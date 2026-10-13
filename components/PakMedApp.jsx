@@ -1,13 +1,18 @@
 "use client";
 
-import { useState, useEffect, useRef, createContext, useContext } from "react";
+import { useState, useEffect, useRef, useCallback, createContext, useContext } from "react";
 import {
   Bell, Home, Briefcase, Activity, Mail, User, Heart, MessageCircle, Repeat2, Bookmark, Send, X,
   Eye, EyeOff, ArrowRight, ArrowLeft, Check, MessageCircle as WhatsAppIcon,
   ChevronLeft, Camera, CheckCircle2, Clock, Upload, FileText, ShieldCheck, Pencil, Search, Stethoscope,
   Store, MessageSquareText, UserRound, MapPin, ChevronRight,
   Menu, Newspaper, Settings, HelpCircle, Info, LogOut, Globe, Shield, Flag, Building2, Star, Phone,
-  Sunrise, Sunset, Moon, Pill, FlaskConical, GraduationCap, Scissors, Wrench, Plus, CalendarDays, Users, History, ChevronDown,
+  Sunrise, Sunset, Moon, Pill, FlaskConical, GraduationCap, Scissors, Wrench, Plus, CalendarDays, Users, History, ChevronDown, SlidersHorizontal, Zap, ArrowUpDown,
+  Wallet,
+  Brain, Baby, HeartPulse, Bone, Smile, Microscope, Video, BadgeCheck,
+  ScanLine, BedDouble, Sparkles, Package, Truck, Tag,
+  Siren, TestTube, Navigation, LayoutGrid,
+  Minus, Save, ClipboardList,
 } from "lucide-react";
 
 // ---------------- Theme ----------------
@@ -41,26 +46,52 @@ const FONT = '"Figtree", system-ui, -apple-system, "Segoe UI", sans-serif';
 
 const TAKEN_USERNAMES = ["awaiskhan", "doctorpk", "hospitaladmin", "pakmed", "test123", "drsara"];
 
+/** Pakistani mobile only: store as 10 digits after +92 (must start with 3). */
+function normalizePkMobile(raw) {
+  let d = String(raw || "").replace(/\D/g, "");
+  if (d.startsWith("0092")) d = d.slice(4);
+  else if (d.startsWith("92") && d.length >= 12) d = d.slice(2);
+  if (d.startsWith("0")) d = d.slice(1);
+  return d.slice(0, 10);
+}
+
+function pkMobileCheck(digits) {
+  if (!digits) {
+    return { ok: false, tone: "hint", msg: "Pakistan only (+92). Enter 10 digits starting with 3." };
+  }
+  if (digits[0] !== "3") {
+    return { ok: false, tone: "error", msg: "Only Pakistani numbers allowed. Must start with 3 (e.g. 300…)." };
+  }
+  if (digits.length < 10) {
+    const left = 10 - digits.length;
+    return { ok: false, tone: "error", msg: `${left} more digit${left === 1 ? "" : "s"} needed · Pakistani mobile only` };
+  }
+  if (!/^3\d{9}$/.test(digits)) {
+    return { ok: false, tone: "error", msg: "Enter a valid Pakistani mobile number" };
+  }
+  return { ok: true, tone: "ok", msg: "Valid Pakistani WhatsApp number" };
+}
+
 /* =========================================================
    AUTH FLOW
    ========================================================= */
-function Field({ label, children, hint }) {
+function Field({ label, children, hint, className = "" }) {
   return (
-    <div className="mb-4">
+    <div className={`mb-5 lg:mb-4 ${className}`}>
       <div className="flex items-baseline justify-between gap-2">
-        <label className="text-[13px] font-semibold" style={{ color: INK_2 }}>{label}</label>
+        <label className="text-[14.5px] font-semibold" style={{ color: INK }}>{label}</label>
         {hint}
       </div>
-      <div className="mt-1.5">{children}</div>
+      <div className="mt-2 lg:mt-1.5">{children}</div>
     </div>
   );
 }
 
-const AUTH_INPUT = "pm-input w-full h-12 text-[15px] rounded-xl px-4 outline-none bg-white transition-shadow";
+const AUTH_INPUT = "pm-input w-full h-[52px] lg:h-12 text-[16px] lg:text-[15.5px] rounded-xl px-4 outline-none bg-white transition-shadow";
 
 function StepDots({ total, current }) {
   return (
-    <div className="flex gap-1.5 mb-7">
+    <div className="flex gap-1.5 mb-6">
       {Array.from({ length: total }).map((_, i) => (
         <span key={i} className="h-1.5 rounded-full flex-1 transition-colors duration-500" style={{ backgroundColor: i <= current ? BRAND : CARD_BORDER }} />
       ))}
@@ -74,7 +105,7 @@ function PrimaryButton({ children, onClick, disabled }) {
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="w-full h-12 rounded-xl font-bold text-[15px] flex items-center justify-center gap-2 text-white transition-all duration-200 enabled:hover:brightness-110 enabled:active:scale-[0.99] disabled:cursor-not-allowed"
+      className="w-full h-[52px] lg:h-12 rounded-xl font-bold text-[16px] flex items-center justify-center gap-2 text-white transition-all duration-200 enabled:hover:brightness-110 enabled:active:scale-[0.99] disabled:cursor-not-allowed"
       style={{ backgroundColor: BRAND, opacity: disabled ? 0.45 : 1, boxShadow: disabled ? "none" : "0 8px 20px -8px rgba(11,87,183,0.55)" }}
     >
       {children}
@@ -84,7 +115,7 @@ function PrimaryButton({ children, onClick, disabled }) {
 
 function BackLink({ onClick }) {
   return (
-    <button type="button" onClick={onClick} className="mb-5 inline-flex items-center gap-1 text-[13px] font-semibold" style={{ color: SUBTLE }}>
+    <button type="button" onClick={onClick} className="mb-5 inline-flex items-center gap-1.5 h-10 -ml-1 px-1 text-[14.5px] font-semibold" style={{ color: SUBTLE }}>
       <ArrowLeft className="w-4 h-4" /> Back
     </button>
   );
@@ -92,10 +123,10 @@ function BackLink({ onClick }) {
 
 function AuthTitle({ eyebrow, title, sub }) {
   return (
-    <div className="mb-7">
-      {eyebrow && <p className="text-[12px] font-bold uppercase tracking-[0.1em]" style={{ color: BRAND }}>{eyebrow}</p>}
-      <h1 className="font-extrabold text-[28px] sm:text-[30px] leading-tight tracking-[-0.03em] mt-1.5" style={{ color: INK }}>{title}</h1>
-      {sub && <p className="text-[14.5px] mt-2 leading-relaxed" style={{ color: SUBTLE }}>{sub}</p>}
+    <div className="mb-7 lg:mb-5">
+      {eyebrow && <p className="text-[12.5px] font-bold uppercase tracking-[0.1em]" style={{ color: BRAND }}>{eyebrow}</p>}
+      <h1 className="font-extrabold text-[28px] sm:text-[32px] lg:text-[28px] leading-tight tracking-[-0.03em] mt-1.5" style={{ color: INK }}>{title}</h1>
+      {sub && <p className="text-[15.5px] mt-2 leading-relaxed" style={{ color: SUBTLE }}>{sub}</p>}
     </div>
   );
 }
@@ -113,8 +144,8 @@ function PasswordInput({ value, onChange, invalid, placeholder = "••••�
         style={{ color: INK, border: `1.5px solid ${invalid ? RED : CARD_BORDER}` }}
       />
       <button type="button" onClick={() => setShow((s) => !s)} aria-label={show ? "Hide password" : "Show password"}
-        className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-lg flex items-center justify-center hover:bg-[#F5F7FA]">
-        {show ? <EyeOff className="w-[18px] h-[18px]" style={{ color: SUBTLE }} /> : <Eye className="w-[18px] h-[18px]" style={{ color: SUBTLE }} />}
+        className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-lg flex items-center justify-center hover:bg-[#F5F7FA]">
+        {show ? <EyeOff className="w-5 h-5" style={{ color: SUBTLE }} /> : <Eye className="w-5 h-5" style={{ color: SUBTLE }} />}
       </button>
     </div>
   );
@@ -146,12 +177,12 @@ function GoogleButton({ label = "Continue with Google", onSuccess }) {
       type="button"
       onClick={start}
       disabled={busy}
-      className="w-full h-12 rounded-xl font-semibold text-[15px] flex items-center justify-center gap-3 bg-white transition-all duration-200 hover:bg-[#F8FAFC] hover:shadow-sm active:scale-[0.99]"
+      className="w-full h-[52px] lg:h-12 rounded-xl font-semibold text-[16px] flex items-center justify-center gap-3 bg-white transition-all duration-200 hover:bg-[#F8FAFC] hover:shadow-sm active:scale-[0.99]"
       style={{ color: INK, border: `1.5px solid ${CARD_BORDER}` }}
     >
       {busy
         ? <span className="w-[18px] h-[18px] rounded-full border-2 animate-spin" style={{ borderColor: `${BRAND} transparent ${BRAND} ${BRAND}` }} />
-        : <GoogleIcon />}
+        : <GoogleIcon size={20} />}
       {busy ? "Connecting to Google…" : label}
     </button>
   );
@@ -159,9 +190,9 @@ function GoogleButton({ label = "Continue with Google", onSuccess }) {
 
 function OrDivider({ label = "or" }) {
   return (
-    <div className="flex items-center gap-3 my-6">
+    <div className="flex items-center gap-3 my-7 lg:my-5">
       <div className="flex-1 h-px" style={{ backgroundColor: CARD_BORDER }} />
-      <span className="text-[12px] font-semibold uppercase tracking-wide" style={{ color: FAINT }}>{label}</span>
+      <span className="text-[13px] font-semibold uppercase tracking-wide" style={{ color: SUBTLE }}>{label}</span>
       <div className="flex-1 h-px" style={{ backgroundColor: CARD_BORDER }} />
     </div>
   );
@@ -169,12 +200,12 @@ function OrDivider({ label = "or" }) {
 
 function AuthModeTabs({ mode, onChange }) {
   return (
-    <div className="grid grid-cols-2 p-1 rounded-xl mb-7" style={{ backgroundColor: CREAM, border: `1px solid ${CARD_BORDER}` }}>
+    <div className="grid grid-cols-2 p-1.5 rounded-2xl mb-8 lg:mb-6" style={{ backgroundColor: CREAM, border: `1px solid ${CARD_BORDER}` }}>
       {[["signin", "Sign in"], ["signup", "Create account"]].map(([k, label]) => {
         const on = mode === k;
         return (
           <button key={k} type="button" onClick={() => onChange(k)}
-            className="h-10 rounded-lg text-[14px] font-bold transition-all duration-200"
+            className="h-12 lg:h-11 rounded-xl text-[15.5px] font-bold transition-all duration-200"
             style={{ backgroundColor: on ? "#fff" : "transparent", color: on ? BRAND : SUBTLE, boxShadow: on ? "0 1px 3px rgba(16,24,40,0.12)" : "none" }}>
             {label}
           </button>
@@ -184,110 +215,184 @@ function AuthModeTabs({ mode, onChange }) {
   );
 }
 
-function UsernameStep({ value, onChange, onNext, onGoogle }) {
-  const [status, setStatus] = useState("idle");
-  const timeoutRef = useRef(null);
-
-  useEffect(() => {
-    clearTimeout(timeoutRef.current);
-    if (!value) return setStatus("idle");
-    if (!/^[a-zA-Z0-9_]{4,20}$/.test(value)) return setStatus("invalid");
-    setStatus("checking");
-    timeoutRef.current = setTimeout(() => {
-      setStatus(TAKEN_USERNAMES.includes(value.toLowerCase()) ? "taken" : "available");
-    }, 700);
-    return () => clearTimeout(timeoutRef.current);
-  }, [value]);
-
+function FieldNote({ tone = "error", children }) {
   return (
-    <div>
-      <AuthTitle eyebrow="Step 1 of 4" title="Create your account" sub="Join Pakistan's healthcare network — it's free and takes under a minute." />
-      <GoogleButton label="Sign up with Google" onSuccess={onGoogle} />
-      <OrDivider label="or with WhatsApp" />
-      <Field label="Choose a username">
-        <div className="relative">
-          <input
-            value={value}
-            onChange={(e) => onChange(e.target.value.replace(/\s/g, ""))}
-            placeholder="e.g. dr_sara_malik"
-            className={`${AUTH_INPUT} pr-11`}
-            style={{ color: INK, border: `1.5px solid ${status === "available" ? GREEN : status === "taken" || status === "invalid" ? RED : CARD_BORDER}` }}
-          />
-          <div className="absolute right-4 top-1/2 -translate-y-1/2">
-            {status === "checking" && <div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: `${SUBTLE} transparent ${SUBTLE} ${SUBTLE}` }} />}
-            {status === "available" && <CheckCircle2 className="w-[18px] h-[18px]" style={{ color: GREEN }} />}
-            {(status === "taken" || status === "invalid") && <X className="w-[18px] h-[18px]" style={{ color: RED }} />}
-          </div>
-        </div>
-        <p className="text-[12.5px] mt-1.5" style={{ color: status === "available" ? GREEN : status === "taken" || status === "invalid" ? RED : SUBTLE }}>
-          {status === "checking" && "Checking availability…"}
-          {status === "available" && "Username is available"}
-          {status === "taken" && "That username is already taken"}
-          {status === "invalid" && "4–20 characters: letters, numbers or underscore"}
-          {status === "idle" && "This is how doctors and hospitals will find you."}
-        </p>
-      </Field>
-      <PrimaryButton onClick={onNext} disabled={status !== "available"}>Continue <ArrowRight className="w-4 h-4" /></PrimaryButton>
-    </div>
+    <p className="text-[13px] mt-1.5 font-medium" style={{ color: tone === "ok" ? GREEN : tone === "error" ? RED : SUBTLE }}>{children}</p>
   );
 }
 
-function ContactStep({ data, onChange, onNext, onBack }) {
-  const digitsOnly = data.whatsapp.replace(/\D/g, "");
-  const validPhone = /^3\d{9}$/.test(digitsOnly);
-  const rules = { length: data.password.length >= 8, upper: /[A-Z]/.test(data.password), number: /[0-9]/.test(data.password) };
+function UsernameStep({ data, onChange, onNext, onGoogle }) {
+  const [status, setStatus] = useState("idle");
+  const [touched, setTouched] = useState({});
+  const timeoutRef = useRef(null);
+  const username = data.username || "";
+  const email = data.email || "";
+  const whatsapp = data.whatsapp || "";
+  const password = data.password || "";
+  const touch = (k) => () => setTouched((t) => ({ ...t, [k]: true }));
+
+  useEffect(() => {
+    clearTimeout(timeoutRef.current);
+    if (!username) return setStatus("idle");
+    if (!/^[a-zA-Z0-9_]{4,20}$/.test(username)) return setStatus("invalid");
+    setStatus("checking");
+    timeoutRef.current = setTimeout(() => {
+      setStatus(TAKEN_USERNAMES.includes(username.toLowerCase()) ? "taken" : "available");
+    }, 700);
+    return () => clearTimeout(timeoutRef.current);
+  }, [username]);
+
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const phoneDigits = normalizePkMobile(whatsapp);
+  const phoneCheck = pkMobileCheck(phoneDigits);
+  const rules = { length: password.length >= 8, upper: /[A-Z]/.test(password), number: /[0-9]/.test(password) };
   const pwValid = rules.length && rules.upper && rules.number;
-  const matchValid = data.password && data.password === data.confirmPassword;
-  const canContinue = validPhone && pwValid && matchValid;
+  const canContinue = status === "available" && emailValid && phoneCheck.ok && pwValid;
+
+  // only speak up when something is actually wrong
+  const userErr = status === "taken" ? "This username is already taken" : status === "invalid" && touched.username ? "Use 4–20 letters, numbers or _" : "";
+  const emailErr = touched.email && email && !emailValid ? "Enter a valid email address" : "";
+  const phoneErr = phoneCheck.tone === "error" && (touched.whatsapp || (phoneDigits && phoneDigits[0] !== "3")) ? phoneCheck.msg : "";
+  const border = (state) => `1.5px solid ${state === "ok" ? GREEN : state === "error" ? RED : CARD_BORDER}`;
 
   return (
     <div>
-      <BackLink onClick={onBack} />
-      <AuthTitle eyebrow="Step 2 of 4" title="WhatsApp & password" sub="We'll send a verification code to your WhatsApp number." />
-      <Field label="WhatsApp number">
-        <div className="flex gap-2">
-          <div className="flex items-center gap-1.5 px-3.5 h-12 rounded-xl shrink-0 bg-white" style={{ border: `1.5px solid ${CARD_BORDER}` }}>
-            <WhatsAppIcon className="w-4 h-4" style={{ color: GREEN }} />
-            <span className="text-[15px] font-semibold" style={{ color: INK }}>+92</span>
-          </div>
+      <AuthTitle title="Create your account" sub="Free for doctors, hospitals and patients." />
+      <GoogleButton label="Sign up with Google" onSuccess={onGoogle} />
+      <OrDivider label="or" />
+
+      <Field label="Username">
+        <div className="relative">
           <input
-            value={data.whatsapp}
-            onChange={(e) => onChange({ ...data, whatsapp: e.target.value.replace(/[^0-9]/g, "").slice(0, 10) })}
-            placeholder="3XX XXXXXXX"
-            inputMode="numeric"
-            className={`${AUTH_INPUT} flex-1 min-w-0`}
-            style={{ color: INK, border: `1.5px solid ${data.whatsapp && !validPhone ? RED : CARD_BORDER}` }}
+            value={username}
+            onChange={(e) => onChange({ ...data, username: e.target.value.replace(/\s/g, "") })}
+            onBlur={touch("username")}
+            placeholder="e.g. dr_sara_malik"
+            autoComplete="username"
+            className={`${AUTH_INPUT} pr-11`}
+            style={{ color: INK, border: border(status === "available" ? "ok" : userErr ? "error" : "") }}
           />
+          <div className="absolute right-4 top-1/2 -translate-y-1/2">
+            {status === "checking" && <div className="w-[18px] h-[18px] rounded-full border-2 animate-spin" style={{ borderColor: `${SUBTLE} transparent ${SUBTLE} ${SUBTLE}` }} />}
+            {status === "available" && <CheckCircle2 className="w-5 h-5" style={{ color: GREEN }} />}
+          </div>
         </div>
-        {data.whatsapp && !validPhone && <p className="text-[12.5px] mt-1.5" style={{ color: RED }}>Enter a valid Pakistani mobile number (e.g. 3001234567)</p>}
+        {userErr && <FieldNote>{userErr}</FieldNote>}
       </Field>
+
+      <Field label="Email">
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => onChange({ ...data, email: e.target.value })}
+          onBlur={touch("email")}
+          placeholder="you@example.com"
+          autoComplete="email"
+          className={AUTH_INPUT}
+          style={{ color: INK, border: border(emailErr ? "error" : "") }}
+        />
+        {emailErr && <FieldNote>{emailErr}</FieldNote>}
+      </Field>
+
+      <Field label="WhatsApp number">
+        <div className="relative">
+          <span className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-[16px] font-semibold pointer-events-none" style={{ color: INK }}>
+            <WhatsAppIcon className="w-[18px] h-[18px]" style={{ color: GREEN }} /> +92
+          </span>
+          <input
+            value={whatsapp}
+            onChange={(e) => onChange({ ...data, whatsapp: normalizePkMobile(e.target.value) })}
+            onBlur={touch("whatsapp")}
+            placeholder="300 1234567"
+            inputMode="numeric"
+            autoComplete="tel-national"
+            maxLength={10}
+            aria-invalid={!!phoneErr}
+            className={`${AUTH_INPUT} pl-[86px] pr-11`}
+            style={{ color: INK, border: border(phoneCheck.ok ? "ok" : phoneErr ? "error" : "") }}
+          />
+          {phoneCheck.ok && <CheckCircle2 className="w-5 h-5 absolute right-4 top-1/2 -translate-y-1/2" style={{ color: GREEN }} />}
+        </div>
+        {phoneErr && <FieldNote>{phoneErr}</FieldNote>}
+      </Field>
+
       <Field label="Password">
-        <PasswordInput value={data.password} onChange={(v) => onChange({ ...data, password: v })} />
-        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
-          {[["length", "8+ characters"], ["upper", "1 uppercase"], ["number", "1 number"]].map(([key, label]) => (
-            <span key={key} className="flex items-center gap-1 text-[12px] font-medium transition-colors" style={{ color: rules[key] ? GREEN : FAINT }}>
-              <CheckCircle2 className="w-3.5 h-3.5" /> {label}
+        <PasswordInput value={password} onChange={(v) => onChange({ ...data, password: v, confirmPassword: v })} placeholder="Create a password" />
+        <div className="flex items-center gap-3 mt-2 whitespace-nowrap overflow-hidden">
+          {[["length", "8+ characters"], ["upper", "1 capital"], ["number", "1 number"]].map(([key, label]) => (
+            <span key={key} className="inline-flex items-center gap-1 text-[12.5px] font-medium transition-colors" style={{ color: rules[key] ? GREEN : FAINT }}>
+              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> {label}
             </span>
           ))}
         </div>
       </Field>
-      <Field label="Confirm password">
-        <PasswordInput value={data.confirmPassword} onChange={(v) => onChange({ ...data, confirmPassword: v })} invalid={data.confirmPassword && !matchValid} />
-        {data.confirmPassword && !matchValid && <p className="text-[12.5px] mt-1.5" style={{ color: RED }}>Passwords don't match</p>}
-      </Field>
+
       <div className="mt-6">
-        <PrimaryButton onClick={onNext} disabled={!canContinue}>Send verification code <ArrowRight className="w-4 h-4" /></PrimaryButton>
+        <PrimaryButton onClick={onNext} disabled={!canContinue}>Continue <ArrowRight className="w-4 h-4" /></PrimaryButton>
       </div>
     </div>
   );
 }
 
-function OtpStep({ whatsapp, onNext, onBack }) {
+function OtpChannelStep({ email, whatsapp, onChoose, onBack }) {
+  const options = [
+    {
+      key: "whatsapp",
+      title: "OTP by WhatsApp",
+      sub: `Send code to +92 ${whatsapp}`,
+      Icon: WhatsAppIcon,
+      tint: GREEN_TINT,
+      color: GREEN,
+    },
+    {
+      key: "email",
+      title: "OTP by Email",
+      sub: `Send code to ${email}`,
+      Icon: Mail,
+      tint: BRAND_50,
+      color: BRAND,
+    },
+  ];
+
+  return (
+    <div>
+      <BackLink onClick={onBack} />
+      <AuthTitle eyebrow="Choose verification" title="How should we verify you?" sub="Pick WhatsApp or email — we'll show a demo code on the next screen." />
+      <div className="space-y-3">
+        {options.map((o) => {
+          const Icon = o.Icon;
+          return (
+            <button
+              key={o.key}
+              type="button"
+              onClick={() => onChoose(o.key)}
+              className="w-full flex items-center gap-3.5 p-4 rounded-2xl text-left bg-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+              style={{ border: `1.5px solid ${CARD_BORDER}` }}
+            >
+              <span className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: o.tint, color: o.color }}>
+                <Icon className="w-5 h-5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[15px] font-bold" style={{ color: INK }}>{o.title}</span>
+                <span className="block text-[13px] mt-0.5 truncate" style={{ color: SUBTLE }}>{o.sub}</span>
+              </span>
+              <ArrowRight className="w-4 h-4 shrink-0" style={{ color: FAINT }} />
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function OtpStep({ channel, whatsapp, email, onNext, onBack }) {
   const [digits, setDigits] = useState(["", "", "", "", "", ""]);
   const [timer, setTimer] = useState(30);
   const [error, setError] = useState(false);
   const inputsRef = useRef([]);
   const CORRECT = "123456";
+  const viaWhatsApp = channel === "whatsapp";
+  const destination = viaWhatsApp ? `+92 ${whatsapp}` : email;
 
   useEffect(() => {
     if (timer <= 0) return;
@@ -317,9 +422,9 @@ function OtpStep({ whatsapp, onNext, onBack }) {
     <div>
       <BackLink onClick={onBack} />
       <AuthTitle
-        eyebrow="Step 3 of 4"
-        title="Verify your WhatsApp"
-        sub={<>Enter the 6-digit code sent to <span className="font-semibold" style={{ color: INK }}>+92 {whatsapp}</span></>}
+        eyebrow="Enter OTP"
+        title={viaWhatsApp ? "Verify WhatsApp" : "Verify email"}
+        sub={<>Enter the 6-digit code sent to <span className="font-semibold" style={{ color: INK }}>{destination}</span></>}
       />
       <div className="grid grid-cols-6 gap-2 mb-2" onPaste={handlePaste}>
         {digits.map((d, i) => (
@@ -328,47 +433,29 @@ function OtpStep({ whatsapp, onNext, onBack }) {
             onChange={(e) => updateDigit(i, e.target.value)} onKeyDown={(e) => handleBackspace(i, e)}
             inputMode="numeric" maxLength={1} aria-label={`Digit ${i + 1}`}
             className="pm-input w-full text-center text-[20px] font-bold rounded-xl outline-none bg-white transition-shadow"
-            style={{ height: 56, color: INK, border: `1.5px solid ${error ? RED : d ? BRAND : CARD_BORDER}` }}
+            style={{ height: 52, color: INK, border: `1.5px solid ${error ? RED : d ? BRAND : CARD_BORDER}` }}
           />
         ))}
       </div>
-      <p className="text-[12.5px] mb-5" style={{ color: error ? RED : FAINT }}>
-        {error ? "Incorrect code — try 123456 for this demo" : "Demo code: 123456"}
-      </p>
-      <p className="text-[13.5px] mb-6" style={{ color: SUBTLE }}>
+      <div className="mb-4 rounded-xl px-3.5 py-3 text-center" style={{ backgroundColor: BRAND_50, border: `1px solid #B9D3F2` }}>
+        <p className="text-[12px] font-semibold uppercase tracking-wide" style={{ color: BRAND }}>Demo OTP</p>
+        <p className="text-[22px] font-extrabold tracking-[0.2em] mt-0.5" style={{ color: INK }}>123456</p>
+        <p className="text-[12px] mt-1" style={{ color: SUBTLE }}>Use this code to continue — frontend demo only</p>
+      </div>
+      {error && <p className="text-[12.5px] mb-3 text-center" style={{ color: RED }}>Incorrect code — enter 123456</p>}
+      <p className="text-[13.5px] mb-5" style={{ color: SUBTLE }}>
         Didn't get it?{" "}
         {timer > 0
           ? <>Resend in <span className="font-semibold" style={{ color: INK }}>{timer}s</span></>
           : <button type="button" onClick={() => setTimer(30)} className="font-bold" style={{ color: BRAND }}>Resend code</button>}
       </p>
-      <PrimaryButton onClick={verify} disabled={digits.some((d) => !d)}>Verify & create account <ArrowRight className="w-4 h-4" /></PrimaryButton>
+      <PrimaryButton onClick={verify} disabled={digits.some((d) => !d)}>Verify & go to PakMed <ArrowRight className="w-4 h-4" /></PrimaryButton>
     </div>
   );
 }
 
-function EmailStep({ email, onChange, onNext, onSkip }) {
-  return (
-    <div>
-      <AuthTitle eyebrow="Step 4 of 4 · Optional" title="Add an email" sub="Used for account recovery and receipts. You can add this later in Settings." />
-      <Field label="Email address">
-        <div className="relative">
-          <Mail className="w-[18px] h-[18px] absolute left-4 top-1/2 -translate-y-1/2" style={{ color: FAINT }} />
-          <input
-            type="email" value={email} onChange={(e) => onChange(e.target.value)} placeholder="you@example.com"
-            className={`${AUTH_INPUT} pl-11`}
-            style={{ color: INK, border: `1.5px solid ${CARD_BORDER}` }}
-          />
-        </div>
-      </Field>
-      <div className="mt-6">
-        <PrimaryButton onClick={onNext}>Continue <ArrowRight className="w-4 h-4" /></PrimaryButton>
-      </div>
-      <button type="button" onClick={onSkip} className="w-full text-center text-[14px] font-semibold mt-3 h-11 rounded-xl hover:bg-[#F5F7FA]" style={{ color: SUBTLE }}>Skip for now</button>
-    </div>
-  );
-}
-
-function SignupDoneStep({ username, onFinish }) {
+function SignupDoneStep({ username, channel, onFinish }) {
+  const verifiedLabel = channel === "email" ? "Email verified" : "WhatsApp verified";
   return (
     <div className="text-center">
       <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5 auth-pop" style={{ backgroundColor: GREEN_TINT }}>
@@ -379,7 +466,7 @@ function SignupDoneStep({ username, onFinish }) {
         Welcome to PakMed{username ? <>, <span className="font-semibold" style={{ color: INK }}>@{username}</span></> : ""}. Complete your profile to get verified and start applying.
       </p>
       <div className="rounded-2xl p-4 mb-7 text-left space-y-3" style={{ backgroundColor: CREAM, border: `1px solid ${CARD_BORDER}` }}>
-        {["Account created", "WhatsApp verified", "Profile — next step"].map((t, i) => (
+        {["Account created", verifiedLabel, "Profile — next step"].map((t, i) => (
           <div key={t} className="flex items-center gap-3 text-[14px] font-semibold" style={{ color: i < 2 ? INK : SUBTLE }}>
             <CheckCircle2 className="w-[18px] h-[18px] shrink-0" style={{ color: i < 2 ? GREEN : FAINT }} /> {t}
           </div>
@@ -406,12 +493,12 @@ function SignInScreen({ onSignIn, onGoogle }) {
           className={AUTH_INPUT} style={{ color: INK, border: `1.5px solid ${CARD_BORDER}` }}
         />
       </Field>
-      <Field label="Password" hint={<button type="button" className="text-[13px] font-semibold" style={{ color: BRAND }}>Forgot password?</button>}>
+      <Field label="Password" hint={<button type="button" className="text-[14px] font-semibold" style={{ color: BRAND }}>Forgot password?</button>}>
         <PasswordInput value={password} onChange={setPassword} />
       </Field>
-      <label className="flex items-center gap-2.5 mb-6 cursor-pointer select-none">
-        <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="w-4 h-4 rounded accent-[#0B57B7]" />
-        <span className="text-[13.5px]" style={{ color: INK_2 }}>Keep me signed in</span>
+      <label className="flex items-center gap-3 mb-7 cursor-pointer select-none">
+        <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="w-5 h-5 rounded accent-[#0B57B7]" />
+        <span className="text-[15px]" style={{ color: INK_2 }}>Keep me signed in</span>
       </label>
       <PrimaryButton onClick={onSignIn}>Sign in <ArrowRight className="w-4 h-4" /></PrimaryButton>
     </div>
@@ -421,18 +508,23 @@ function SignInScreen({ onSignIn, onGoogle }) {
 function AuthScreen({ onAuthenticated, initialMode = "signin" }) {
   const [mode, setMode] = useState(initialMode);
   const [step, setStep] = useState(0);
-  const [username, setUsername] = useState("");
-  const [contact, setContact] = useState({ whatsapp: "", password: "", confirmPassword: "" });
-  const [email, setEmail] = useState("");
+  const [account, setAccount] = useState({ username: "", email: "", whatsapp: "", password: "", confirmPassword: "" });
+  const [otpChannel, setOtpChannel] = useState("whatsapp");
 
   const switchMode = (m) => { setMode(m); setStep(0); };
   const showTabs = mode === "signin" || step === 0;
+  const username = account.username;
+  const finishSignup = () => onAuthenticated(username || "new_user", true, {
+    phone: account.whatsapp,
+    email: account.email,
+    password: account.password,
+  });
 
   return (
     <div>
       {showTabs && <AuthModeTabs mode={mode} onChange={switchMode} />}
-      {mode === "signup" && step > 0 && step < 4 && <StepDots total={4} current={step} />}
-      <div key={`${mode}-${step}`} className="auth-step">
+      {mode === "signup" && step > 0 && <StepDots total={2} current={step - 1} />}
+      <div key={`${mode}-${step}-${otpChannel}`} className="auth-step">
         {mode === "signin" && (
           <SignInScreen
             onSignIn={() => onAuthenticated(username || "dr_awais_khan", false)}
@@ -440,18 +532,43 @@ function AuthScreen({ onAuthenticated, initialMode = "signin" }) {
           />
         )}
         {mode === "signup" && step === 0 && (
-          <UsernameStep value={username} onChange={setUsername} onNext={() => setStep(1)} onGoogle={() => onAuthenticated("google_user", true)} />
+          <UsernameStep data={account} onChange={setAccount} onNext={() => setStep(1)} onGoogle={() => onAuthenticated("google_user", true)} />
         )}
-        {mode === "signup" && step === 1 && <ContactStep data={contact} onChange={setContact} onNext={() => setStep(2)} onBack={() => setStep(0)} />}
-        {mode === "signup" && step === 2 && <OtpStep whatsapp={contact.whatsapp} onNext={() => setStep(3)} onBack={() => setStep(1)} />}
-        {mode === "signup" && step === 3 && <EmailStep email={email} onChange={setEmail} onNext={() => setStep(4)} onSkip={() => setStep(4)} />}
-        {mode === "signup" && step === 4 && (
-          <SignupDoneStep username={username} onFinish={() => onAuthenticated(username, true, { phone: contact.whatsapp, email })} />
+        {mode === "signup" && step === 1 && (
+          <OtpChannelStep
+            email={account.email}
+            whatsapp={account.whatsapp}
+            onChoose={(ch) => { setOtpChannel(ch); setStep(2); }}
+            onBack={() => setStep(0)}
+          />
+        )}
+        {mode === "signup" && step === 2 && (
+          <OtpStep
+            channel={otpChannel}
+            whatsapp={account.whatsapp}
+            email={account.email}
+            onNext={finishSignup}
+            onBack={() => setStep(1)}
+          />
         )}
       </div>
       {showTabs && (
-        <p className="text-[12.5px] text-center mt-8 leading-relaxed" style={{ color: FAINT }}>
-          By continuing you agree to PakMed's <a href="/terms" target="_blank" rel="noopener" className="font-semibold underline-offset-2 hover:underline" style={{ color: SUBTLE }}>Terms of Use</a> and <a href="/privacy" target="_blank" rel="noopener" className="font-semibold underline-offset-2 hover:underline" style={{ color: SUBTLE }}>Privacy Policy</a>.
+        <p className="text-[15px] text-center mt-7 lg:mt-5 leading-relaxed" style={{ color: SUBTLE }}>
+          {mode === "signin" ? (
+            <>
+              Don&apos;t have an account?{" "}
+              <button type="button" onClick={() => switchMode("signup")} className="font-bold underline-offset-2 hover:underline" style={{ color: BRAND }}>
+                Create account
+              </button>
+            </>
+          ) : (
+            <>
+              Already have an account?{" "}
+              <button type="button" onClick={() => switchMode("signin")} className="font-bold underline-offset-2 hover:underline" style={{ color: BRAND }}>
+                Sign in
+              </button>
+            </>
+          )}
         </p>
       )}
     </div>
@@ -460,58 +577,54 @@ function AuthScreen({ onAuthenticated, initialMode = "signin" }) {
 
 function AuthShell({ reason, onHome, onClose, children }) {
   return (
-    <div className="flex-1 w-full grid lg:grid-cols-[1fr_1.05fr] min-h-screen bg-white" style={{ fontFamily: FONT }}>
-      <aside className="relative hidden lg:flex flex-col justify-between p-10 xl:p-12 overflow-hidden" style={{ backgroundColor: BRAND_DK }}>
+    <div className="flex-1 w-full grid lg:grid-cols-[0.9fr_1.1fr] min-h-screen lg:min-h-0 lg:h-dvh bg-white" style={{ fontFamily: FONT }}>
+      <aside className="relative hidden lg:flex flex-col justify-between p-8 xl:p-10 overflow-hidden lg:h-dvh" style={{ backgroundColor: BRAND_DK }}>
         <img src="/images/landing/care.jpg" alt="" className="absolute inset-0 w-full h-full object-cover" />
         <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(8,66,140,0.25) 0%, rgba(8,66,140,0.75) 50%, rgba(6,38,79,0.97) 100%)" }} />
         <button type="button" onClick={onHome} className="relative flex items-center gap-2 self-start" aria-label="PakMed home">
-          <span className="w-10 h-10 rounded-[12px] flex items-center justify-center bg-white">
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke={BRAND} strokeWidth="2.8" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+          <span className="w-9 h-9 rounded-[12px] flex items-center justify-center bg-white">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke={BRAND} strokeWidth="2.8" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
           </span>
-          <span className="text-[24px] font-extrabold tracking-[-0.035em] text-white">PakMed</span>
+          <span className="text-[22px] font-extrabold tracking-[-0.035em] text-white">PakMed</span>
         </button>
         <div className="relative auth-panel-in">
-          <h2 className="text-[36px] xl:text-[42px] font-extrabold leading-[1.08] tracking-[-0.035em] text-white max-w-md">
+          <h2 className="text-[30px] xl:text-[36px] font-extrabold leading-[1.08] tracking-[-0.035em] text-white max-w-md">
             Pakistan's healthcare network, in one place.
           </h2>
-          <ul className="mt-6 space-y-3">
+          <ul className="mt-4 xl:mt-5 space-y-2.5">
             {["Thousands of verified doctors & facilities", "Apply to jobs in one tap", "Message employers and doctors directly"].map((t) => (
-              <li key={t} className="flex items-center gap-3 text-[15px] font-medium" style={{ color: "#DCE8F8" }}>
-                <CheckCircle2 className="w-5 h-5 shrink-0" style={{ color: "#7DD3A8" }} /> {t}
+              <li key={t} className="flex items-center gap-2.5 text-[14px] font-medium" style={{ color: "#DCE8F8" }}>
+                <CheckCircle2 className="w-[18px] h-[18px] shrink-0" style={{ color: "#7DD3A8" }} /> {t}
               </li>
             ))}
           </ul>
-          <figure className="mt-8 rounded-2xl p-5 max-w-md" style={{ backgroundColor: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.18)", backdropFilter: "blur(10px)" }}>
-            <blockquote className="text-[14.5px] leading-relaxed text-white">“I found a locum emergency shift within a day. The whole process was transparent.”</blockquote>
-            <figcaption className="flex items-center gap-3 mt-4">
-              <img src="/images/landing/avatar-1.jpg" alt="" className="w-9 h-9 rounded-full object-cover" />
+          <figure className="mt-5 xl:mt-6 rounded-2xl p-4 max-w-md" style={{ backgroundColor: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.18)", backdropFilter: "blur(10px)" }}>
+            <blockquote className="text-[13.5px] leading-relaxed text-white">“I found a locum emergency shift within a day. The whole process was transparent.”</blockquote>
+            <figcaption className="flex items-center gap-3 mt-3">
+              <img src="/images/landing/avatar-1.jpg" alt="" className="w-8 h-8 rounded-full object-cover" />
               <div>
-                <p className="text-[13.5px] font-bold text-white">Dr. Ayesha Siddiqui</p>
-                <p className="text-[12px]" style={{ color: "#B8C9E3" }}>Medical Officer, Karachi</p>
+                <p className="text-[13px] font-bold text-white">Dr. Ayesha Siddiqui</p>
+                <p className="text-[11.5px]" style={{ color: "#B8C9E3" }}>Medical Officer, Karachi</p>
               </div>
             </figcaption>
           </figure>
         </div>
-        <p className="relative text-[12.5px]" style={{ color: "#9FB3D1" }}>© {new Date().getFullYear()} PakMed · Healthcare. Connected.</p>
+        <p className="relative text-[12px]" style={{ color: "#9FB3D1" }}>© {new Date().getFullYear()} PakMed · Healthcare. Connected.</p>
       </aside>
 
-      <main className="flex flex-col min-h-screen" style={{ background: `linear-gradient(180deg, ${BRAND_50} 0%, #fff 220px)` }}>
-        <div className="flex items-center justify-between gap-3 px-5 sm:px-8 h-[68px] shrink-0">
-          <div className="lg:hidden"><BrandMark size={30} onClick={onHome} /></div>
-          <span className="hidden lg:block text-[13.5px] font-semibold" style={{ color: SUBTLE }}>
-            {reason ? `Sign in to ${reason}` : "Welcome to PakMed"}
-          </span>
-          <div className="flex items-center gap-2">
-            <button type="button" onClick={onHome} className="hidden sm:flex items-center gap-1.5 h-10 px-3.5 rounded-xl text-[13.5px] font-semibold bg-white" style={{ color: INK_2, border: `1px solid ${CARD_BORDER}` }}>
-              <Home className="w-4 h-4" /> Home
-            </button>
-            <button type="button" onClick={onClose} className="w-10 h-10 rounded-xl flex items-center justify-center bg-white" style={{ border: `1px solid ${CARD_BORDER}` }} aria-label="Close">
-              <X className="w-5 h-5" style={{ color: INK }} />
-            </button>
-          </div>
+      <main className="auth-scroll flex flex-col min-h-screen lg:min-h-0 lg:h-dvh lg:overflow-y-auto" style={{ background: `linear-gradient(180deg, ${BRAND_50} 0%, #fff 220px)` }}>
+        <div className="lg:hidden flex items-center justify-between gap-3 px-5 h-[56px] shrink-0">
+          <BrandMark size={30} onClick={onHome} />
+          <button type="button" onClick={onClose} className="w-9 h-9 rounded-xl flex items-center justify-center bg-white" style={{ border: `1px solid ${CARD_BORDER}` }} aria-label="Close">
+            <X className="w-5 h-5" style={{ color: INK }} />
+          </button>
         </div>
-        <div className="flex-1 flex justify-center px-5 sm:px-8 pt-4 pb-12 lg:items-center">
-          <div className="w-full max-w-[420px]">
+        <div className="flex-1 flex flex-col px-5 sm:px-8 pt-4 pb-14 lg:py-8">
+          {/* my-auto centres when it fits and stays fully reachable when it doesn't */}
+          <div className="w-full max-w-[460px] lg:max-w-[540px] mx-auto lg:my-auto">
+            <div className="hidden lg:flex justify-center mb-6">
+              <BrandMark size={32} onClick={onHome} />
+            </div>
             {reason && (
               <div className="lg:hidden mb-5 flex items-center gap-2 text-[13px] font-semibold px-3.5 py-2.5 rounded-xl" style={{ color: BRAND, backgroundColor: "#fff", border: "1px solid #B9D3F2" }}>
                 <Info className="w-4 h-4 shrink-0" /> Sign in to {reason}
@@ -716,6 +829,11 @@ function ShareSheet({ card, onClose }) {
   const [copied, setCopied] = useState(false);
   const shareUrl = `https://pakmed.app/feed/${card.id}`;
   const shareText = card.title;
+  useEffect(() => {
+    const onKey = (e) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   const openLink = (url) => {
     try {
@@ -783,19 +901,20 @@ function ShareSheet({ card, onClose }) {
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative w-full max-w-[390px] bg-white rounded-t-3xl flex flex-col">
-        <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b" style={{ borderColor: CARD_BORDER }}>
-          <span className="w-8" />
-          <p className="font-bold text-[15px]" style={{ color: INK }}>Share to</p>
-          <button onClick={onClose} aria-label="Close"><X className="w-5 h-5" style={{ color: SUBTLE }} /></button>
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Share">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={onClose} />
+      <div className="relative w-full max-w-[420px] bg-white rounded-3xl flex flex-col auth-step" style={{ boxShadow: "0 30px 80px -20px rgba(16,24,40,0.45)", fontFamily: FONT }}>
+        <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-1">
+          <p className="font-extrabold text-[18px]" style={{ color: INK }}>Share</p>
+          <button type="button" onClick={onClose} aria-label="Close" className="w-9 h-9 rounded-full flex items-center justify-center transition-colors hover:bg-[#EEF1F5]" style={{ backgroundColor: CREAM }}>
+            <X className="w-5 h-5" style={{ color: INK }} />
+          </button>
         </div>
-        <div className="px-5 py-5">
-          <p className="text-[12.5px] mb-4 truncate" style={{ color: SUBTLE }}>{card.title}</p>
+        <div className="px-5 pt-2 pb-6">
+          <p className="text-[14px] mb-5 line-clamp-2" style={{ color: SUBTLE }}>{card.title}</p>
           <div className="grid grid-cols-3 gap-y-5">
             {platforms.map((p) => (
-              <button key={p.key} onClick={p.onClick} className="flex flex-col items-center gap-2">
+              <button key={p.key} type="button" onClick={p.onClick} className="flex flex-col items-center gap-2 rounded-2xl py-2 transition-colors hover:bg-[#F5F7FA]">
                 <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background: p.bg, border: p.key === "copy" ? `1px solid ${CARD_BORDER}` : "none" }}>
                   {p.icon}
                 </div>
@@ -803,11 +922,12 @@ function ShareSheet({ card, onClose }) {
               </button>
             ))}
           </div>
-          {copied && (
-            <p className="text-center text-[12.5px] font-medium mt-4 py-2 rounded-full" style={{ color: GREEN, backgroundColor: GREEN_TINT }}>
-              Link copied to clipboard
-            </p>
-          )}
+          <div className="mt-5 flex items-center gap-2 p-1.5 pl-3.5 rounded-xl" style={{ backgroundColor: CREAM, border: `1px solid ${CARD_BORDER}` }}>
+            <span className="flex-1 min-w-0 truncate text-[13.5px]" style={{ color: INK_2 }}>{shareUrl}</span>
+            <button type="button" onClick={copyLink} className="h-9 px-3.5 rounded-lg text-[13px] font-bold text-white shrink-0" style={{ backgroundColor: copied ? GREEN : BRAND }}>
+              {copied ? "Copied" : "Copy link"}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -2083,15 +2203,40 @@ function SellerPanelScreen({ onBack, onMenu, seller, setSeller, listings, setLis
    ========================================================= */
 const CONDITION_FILTER = ["All", "New", "Used", "Refurbished"];
 
+const MKT_IMG = "/images/market";
+const MARKET_CATS = [
+  { key: "diagnostics", label: "Diagnostics & Monitoring", short: "Diagnostics", icon: Activity, img: `${MKT_IMG}/stethoscope.jpg` },
+  { key: "imaging", label: "Imaging Equipment", short: "Imaging", icon: ScanLine, img: `${MKT_IMG}/ultrasound.jpg` },
+  { key: "surgical", label: "Surgical & Theatre", short: "Surgical & OT", icon: Scissors, img: `${MKT_IMG}/operating-room.jpg` },
+  { key: "lab", label: "Lab & Pathology", short: "Lab", icon: Microscope, img: `${MKT_IMG}/microscope.jpg` },
+  { key: "furniture", label: "Hospital Furniture & Support", short: "Furniture", icon: BedDouble, img: `${MKT_IMG}/wheelchair.jpg` },
+  { key: "aesthetic", label: "Aesthetic & Dermatology", short: "Aesthetic", icon: Sparkles, img: `${MKT_IMG}/hydrafacial.jpg` },
+  { key: "supplies", label: "Supplies & Disposables", short: "Supplies", icon: Package, img: `${MKT_IMG}/gloves.jpg` },
+];
+const marketCatOf = (name = "") => {
+  const n = String(name).toLowerCase();
+  return MARKET_CATS.find((c) => c.label.toLowerCase() === n)
+    || MARKET_CATS.find((c) => n && (n.includes(c.short.toLowerCase().split(" ")[0]) || c.label.toLowerCase().startsWith(n.split(" ")[0])))
+    || MARKET_CATS[0];
+};
+
 const SEED_MARKET_ITEMS = [
-  { id: "mi1", name: "BP Apparatus (Aneroid)", category: "Diagnostics & Monitoring", condition: "New", price: "4,500", seller: "Al-Noor Surgical", city: "Lahore", area: "Jail Road", phone: "0300 8471290", showPhone: true, note: "German stock, 1-year warranty", kind: "product" },
-  { id: "mi2", name: "Portable Ultrasound", category: "Imaging Equipment", condition: "Refurbished", price: "850,000", seller: "MediTech Instruments", city: "Karachi", area: "Saddar", phone: "", showPhone: false, note: "Convex + linear probes, serviced", kind: "product" },
-  { id: "mi3", name: "Hydrafacial Machine", category: "Aesthetic & Dermatology", condition: "Used", price: "320,000", seller: "Glow Aesthetics", city: "Lahore", area: "DHA Phase 5", phone: "0304 7712345", showPhone: true, note: "2 years old, all handpieces included", kind: "product" },
-  { id: "mi4", name: "Hospital Bed (Electric)", category: "Hospital Furniture", condition: "New", price: "185,000", seller: "Shifa Medical Supplies", city: "Islamabad", area: "Blue Area", phone: "051 2874400", showPhone: true, note: "3-function, side rails", kind: "product" },
-  { id: "mi5", name: "Centrifuge", category: "Lab & Pathology", condition: "Used", price: "45,000", seller: "Faisal Medical Store", city: "Faisalabad", area: "Susan Road", phone: "0321 6639988", showPhone: true, note: "8-tube, working condition", kind: "product" },
-  { id: "mi6", name: "ECG Machine (12-lead)", category: "Diagnostics & Monitoring", condition: "New", price: "125,000", seller: "Rehman BioMedical", city: "Peshawar", area: "University Road", phone: "", showPhone: false, note: "With trolley and cables", kind: "product" },
-  { id: "mi7", name: "Dental Chair Unit", category: "Surgical & Theatre", condition: "Refurbished", price: "410,000", seller: "Care Diagnostics Hub", city: "Lahore", area: "Model Town", phone: "0333 4455667", showPhone: true, note: "Fully serviced, installation included", kind: "product" },
-  { id: "mi8", name: "Oxygen Concentrator", category: "Hospital Furniture", condition: "New", price: "95,000", seller: "Al-Noor Surgical", city: "Multan", area: "Bosan Road", phone: "0300 8471290", showPhone: true, note: "5 LPM, imported", kind: "product" },
+  { id: "mi1", name: "BP Apparatus (Aneroid)", category: "Diagnostics & Monitoring", condition: "New", price: "4,500", seller: "Al-Noor Surgical", city: "Lahore", area: "Jail Road", phone: "0300 8471290", showPhone: true, note: "German-made aneroid sphygmomanometer with adult cuff and calibration certificate.", kind: "product", img: `${MKT_IMG}/bp-apparatus.jpg`, stock: "In stock", delivery: ["Nationwide courier"], warranty: "1 year", posted: "2 days ago", verifiedSeller: true },
+  { id: "mi2", name: "Portable Ultrasound Machine", category: "Imaging Equipment", condition: "Refurbished", price: "850,000", seller: "MediTech Instruments", city: "Karachi", area: "Saddar", phone: "", showPhone: false, note: "Portable colour Doppler unit with convex and linear probes. Fully serviced and tested.", kind: "product", img: `${MKT_IMG}/ultrasound.jpg`, stock: "Limited stock", delivery: ["Installation included"], warranty: "6 months service", posted: "1 day ago", verifiedSeller: true },
+  { id: "mi3", name: "Hydrafacial Machine", category: "Aesthetic & Dermatology", condition: "Used — Good", price: "320,000", seller: "Glow Aesthetics", city: "Lahore", area: "DHA Phase 5", phone: "0304 7712345", showPhone: true, note: "Two years old, all handpieces included. Regularly serviced.", kind: "product", img: `${MKT_IMG}/hydrafacial.jpg`, stock: "In stock", delivery: ["Pickup only"], warranty: "", posted: "4 days ago", verifiedSeller: false },
+  { id: "mi4", name: "Hospital Bed (Electric, 3-function)", category: "Hospital Furniture & Support", condition: "New", price: "185,000", seller: "Shifa Medical Supplies", city: "Islamabad", area: "Blue Area", phone: "051 2874400", showPhone: true, note: "Three-function electric bed with side rails, mattress and IV pole.", kind: "product", img: `${MKT_IMG}/hospital-bed.jpg`, stock: "In stock", delivery: ["Local delivery", "Installation included"], warranty: "2 years", posted: "Today", verifiedSeller: true },
+  { id: "mi5", name: "Laboratory Centrifuge (8-tube)", category: "Lab & Pathology", condition: "Used — Good", price: "45,000", seller: "Faisal Medical Store", city: "Faisalabad", area: "Susan Road", phone: "0321 6639988", showPhone: true, note: "8-tube benchtop centrifuge in good working condition.", kind: "product", img: `${MKT_IMG}/lab-pipette.jpg`, stock: "In stock", delivery: ["Pickup only", "Nationwide courier"], warranty: "", posted: "1 week ago", verifiedSeller: false },
+  { id: "mi6", name: "ECG Machine (12-lead)", category: "Diagnostics & Monitoring", condition: "New", price: "125,000", seller: "Rehman BioMedical", city: "Peshawar", area: "University Road", phone: "", showPhone: false, note: "12-lead interpretive ECG with trolley, cables and thermal paper.", kind: "product", img: `${MKT_IMG}/ecg.jpg`, stock: "In stock", delivery: ["Nationwide courier"], warranty: "1 year", posted: "3 days ago", verifiedSeller: true },
+  { id: "mi7", name: "Operating Table (Hydraulic)", category: "Surgical & Theatre", condition: "Refurbished", price: "410,000", seller: "Care Diagnostics Hub", city: "Lahore", area: "Model Town", phone: "0333 4455667", showPhone: true, note: "Fully serviced hydraulic OT table, installation included.", kind: "product", img: `${MKT_IMG}/operating-room.jpg`, stock: "Limited stock", delivery: ["Installation included"], warranty: "6 months", posted: "5 days ago", verifiedSeller: true },
+  { id: "mi8", name: "Oxygen Concentrator (5 LPM)", category: "Hospital Furniture & Support", condition: "New", price: "95,000", seller: "Al-Noor Surgical", city: "Multan", area: "Bosan Road", phone: "0300 8471290", showPhone: true, note: "Imported 5 LPM concentrator with nebuliser function.", kind: "product", img: `${MKT_IMG}/medical-kit.jpg`, stock: "In stock", delivery: ["Nationwide courier"], warranty: "1 year", posted: "2 days ago", verifiedSeller: true },
+  { id: "mi9", name: "Patient Monitor (5-parameter)", category: "Diagnostics & Monitoring", condition: "Refurbished", price: "165,000", seller: "Care Diagnostics Hub", city: "Lahore", area: "Model Town", phone: "", showPhone: false, note: "ECG, SpO2, NIBP, temperature and respiration. Battery backup.", kind: "product", img: `${MKT_IMG}/patient-monitor.jpg`, stock: "In stock", delivery: ["Local delivery"], warranty: "6 months", posted: "Yesterday", verifiedSeller: true },
+  { id: "mi10", name: "Binocular Microscope", category: "Lab & Pathology", condition: "New", price: "68,000", seller: "Precision Lab Supplies", city: "Islamabad", area: "G-9 Markaz", phone: "", showPhone: false, note: "Clinical binocular microscope with 4 objectives and LED illumination.", kind: "product", img: `${MKT_IMG}/microscope.jpg`, stock: "In stock", delivery: ["Nationwide courier"], warranty: "1 year", posted: "3 days ago", verifiedSeller: true },
+  { id: "mi11", name: "Foldable Wheelchair", category: "Hospital Furniture & Support", condition: "New", price: "18,500", seller: "Al-Noor Surgical", city: "Lahore", area: "Jail Road", phone: "", showPhone: false, note: "Lightweight foldable wheelchair with removable footrests.", kind: "product", img: `${MKT_IMG}/wheelchair.jpg`, stock: "In stock", delivery: ["Nationwide courier", "Local delivery"], warranty: "6 months", posted: "Today", verifiedSeller: true },
+  { id: "mi12", name: "Anesthesia Workstation", category: "Surgical & Theatre", condition: "Refurbished", price: "1,250,000", seller: "MediTech Instruments", city: "Karachi", area: "Saddar", phone: "", showPhone: false, note: "Two-vaporiser anesthesia machine with integrated ventilator. Calibrated.", kind: "product", img: `${MKT_IMG}/anesthesia.jpg`, stock: "Made to order", delivery: ["Installation included"], warranty: "1 year service", posted: "1 week ago", verifiedSeller: true },
+  { id: "mi13", name: "Lab Microscope Set (×3)", category: "Lab & Pathology", condition: "Used — Good", price: "120,000", seller: "Faisal Medical Store", city: "Faisalabad", area: "Susan Road", phone: "", showPhone: false, note: "Three teaching microscopes, ideal for colleges and small labs.", kind: "product", img: `${MKT_IMG}/lab-bench.jpg`, stock: "In stock", delivery: ["Pickup only"], warranty: "", posted: "6 days ago", verifiedSeller: false },
+  { id: "mi14", name: "Professional Stethoscope", category: "Diagnostics & Monitoring", condition: "New", price: "14,500", seller: "Shifa Medical Supplies", city: "Islamabad", area: "Blue Area", phone: "", showPhone: false, note: "Dual-head cardiology stethoscope with spare ear tips.", kind: "product", img: `${MKT_IMG}/stethoscope.jpg`, stock: "In stock", delivery: ["Nationwide courier"], warranty: "2 years", posted: "Yesterday", verifiedSeller: true },
+  { id: "mi15", name: "Nitrile Gloves (Box of 100)", category: "Supplies & Disposables", condition: "New", price: "1,450", seller: "MediTech Instruments", city: "Karachi", area: "Saddar", phone: "", showPhone: false, note: "Powder-free nitrile examination gloves. Bulk discounts for clinics.", kind: "product", img: `${MKT_IMG}/gloves.jpg`, stock: "In stock", delivery: ["Nationwide courier"], warranty: "", posted: "Today", verifiedSeller: true },
+  { id: "mi16", name: "Clinic Starter Kit", category: "Supplies & Disposables", condition: "New", price: "6,800", seller: "Al-Noor Surgical", city: "Multan", area: "Bosan Road", phone: "", showPhone: false, note: "Thermometer, pill organisers, dressings and basic diagnostic tools.", kind: "product", img: `${MKT_IMG}/medical-kit.jpg`, stock: "In stock", delivery: ["Nationwide courier"], warranty: "", posted: "4 days ago", verifiedSeller: true },
 ];
 
 const SEED_SERVICES = [
@@ -2102,18 +2247,267 @@ const SEED_SERVICES = [
   { id: "sv5", name: "Hospital Furniture Maintenance", provider: "FixIt Medical", city: "Peshawar", area: "University Road", phone: "", showPhone: false, note: "Beds, trolleys, OT tables.", rating: 4.2, jobs: 51 },
 ];
 
+const MKT_CONDITIONS = ["New", "Refurbished", "Used"];
+const MKT_PRICE_BANDS = [
+  { key: "p1", label: "Under Rs 10k", test: (n) => n < 10000 },
+  { key: "p2", label: "Rs 10k – 100k", test: (n) => n >= 10000 && n < 100000 },
+  { key: "p3", label: "Rs 100k – 500k", test: (n) => n >= 100000 && n < 500000 },
+  { key: "p4", label: "Rs 500k +", test: (n) => n >= 500000 },
+];
+const MKT_SORTS = [
+  { value: "newest", label: "Newest first" },
+  { value: "low", label: "Price: low to high" },
+  { value: "high", label: "Price: high to low" },
+];
+const EMPTY_MKT_FILTERS = { category: "", conds: [], prices: [], verified: false, delivery: false, warranty: false };
+const mktPrice = (i) => parseFloat(String(i.price || "").replace(/,/g, "")) || 0;
+const mktImage = (i) => (i.photos && i.photos.length ? i.photos[i.coverIndex || 0] || i.photos[0] : i.img || marketCatOf(i.category).img);
+const mktCondTone = (c = "") => (/^new/i.test(c) ? { color: GREEN, bg: GREEN_TINT } : /refurb/i.test(c) ? { color: BRAND, bg: BRAND_50 } : { color: AMBER, bg: AMBER_TINT });
+
+function MarketItemCard({ item, saved, onOpen, onToggleSave }) {
+  const tone = mktCondTone(item.condition);
+  return (
+    <article role="button" tabIndex={0} onClick={() => onOpen(item)}
+      onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onOpen(item); } }}
+      className="group h-full rounded-2xl bg-white overflow-hidden flex flex-col cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+      style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: SOFT_SHADOW }}>
+      <div className="relative aspect-[4/3] overflow-hidden" style={{ backgroundColor: CREAM }}>
+        <img src={mktImage(item)} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+        <span className="absolute left-3 top-3 text-[11px] font-bold px-2 py-1 rounded-md" style={{ color: tone.color, backgroundColor: "#fff" }}>{item.condition}</span>
+        {item.mine
+          ? <span className="absolute right-3 top-3 text-[11px] font-bold px-2 py-1 rounded-md text-white" style={{ backgroundColor: VIOLET }}>Your listing</span>
+          : (
+            <button type="button" onClick={(e) => { e.stopPropagation(); onToggleSave(item); }} aria-label={saved ? "Remove from saved" : "Save item"}
+              className="absolute right-3 top-3 w-9 h-9 rounded-full flex items-center justify-center bg-white/95 transition-transform hover:scale-105">
+              <Bookmark className="w-4 h-4" fill={saved ? BRAND : "none"} stroke={saved ? BRAND : INK_2} />
+            </button>
+          )}
+      </div>
+      <div className="p-4 flex-1 flex flex-col">
+        <p className="text-[12px] font-semibold" style={{ color: VIOLET }}>{marketCatOf(item.category).short}</p>
+        <p className="text-[15.5px] font-bold leading-snug mt-0.5 line-clamp-2 group-hover:text-[#5B47C7] transition-colors" style={{ color: INK }}>{item.name}</p>
+        <p className="text-[19px] font-extrabold mt-1.5" style={{ color: INK }}>
+          PKR {item.price}{item.priceTo ? <span className="text-[14px]"> – {item.priceTo}</span> : null}
+        </p>
+        <span className="flex-1" />
+        <div className="flex items-center gap-1.5 mt-3 pt-3 text-[12.5px] min-w-0" style={{ color: SUBTLE, borderTop: `1px solid ${CARD_BORDER}` }}>
+          <span className="truncate font-semibold" style={{ color: INK_2 }}>{item.seller}</span>
+          {item.verifiedSeller && <BadgeCheck className="w-4 h-4 shrink-0" style={{ color: GREEN }} />}
+          <span className="ml-auto inline-flex items-center gap-1 shrink-0"><MapPin className="w-3.5 h-3.5" />{item.city || "Pakistan"}</span>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function MarketItemPage({ item, all, onBack, onOpen, saved, onToggleSave, onMessage, onWhatsApp, onShare, onReport, reported, onEdit }) {
+  const [idx, setIdx] = useState(item.coverIndex || 0);
+  const trackRef = useRef(null);
+  useEffect(() => { setIdx(item.coverIndex || 0); window.scrollTo({ top: 0, left: 0, behavior: "instant" }); }, [item.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const photos = item.photos && item.photos.length ? item.photos : [mktImage(item)];
+  const cat = marketCatOf(item.category);
+  const tone = mktCondTone(item.condition);
+  const similar = all.filter((x) => x.id !== item.id && marketCatOf(x.category).key === cat.key)
+    .concat(all.filter((x) => x.id !== item.id && marketCatOf(x.category).key !== cat.key && x.city === item.city))
+    .slice(0, 10);
+  const specs = [
+    ["Category", cat.label],
+    ["Condition", item.condition],
+    ["Availability", item.stock || "Ask seller"],
+    ["Warranty", item.warranty || "No warranty"],
+    ["Delivery", (item.delivery && item.delivery.length ? item.delivery.join(", ") : "Ask seller")],
+    ["Location", [item.area, item.city].filter(Boolean).join(", ") || "Shared on contact"],
+  ];
+  const slide = (dir) => { const el = trackRef.current; if (el) el.scrollBy({ left: dir * el.clientWidth * 0.9, behavior: "smooth" }); };
+
+  return (
+    <div className="w-full min-w-0 page-enter" style={{ fontFamily: FONT }}>
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 sm:py-7">
+        <div className="flex items-center gap-2 text-[13.5px] mb-5" style={{ color: SUBTLE }}>
+          <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl font-semibold bg-white transition-colors hover:bg-[#F5F7FA]" style={{ color: INK_2, border: `1px solid ${CARD_BORDER}` }}>
+            <ChevronLeft className="w-4 h-4" /> Marketplace
+          </button>
+          <span className="hidden sm:inline">/</span>
+          <span className="hidden sm:inline">{cat.label}</span>
+        </div>
+
+        <div className="grid lg:grid-cols-[1.1fr_1fr] gap-6 items-start">
+          {/* gallery */}
+          <div className="min-w-0">
+            <div className="rounded-3xl overflow-hidden aspect-[4/3]" style={{ backgroundColor: CREAM, border: `1px solid ${CARD_BORDER}` }}>
+              <img src={photos[idx] || photos[0]} alt={item.name} className="w-full h-full object-cover" />
+            </div>
+            {photos.length > 1 && (
+              <div className="flex gap-2 mt-3 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+                {photos.map((src, k) => (
+                  <button key={k} type="button" onClick={() => setIdx(k)} className="shrink-0 w-20 h-16 rounded-xl overflow-hidden"
+                    style={{ border: `2px solid ${k === idx ? VIOLET : "transparent"}` }}>
+                    <img src={src} alt="" className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* summary */}
+          <div className="min-w-0 lg:sticky lg:top-[88px]">
+            <div className="rounded-3xl bg-white p-5 sm:p-6" style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: "0 16px 40px -24px rgba(16,24,40,0.3)" }}>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[12px] font-bold px-2.5 py-1 rounded-lg" style={{ color: tone.color, backgroundColor: tone.bg }}>{item.condition}</span>
+                <span className="text-[12px] font-bold px-2.5 py-1 rounded-lg inline-flex items-center gap-1" style={{ color: VIOLET, backgroundColor: VIOLET_TINT }}><cat.icon className="w-3.5 h-3.5" /> {cat.short}</span>
+                {item.stock && <span className="text-[12px] font-semibold px-2.5 py-1 rounded-lg" style={{ color: INK_2, backgroundColor: CREAM }}>{item.stock}</span>}
+              </div>
+              <h1 className="text-[24px] sm:text-[28px] font-extrabold tracking-[-0.025em] leading-tight mt-3" style={{ color: INK }}>{item.name}</h1>
+              <p className="text-[30px] font-extrabold mt-2 leading-none" style={{ color: INK }}>
+                PKR {item.price}{item.priceTo ? <span className="text-[20px]"> – {item.priceTo}</span> : null}
+              </p>
+              {item.posted && <p className="text-[13px] mt-2" style={{ color: FAINT }}>Listed {item.posted}</p>}
+
+              <div className="grid grid-cols-2 gap-2 mt-5">
+                {[
+                  [Truck, "Delivery", item.delivery && item.delivery.length ? item.delivery[0] : "Ask seller"],
+                  [ShieldCheck, "Warranty", item.warranty || "None"],
+                ].map(([Icon, k, v]) => (
+                  <div key={k} className="rounded-xl p-3" style={{ backgroundColor: CREAM }}>
+                    <p className="text-[11.5px] font-bold uppercase tracking-[0.06em] flex items-center gap-1.5" style={{ color: SUBTLE }}><Icon className="w-3.5 h-3.5" /> {k}</p>
+                    <p className="text-[14px] font-semibold mt-1 truncate" style={{ color: INK }}>{v}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* seller */}
+              <div className="mt-5 rounded-2xl p-4 flex items-center gap-3" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                <span className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 text-white font-extrabold text-[17px]" style={{ backgroundColor: VIOLET }}>
+                  {(item.seller || "?")[0]}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[15px] font-bold truncate flex items-center gap-1.5" style={{ color: INK }}>
+                    {item.seller} {item.verifiedSeller && <BadgeCheck className="w-4 h-4 shrink-0" style={{ color: GREEN }} />}
+                  </p>
+                  <p className="text-[13px] truncate flex items-center gap-1" style={{ color: SUBTLE }}>
+                    <MapPin className="w-3.5 h-3.5 shrink-0" /> {[item.area, item.city].filter(Boolean).join(", ") || "Location shared on contact"}
+                  </p>
+                </div>
+              </div>
+
+              {item.mine ? (
+                <button type="button" onClick={onEdit} className="w-full h-12 mt-4 rounded-xl text-[15px] font-bold text-white inline-flex items-center justify-center gap-2" style={{ backgroundColor: VIOLET }}>
+                  <Pencil className="w-4 h-4" /> Edit listing
+                </button>
+              ) : (
+                <div className="flex gap-2 mt-4">
+                  <button type="button" onClick={onMessage}
+                    className="flex-1 h-12 rounded-xl text-[15px] font-bold text-white inline-flex items-center justify-center gap-2 transition-all hover:brightness-110"
+                    style={{ backgroundColor: VIOLET, boxShadow: "0 8px 20px -10px rgba(91,71,199,0.6)" }}>
+                    <MessageSquareText className="w-[18px] h-[18px]" /> Message seller
+                  </button>
+                  {item.showPhone && item.phone && (
+                    <button type="button" onClick={onWhatsApp} aria-label="WhatsApp seller"
+                      className="h-12 px-4 rounded-xl text-[14.5px] font-bold inline-flex items-center justify-center gap-2" style={{ color: "#128C3E", border: "1.5px solid #1DA851" }}>
+                      <WhatsAppGlyph /> <span className="hidden sm:inline">WhatsApp</span>
+                    </button>
+                  )}
+                </div>
+              )}
+
+              <div className="flex gap-2 mt-2.5">
+                {!item.mine && (
+                  <button type="button" onClick={onToggleSave} className="flex-1 h-11 rounded-xl text-[13.5px] font-bold inline-flex items-center justify-center gap-1.5 transition-colors hover:bg-[#F5F7FA]"
+                    style={{ color: saved ? BRAND : INK_2, border: `1px solid ${saved ? "#B9D3F2" : CARD_BORDER}`, backgroundColor: saved ? BRAND_50 : "#fff" }}>
+                    <Bookmark className="w-4 h-4" fill={saved ? BRAND : "none"} /> {saved ? "Saved" : "Save"}
+                  </button>
+                )}
+                <button type="button" onClick={onShare} className="flex-1 h-11 rounded-xl text-[13.5px] font-bold inline-flex items-center justify-center gap-1.5 transition-colors hover:bg-[#F5F7FA]" style={{ color: INK_2, border: `1px solid ${CARD_BORDER}` }}>
+                  <Repeat2 className="w-4 h-4" /> Share
+                </button>
+                {!item.mine && (
+                  <button type="button" onClick={onReport} className="flex-1 h-11 rounded-xl text-[13.5px] font-bold inline-flex items-center justify-center gap-1.5 transition-colors hover:bg-[#F5F7FA]"
+                    style={{ color: reported ? RED : INK_2, border: `1px solid ${reported ? "#F3B7B2" : CARD_BORDER}`, backgroundColor: reported ? RED_TINT : "#fff" }}>
+                    <Flag className="w-4 h-4" /> {reported ? "Reported" : "Report"}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid lg:grid-cols-[1.1fr_1fr] gap-6 mt-6 items-start">
+          <section className="rounded-2xl bg-white p-5 sm:p-6" style={{ border: `1px solid ${CARD_BORDER}` }}>
+            <h2 className="text-[17px] font-extrabold mb-3" style={{ color: INK }}>Description</h2>
+            <p className="text-[15px] leading-relaxed" style={{ color: INK_2 }}>{item.note || "The seller hasn't added a description yet — message them for details."}</p>
+            <h2 className="text-[17px] font-extrabold mt-6 mb-3" style={{ color: INK }}>Specifications</h2>
+            <dl className="rounded-xl overflow-hidden" style={{ border: `1px solid ${CARD_BORDER}` }}>
+              {specs.map(([k, v], i) => (
+                <div key={k} className="flex gap-4 px-4 py-3 text-[14px]" style={{ borderTop: i ? `1px solid ${CARD_BORDER}` : "none", backgroundColor: i % 2 ? "#fff" : "#FAFBFC" }}>
+                  <dt className="w-32 shrink-0 font-semibold" style={{ color: SUBTLE }}>{k}</dt>
+                  <dd className="flex-1 min-w-0 font-semibold" style={{ color: INK }}>{v}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+          <section className="rounded-2xl p-5 sm:p-6" style={{ backgroundColor: AMBER_TINT }}>
+            <h2 className="text-[17px] font-extrabold mb-3 flex items-center gap-2" style={{ color: "#6B4B22" }}><ShieldCheck className="w-5 h-5" style={{ color: AMBER }} /> Buy safely</h2>
+            <ul className="space-y-2.5 text-[14.5px]" style={{ color: "#6B4B22" }}>
+              {["Inspect the equipment in person or on video before paying.", "Ask for invoices, warranty cards and calibration certificates.", "Never send an advance payment to someone you haven't met.", "Report listings that look suspicious — we review every report."].map((t) => (
+                <li key={t} className="flex items-start gap-2.5"><CheckCircle2 className="w-[18px] h-[18px] shrink-0 mt-0.5" style={{ color: AMBER }} /> {t}</li>
+              ))}
+            </ul>
+          </section>
+        </div>
+
+        {similar.length > 0 && (
+          <section className="mt-10">
+            <div className="flex items-end justify-between gap-4 mb-4">
+              <div>
+                <h2 className="text-[22px] font-extrabold tracking-[-0.02em]" style={{ color: INK }}>Similar equipment</h2>
+                <p className="text-[14px] mt-1" style={{ color: SUBTLE }}>More in {cat.short}{item.city ? ` and around ${item.city}` : ""}</p>
+              </div>
+              <div className="hidden sm:flex gap-2 shrink-0">
+                {[[-1, ChevronLeft, "Previous"], [1, ChevronRight, "Next"]].map(([dir, Icon, label]) => (
+                  <button key={label} type="button" onClick={() => slide(dir)} aria-label={label}
+                    className="w-10 h-10 rounded-full flex items-center justify-center bg-white transition-shadow hover:shadow-md" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                    <Icon className="w-5 h-5" style={{ color: INK }} />
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div ref={trackRef} className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-3 -mx-4 px-4 scroll-px-4 sm:mx-0 sm:px-0 sm:scroll-px-0" style={{ scrollbarWidth: "none" }}>
+              {similar.map((x) => (
+                <div key={x.id} className="snap-start shrink-0 w-[72%] sm:w-[calc((100%-16px)/2)] lg:w-[calc((100%-48px)/4)]">
+                  <MarketItemCard item={x} saved={false} onOpen={onOpen} onToggleSave={() => {}} />
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function MarketHubScreen({ initialQuery, onBack, onMenu, onOpenSeller, onSendMessage, onReport, reportedIds, listings, canSell, requireAuth = (r, fn) => fn(), isSaved = () => false, onToggleSave = () => {} }) {
   const [tab, setTab] = useState("buy");          // buy | sell | services
-  const [text, setText] = useState(initialQuery || "");
-  const [city, setCity] = useState("");
-  const [cond, setCond] = useState("All");
-  const [sheet, setSheet] = useState(null);
+  const [query, setQuery] = useState(initialQuery || "");
+  const [qDraft, setQDraft] = useState(initialQuery || "");
+  const [location, setLocation] = useState("");
+  const [locDraft, setLocDraft] = useState("");
+  const [f, setF] = useState(EMPTY_MKT_FILTERS);
+  const [sort, setSort] = useState("newest");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [msgTarget, setMsgTarget] = useState(null);
   const [msgDraft, setMsgDraft] = useState("");
   const [sentTo, setSentTo] = useState({});
   const [openItem, setOpenItem] = useState(null);
   const [shareItem, setShareItem] = useState(null);
-  const [photoIdx, setPhotoIdx] = useState(0);
+  const resultsRef = useRef(null);
+
+  useEffect(() => {
+    if (!filtersOpen && !msgTarget) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [filtersOpen, msgTarget]);
+
   const waLink = (phone, item) => {
     const d = String(phone || "").replace(/\D/g, "").replace(/^0/, "");
     const text = `Assalam o Alaikum, I saw your listing "${item.name}" on PakMed. Is it still available?\n— sent via PakMed · pakmed.app`;
@@ -2124,24 +2518,58 @@ function MarketHubScreen({ initialQuery, onBack, onMenu, onOpenSeller, onSendMes
     id: l.id, name: l.name, category: l.category, condition: l.condition,
     price: l.price, priceTo: l.priceTo, seller: "Your listing", city: "", area: "", phone: "", showPhone: false,
     note: l.notes || "", kind: "product", mine: true, photos: l.photos, coverIndex: l.coverIndex,
-    stock: l.stock, delivery: l.delivery, warranty: l.warranty,
+    stock: l.stock, delivery: l.delivery, warranty: l.warranty, posted: "Just now",
   }));
-
   const allItems = [...userListings, ...SEED_MARKET_ITEMS];
-  const t = text.trim().toLowerCase();
 
-  const items = allItems.filter((i) =>
-    (!city || (i.city || "").toLowerCase() === city.toLowerCase()) &&
-    (cond === "All" || (i.condition || "").toLowerCase().includes(cond.toLowerCase())) &&
-    (!t || [i.name, i.category, i.seller, i.city, i.area].filter(Boolean).some((v) => v.toLowerCase().includes(t)))
-  );
-
+  const q = query.trim().toLowerCase();
+  const loc = location.trim().toLowerCase();
+  const base = allItems.filter((i) => {
+    if (q && ![i.name, i.category, i.seller, i.note].filter(Boolean).some((v) => v.toLowerCase().includes(q))) return false;
+    if (loc && ![i.city, i.area].filter(Boolean).some((v) => v.toLowerCase().includes(loc))) return false;
+    if (f.conds.length && !f.conds.some((c) => (i.condition || "").toLowerCase().startsWith(c.toLowerCase()))) return false;
+    if (f.prices.length && !f.prices.some((k) => MKT_PRICE_BANDS.find((b) => b.key === k).test(mktPrice(i)))) return false;
+    if (f.verified && !i.verifiedSeller) return false;
+    if (f.delivery && !(i.delivery || []).some((d) => /courier|delivery/i.test(d))) return false;
+    if (f.warranty && !i.warranty) return false;
+    return true;
+  });
+  const catCounts = base.reduce((acc, i) => { const k = marketCatOf(i.category).key; acc[k] = (acc[k] || 0) + 1; return acc; }, {});
+  const items = (f.category ? base.filter((i) => marketCatOf(i.category).key === f.category) : base).slice().sort((a, b) => {
+    if (sort === "low") return mktPrice(a) - mktPrice(b);
+    if (sort === "high") return mktPrice(b) - mktPrice(a);
+    return 0;
+  });
   const services = SEED_SERVICES.filter((sv) =>
-    (!city || sv.city.toLowerCase() === city.toLowerCase()) &&
-    (!t || [sv.name, sv.provider, sv.city, sv.area].some((v) => v.toLowerCase().includes(t)))
+    (!loc || [sv.city, sv.area].some((v) => v.toLowerCase().includes(loc))) &&
+    (!q || [sv.name, sv.provider, sv.note].some((v) => v.toLowerCase().includes(q)))
   );
 
+  const suggestions = tab === "services"
+    ? [...new Set(SEED_SERVICES.flatMap((s) => [s.name, s.provider]))]
+    : [...new Set([...allItems.map((i) => i.name), ...MARKET_CATS.map((c) => c.label), ...ALL_PRODUCTS.map((p) => p.name)])];
   const cityOptions = [...new Set([...CITIES, ...SEED_MARKET_ITEMS.map((i) => i.city)])].sort();
+
+  const panelCount = f.conds.length + f.prices.length + f.verified + f.delivery + f.warranty;
+  const toggle = (key) => (v) => setF((p) => ({ ...p, [key]: p[key].includes(v) ? p[key].filter((x) => x !== v) : [...p[key], v] }));
+  const chips = [
+    query && { label: `“${query}”`, clear: () => { setQuery(""); setQDraft(""); } },
+    location && { label: location, icon: MapPin, clear: () => { setLocation(""); setLocDraft(""); } },
+    f.category && { label: MARKET_CATS.find((c) => c.key === f.category).short, clear: () => setF((p) => ({ ...p, category: "" })) },
+    ...f.conds.map((c) => ({ label: c, clear: () => toggle("conds")(c) })),
+    ...f.prices.map((k) => ({ label: MKT_PRICE_BANDS.find((b) => b.key === k).label, clear: () => toggle("prices")(k) })),
+    f.verified && { label: "Verified sellers", clear: () => setF((p) => ({ ...p, verified: false })) },
+    f.delivery && { label: "Delivery available", clear: () => setF((p) => ({ ...p, delivery: false })) },
+    f.warranty && { label: "With warranty", clear: () => setF((p) => ({ ...p, warranty: false })) },
+  ].filter(Boolean);
+  const clearAll = () => { setQuery(""); setQDraft(""); setLocation(""); setLocDraft(""); setF(EMPTY_MKT_FILTERS); };
+  const runSearch = (e) => {
+    if (e) e.preventDefault();
+    setQuery(qDraft.trim());
+    setLocation(locDraft.trim());
+    if (tab === "sell") setTab("buy");
+    if (resultsRef.current && window.innerWidth < 1024) resultsRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   const send = () => {
     if (!msgDraft.trim() || !msgTarget) return;
@@ -2149,201 +2577,334 @@ function MarketHubScreen({ initialQuery, onBack, onMenu, onOpenSeller, onSendMes
     setSentTo((p) => ({ ...p, [msgTarget.id]: true }));
     setMsgDraft(""); setMsgTarget(null);
   };
+  const contact = (it) => requireAuth("contact this seller", () => setMsgTarget(it));
+  const pill = (on, color = VIOLET) => ({ color: on ? "#fff" : INK_2, backgroundColor: on ? color : "#fff", border: `1px solid ${on ? color : CARD_BORDER}` });
+  const H = ({ children }) => <p className="text-[12.5px] font-bold uppercase tracking-[0.07em] mb-2.5" style={{ color: SUBTLE }}>{children}</p>;
 
-  const TabBtn = ({ k, label }) => (
-    <button onClick={() => setTab(k)}
-      className="flex-1 py-2.5 rounded-xl text-[13px] font-semibold transition-colors"
-      style={{ backgroundColor: tab === k ? INK : "transparent", color: tab === k ? "white" : SUBTLE }}>
-      {label}
-    </button>
-  );
-
-  return (
-    <div className="flex flex-col h-full min-h-0">
-      <ScreenHeader title="Healthcare Market" subtitle="Buy, sell, service and repair" onBack={onBack} onMenu={onMenu} />
-
-      {/* Buy / Sell / Services */}
-      <div className="px-3 pb-2 shrink-0">
-        <div className="flex gap-1 p-1 rounded-2xl" style={{ backgroundColor: "white", border: `1px solid ${CARD_BORDER}` }}>
-          <TabBtn k="buy" label="Buy" />
-          <TabBtn k="sell" label="Sell" />
-          <TabBtn k="services" label="Services & Repair" />
+  const Panel = (
+    <div className="pb-4">
+      <div className="pt-1">
+        <H>Condition</H>
+        <div className="flex flex-wrap gap-2">
+          {MKT_CONDITIONS.map((c) => (
+            <button key={c} type="button" aria-pressed={f.conds.includes(c)} onClick={() => toggle("conds")(c)}
+              className="h-9 px-3.5 rounded-full text-[13px] font-semibold transition-colors" style={pill(f.conds.includes(c))}>{c}</button>
+          ))}
         </div>
       </div>
+      <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+        <H>Price</H>
+        <div className="flex flex-wrap gap-2">
+          {MKT_PRICE_BANDS.map((b) => (
+            <button key={b.key} type="button" aria-pressed={f.prices.includes(b.key)} onClick={() => toggle("prices")(b.key)}
+              className="h-9 px-3.5 rounded-full text-[13px] font-semibold transition-colors" style={pill(f.prices.includes(b.key))}>{b.label}</button>
+          ))}
+        </div>
+      </div>
+      <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+        <H>More</H>
+        <div className="flex flex-wrap gap-2">
+          {[["verified", "Verified sellers", BadgeCheck], ["delivery", "Delivery available", Truck], ["warranty", "With warranty", ShieldCheck]].map(([k, label, Icon]) => (
+            <button key={k} type="button" aria-pressed={f[k]} onClick={() => setF((p) => ({ ...p, [k]: !p[k] }))}
+              className="h-9 px-3 rounded-full text-[13px] font-semibold inline-flex items-center gap-1.5 transition-colors" style={pill(f[k])}>
+              <Icon className="w-3.5 h-3.5" /> {label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 
-      {/* search + minimal filters (buy & services only) */}
-      {tab !== "sell" && (
-        <div className="px-3 pb-2 shrink-0">
-          <div className="relative mb-2">
-            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: SUBTLE }} />
-            <input value={text} onChange={(e) => setText(e.target.value)}
-              placeholder={tab === "buy" ? "What are you looking for?" : "Search a service or provider"}
-              className="w-full text-[14.5px] rounded-xl pl-10 pr-9 py-3 outline-none"
-              style={{ backgroundColor: "white", color: INK, border: `1px solid ${CARD_BORDER}` }} />
-            {text && <button onClick={() => setText("")} className="absolute right-3.5 top-1/2 -translate-y-1/2"><X className="w-4 h-4" style={{ color: SUBTLE }} /></button>}
+  if (openItem) {
+    return (
+      <>
+        <MarketItemPage
+          item={openItem}
+          all={allItems}
+          onBack={() => setOpenItem(null)}
+          onOpen={setOpenItem}
+          saved={isSaved("market", openItem.id)}
+          onToggleSave={() => onToggleSave("market", openItem)}
+          onMessage={() => contact(openItem)}
+          onWhatsApp={() => requireAuth("contact this seller", () => { try { window.open(waLink(openItem.phone, openItem), "_blank", "noopener"); } catch (e) { /* blocked */ } })}
+          onShare={() => requireAuth("share this listing", () => setShareItem(openItem))}
+          onReport={() => onReport({ id: openItem.id, type: "listing", title: openItem.name, subtitle: `${openItem.seller} · ${openItem.city}` })}
+          reported={reportedIds && reportedIds.has(openItem.id)}
+          onEdit={() => { setOpenItem(null); onOpenSeller(); }}
+        />
+        {shareItem && <ShareSheet card={{ id: shareItem.id, title: `${shareItem.name} — PKR ${shareItem.price}` }} onClose={() => setShareItem(null)} />}
+        {msgTarget && <MarketMessageModal target={msgTarget} draft={msgDraft} setDraft={setMsgDraft} onSend={send} onClose={() => setMsgTarget(null)} />}
+      </>
+    );
+  }
+
+  return (
+    <div className="w-full min-w-0" style={{ fontFamily: FONT }}>
+      {/* hero */}
+      <section className="relative z-10" style={{ background: "linear-gradient(135deg, #2E2370 0%, #5B47C7 55%, #0B57B7 100%)" }}>
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div className="absolute -right-24 -top-24 w-80 h-80 rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.07)" }} />
+          <img src={`${MKT_IMG}/patient-monitor.jpg`} alt="" className="hidden lg:block absolute right-0 top-0 h-full w-[34%] object-cover opacity-25" style={{ maskImage: "linear-gradient(90deg, transparent, #000 60%)", WebkitMaskImage: "linear-gradient(90deg, transparent, #000 60%)" }} />
+        </div>
+        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-6 pb-8 sm:pt-8 sm:pb-10">
+          <div className="flex items-center gap-2 mb-5">
+            {onBack && (
+              <button type="button" onClick={onBack} aria-label="Back" className="w-9 h-9 rounded-xl flex items-center justify-center bg-white/15 hover:bg-white/25 transition-colors">
+                <ChevronLeft className="w-5 h-5 text-white" />
+              </button>
+            )}
+            <p className="text-[13px] font-semibold text-white/80">Home <span className="mx-1 text-white/50">/</span> <span className="text-white">Buy / Sell</span></p>
           </div>
-          <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
-            <FilterPill label="Near me" value={city} onClick={() => setSheet("city")} onClear={() => setCity("")} />
-            {tab === "buy" && CONDITION_FILTER.map((c) => (
-              <button key={c} onClick={() => setCond(c)}
-                className="shrink-0 px-3 py-2 rounded-full text-[12.5px] font-semibold transition-colors"
-                style={{ backgroundColor: cond === c ? INK : "white", color: cond === c ? "white" : INK, border: `1.5px solid ${cond === c ? INK : CARD_BORDER}` }}>
-                {c}
+          <h1 className="text-[28px] sm:text-[38px] font-extrabold tracking-[-0.03em] leading-tight text-white">Medical equipment marketplace</h1>
+          <p className="text-[14.5px] sm:text-[16px] mt-2 text-white/80">Buy, sell and service equipment from {new Set(SEED_MARKET_ITEMS.map((i) => i.seller)).size}+ trusted suppliers across Pakistan</p>
+
+          <div className="inline-flex p-1 rounded-2xl mt-6 bg-white/12" style={{ backgroundColor: "rgba(255,255,255,0.12)" }} role="tablist">
+            {[["buy", "Buy", Store], ["sell", "Sell", Tag], ["services", "Services & repair", Wrench]].map(([k, label, Icon]) => (
+              <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
+                className="h-10 px-3.5 sm:px-5 rounded-xl text-[14px] font-bold inline-flex items-center gap-2 transition-all"
+                style={{ backgroundColor: tab === k ? "#fff" : "transparent", color: tab === k ? VIOLET : "#fff" }}>
+                <Icon className="w-4 h-4" /> {label}
               </button>
             ))}
           </div>
+
+          {tab !== "sell" && (
+            <form onSubmit={runSearch} className="mt-4 bg-white rounded-2xl p-2 grid grid-cols-1 md:grid-cols-[1.3fr_1fr_auto] gap-2 relative z-20" style={{ boxShadow: "0 20px 40px -20px rgba(0,0,0,0.4)" }}>
+              <SearchSuggestInput
+                icon={tab === "services" ? Wrench : Search}
+                value={qDraft}
+                onChange={setQDraft}
+                onPick={(v) => { setQDraft(v); setQuery(v); }}
+                onClear={() => { setQDraft(""); setQuery(""); }}
+                placeholder={tab === "services" ? "Repair, calibration, installation…" : "Equipment, brand or category"}
+                suggestions={suggestions}
+                srLabel="Search the marketplace"
+                className="md:border-r rounded-xl"
+                style={{ borderColor: CARD_BORDER }}
+              />
+              <SearchSuggestInput
+                icon={MapPin}
+                value={locDraft}
+                onChange={setLocDraft}
+                onPick={(v) => { setLocDraft(v); setLocation(v); }}
+                onClear={() => { setLocDraft(""); setLocation(""); }}
+                placeholder="City or area"
+                suggestions={cityOptions}
+                srLabel="City or area"
+                className="rounded-xl"
+              />
+              <button type="submit" className="h-12 px-7 rounded-xl text-[15px] font-bold text-white inline-flex items-center justify-center gap-2 transition-all hover:brightness-110" style={{ backgroundColor: VIOLET }}>
+                <Search className="w-4 h-4" /> Search
+              </button>
+            </form>
+          )}
         </div>
-      )}
+      </section>
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-4">
-
-        {/* ---------- BUY ---------- */}
+      <div ref={resultsRef} className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 scroll-mt-20">
+        {/* ================= BUY ================= */}
         {tab === "buy" && (
           <>
-            <p className="text-[14px] font-bold mb-2" style={{ color: INK, letterSpacing: "-0.01em" }}>
-              {items.length} item{items.length !== 1 ? "s" : ""}{city ? ` near ${city}` : " nationwide"}
-            </p>
-            {items.length === 0 ? (
-              <div className="rounded-2xl bg-white p-6 text-center" style={{ border: `1px solid ${CARD_BORDER}` }}>
-                <Store className="w-8 h-8 mx-auto mb-2" style={{ color: SUBTLE }} />
-                <p className="text-[13.5px]" style={{ color: SUBTLE }}>Nothing matches. Try a nearby city or clear a filter.</p>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2.5">
-                {items.map((i) => (
-                  <div key={i.id} className="rounded-2xl bg-white p-3.5" style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: SOFT_SHADOW }}>
-                    <div className="flex items-start gap-3 cursor-pointer" onClick={() => { setPhotoIdx(i.coverIndex || 0); setOpenItem(i); }}>
-                      {i.photos && i.photos.length ? (
-                        <img src={i.photos[i.coverIndex] || i.photos[0]} alt="" className="w-14 h-14 rounded-xl object-cover shrink-0" />
-                      ) : (
-                        <div className="w-14 h-14 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "#EFF2FA" }}>
-                          <Store className="w-5 h-5" style={{ color: SUBTLE }} />
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                            style={{ color: i.condition === "New" ? GREEN : SUBTLE, backgroundColor: i.condition === "New" ? GREEN_TINT : "#EFF2FA" }}>
-                            {i.condition}
-                          </span>
-                          {i.mine && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: VIOLET, backgroundColor: VIOLET_TINT }}>Yours</span>}
-                        </div>
-                        <p className="text-[15px] font-semibold leading-snug" style={{ color: INK }}>{i.name}</p>
-                        <p className="text-[16px] font-bold mt-0.5" style={{ color: INK }}>PKR {i.price}</p>
-                        <p className="text-[12px] mt-0.5 truncate" style={{ color: SUBTLE }}>{i.seller}{i.city ? ` · ${i.area}, ${i.city}` : ""}</p>
-                        {i.note && <p className="text-[12px] mt-1 leading-snug" style={{ color: "#4B4A45" }}>{i.note}</p>}
-                      </div>
-                    </div>
-                    {!i.mine && (
-                      <div className="flex items-center gap-2 mt-2.5 pt-2.5" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
-                        <button onClick={() => requireAuth("contact this seller", () => setMsgTarget(i))}
-                          className="flex-1 py-2.5 rounded-full text-[12.5px] font-semibold flex items-center justify-center gap-1.5"
-                          style={{ backgroundColor: sentTo[i.id] ? GREEN_TINT : BRAND, color: sentTo[i.id] ? GREEN : "white" }}>
-                          {sentTo[i.id] ? <><Check className="w-3.5 h-3.5" /> Message sent</> : <><MessageSquareText className="w-3.5 h-3.5" /> Contact seller</>}
-                        </button>
-                        <SaveButton saved={isSaved("market", i.id)} onClick={() => onToggleSave("market", i)} />
-                        <ReportButton reported={reportedIds && reportedIds.has(i.id)}
-                          onClick={() => onReport({ id: i.id, type: "listing", title: i.name, subtitle: `${i.seller} · ${i.city}` })} />
-                      </div>
-                    )}
-                    {i.showPhone && i.phone && <p className="text-[12px] mt-2" style={{ color: SUBTLE }}><IconText icon={Phone}>{i.phone}</IconText></p>}
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
-        )}
-
-        {/* ---------- SELL ---------- */}
-        {tab === "sell" && (
-          <>
-            <button onClick={onOpenSeller}
-              className="w-full rounded-2xl p-4 flex items-center gap-3.5 mb-3 active:scale-[0.98] transition-transform"
-              style={{ backgroundColor: INK }}>
-              <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "#FFFFFF22" }}>
-                <Upload className="w-5 h-5 text-white" />
-              </div>
-              <div className="flex-1 text-left">
-                <p className="text-[15px] font-semibold text-white">List something for sale</p>
-                <p className="text-[12.5px] mt-0.5 text-white/70">Products, equipment or supplies — new or used</p>
-              </div>
-              <ChevronRight className="w-4 h-4 text-white/60" />
-            </button>
-
-            <div className="flex items-center justify-between mb-1.5">
-              <p className="text-[13px] font-semibold" style={{ color: INK_2 }}>Your listings</p>
-              <span className="text-[12px]" style={{ color: SUBTLE }}>{(listings || []).length}</span>
-            </div>
-
-            {(listings || []).length === 0 ? (
-              <div className="rounded-2xl bg-white p-6 text-center" style={{ border: `1px solid ${CARD_BORDER}` }}>
-                <Store className="w-8 h-8 mx-auto mb-2" style={{ color: SUBTLE }} />
-                <p className="text-[13.5px]" style={{ color: SUBTLE }}>You haven't listed anything yet.</p>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2.5">
-                {listings.map((l) => (
-                  <button key={l.id} onClick={onOpenSeller} className="rounded-2xl bg-white p-3.5 text-left" style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: SOFT_SHADOW }}>
-                    <div className="flex items-center gap-3">
-                      {l.photos && l.photos.length ? (
-                        <img src={l.photos[l.coverIndex] || l.photos[0]} alt="" className="w-12 h-12 rounded-xl object-cover shrink-0" />
-                      ) : (
-                        <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "#EFF2FA" }}>
-                          <Store className="w-5 h-5" style={{ color: SUBTLE }} />
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[14.5px] font-semibold truncate" style={{ color: INK }}>{l.name}</p>
-                        <p className="text-[13px] font-bold" style={{ color: INK }}>PKR {l.price}</p>
-                      </div>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                        style={{ color: l.status === "live" ? GREEN : SUBTLE, backgroundColor: l.status === "live" ? GREEN_TINT : "#EFF2FA" }}>
-                        {l.status === "live" ? "Live" : l.status === "sold" ? "Sold" : "Hidden"}
+            {/* categories */}
+            <div className="flex gap-3 overflow-x-auto pb-2 mb-6 -mx-4 px-4 sm:mx-0 sm:px-0" style={{ scrollbarWidth: "none" }}>
+              {MARKET_CATS.map((c) => {
+                const on = f.category === c.key;
+                const n = catCounts[c.key] || 0;
+                return (
+                  <button key={c.key} type="button" onClick={() => setF((p) => ({ ...p, category: on ? "" : c.key }))}
+                    className="group shrink-0 w-[150px] sm:w-[156px] rounded-2xl overflow-hidden text-left bg-white transition-all hover:-translate-y-0.5 hover:shadow-md"
+                    style={{ border: `2px solid ${on ? VIOLET : CARD_BORDER}` }}>
+                    <div className="relative h-20 overflow-hidden">
+                      <img src={c.img} alt="" loading="lazy" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                      <div className="absolute inset-0" style={{ background: on ? "rgba(91,71,199,0.35)" : "linear-gradient(180deg, transparent 30%, rgba(16,24,40,0.35))" }} />
+                      <span className="absolute left-2.5 bottom-2 w-8 h-8 rounded-lg flex items-center justify-center bg-white">
+                        <c.icon className="w-4 h-4" style={{ color: VIOLET }} />
                       </span>
                     </div>
+                    <div className="px-3 py-2.5">
+                      <p className="text-[13.5px] font-bold truncate" style={{ color: on ? VIOLET : INK }}>{c.short}</p>
+                      <p className="text-[12px]" style={{ color: SUBTLE }}>{n} {n === 1 ? "item" : "items"}</p>
+                    </div>
                   </button>
-                ))}
+                );
+              })}
+            </div>
+
+            <div className="grid lg:grid-cols-[250px_1fr] gap-6 items-start">
+              <aside className="hidden lg:block sticky top-[88px] rounded-2xl bg-white px-5 pt-4 pb-1" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                <div className="flex items-center justify-between pb-3">
+                  <p className="text-[16px] font-extrabold flex items-center gap-2" style={{ color: INK }}><SlidersHorizontal className="w-4 h-4" /> Filters</p>
+                  {panelCount > 0 && <button type="button" onClick={() => setF((p) => ({ ...EMPTY_MKT_FILTERS, category: p.category }))} className="text-[13px] font-bold" style={{ color: VIOLET }}>Clear</button>}
+                </div>
+                {Panel}
+              </aside>
+
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  <p className="text-[14.5px] mr-auto" style={{ color: SUBTLE }}>
+                    <b className="text-[16px]" style={{ color: INK }}>{items.length}</b> {items.length === 1 ? "item" : "items"}
+                    {location ? <> in <b style={{ color: INK }}>{location}</b></> : " across Pakistan"}
+                  </p>
+                  <button type="button" onClick={() => setFiltersOpen(true)}
+                    className="lg:hidden h-10 px-3.5 rounded-xl text-[13.5px] font-bold inline-flex items-center gap-2 bg-white" style={{ color: INK, border: `1px solid ${CARD_BORDER}` }}>
+                    <SlidersHorizontal className="w-4 h-4" /> Filters
+                    {panelCount > 0 && <span className="w-5 h-5 rounded-full text-[11px] text-white flex items-center justify-center" style={{ backgroundColor: VIOLET }}>{panelCount}</span>}
+                  </button>
+                  <Dropdown label="Sort items" icon={ArrowUpDown} value={sort} onChange={setSort} options={MKT_SORTS} />
+                </div>
+
+                {chips.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 mb-4">
+                    {chips.map((c) => (
+                      <span key={c.label} className="inline-flex items-center gap-1.5 h-8 pl-3 pr-1.5 rounded-full text-[12.5px] font-semibold" style={{ color: VIOLET, backgroundColor: VIOLET_TINT, border: "1px solid #D9D2F7" }}>
+                        {c.icon && <c.icon className="w-3.5 h-3.5" />} {c.label}
+                        <button type="button" onClick={c.clear} aria-label={`Remove ${c.label}`} className="w-5 h-5 rounded-full flex items-center justify-center hover:bg-white"><X className="w-3 h-3" /></button>
+                      </span>
+                    ))}
+                    <button type="button" onClick={clearAll} className="text-[13px] font-bold px-2 h-8" style={{ color: RED }}>Clear all</button>
+                  </div>
+                )}
+
+                {items.length === 0 ? (
+                  <div className="rounded-2xl bg-white px-6 py-14 text-center" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                    <span className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: VIOLET_TINT }}>
+                      <Store className="w-6 h-6" style={{ color: VIOLET }} />
+                    </span>
+                    <p className="text-[17px] font-bold" style={{ color: INK }}>Nothing matches your search</p>
+                    <p className="text-[14px] mt-1 mb-5" style={{ color: SUBTLE }}>Try another category, a nearby city or fewer filters.</p>
+                    <button type="button" onClick={clearAll} className="h-11 px-5 rounded-xl text-[14px] font-bold text-white" style={{ backgroundColor: VIOLET }}>Clear all filters</button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                    {items.map((i) => (
+                      <MarketItemCard key={i.id} item={i} saved={isSaved("market", i.id)} onOpen={setOpenItem} onToggleSave={(it) => onToggleSave("market", it)} />
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </>
         )}
 
-        {/* ---------- SERVICES & REPAIR ---------- */}
+        {/* ================= SELL ================= */}
+        {tab === "sell" && (
+          <div className="space-y-6">
+            <div className="rounded-3xl overflow-hidden grid lg:grid-cols-[1.2fr_1fr] bg-white" style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: SOFT_SHADOW }}>
+              <div className="p-6 sm:p-8">
+                <p className="text-[12px] font-bold tracking-[0.12em] uppercase" style={{ color: VIOLET }}>Sell on PakMed</p>
+                <h2 className="text-[24px] sm:text-[30px] font-extrabold tracking-[-0.03em] leading-tight mt-2" style={{ color: INK }}>Reach clinics and hospitals across Pakistan</h2>
+                <p className="text-[15px] mt-2 leading-relaxed" style={{ color: SUBTLE }}>List new, used or refurbished equipment in minutes. Buyers message you directly — no commission on your first {FREE_LISTINGS_PER_MONTH} listings each month.</p>
+                <ol className="grid sm:grid-cols-3 gap-3 mt-6">
+                  {[["1", "Create your seller profile", Store], ["2", "Add items with photos & price", Upload], ["3", "Get enquiries on PakMed", MessageSquareText]].map(([n, t, Icon]) => (
+                    <li key={n} className="rounded-2xl p-4" style={{ backgroundColor: CREAM }}>
+                      <span className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: VIOLET_TINT }}><Icon className="w-[18px] h-[18px]" style={{ color: VIOLET }} /></span>
+                      <p className="text-[12px] font-bold mt-3" style={{ color: VIOLET }}>Step {n}</p>
+                      <p className="text-[14px] font-bold mt-0.5 leading-snug" style={{ color: INK }}>{t}</p>
+                    </li>
+                  ))}
+                </ol>
+                <button type="button" onClick={onOpenSeller} className="mt-6 h-12 px-6 rounded-xl text-[15px] font-bold text-white inline-flex items-center gap-2 transition-all hover:brightness-110" style={{ backgroundColor: VIOLET, boxShadow: "0 8px 20px -10px rgba(91,71,199,0.6)" }}>
+                  <Plus className="w-4 h-4" /> {canSell ? "List an item" : "Start selling"}
+                </button>
+              </div>
+              <div className="relative min-h-[220px]">
+                <img src={`${MKT_IMG}/hospital-bed.jpg`} alt="" className="absolute inset-0 w-full h-full object-cover" />
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-[18px] font-extrabold" style={{ color: INK }}>Your listings <span style={{ color: FAINT }}>({(listings || []).length})</span></h3>
+                {(listings || []).length > 0 && (
+                  <button type="button" onClick={onOpenSeller} className="text-[13.5px] font-bold inline-flex items-center gap-1" style={{ color: VIOLET }}>Seller dashboard <ChevronRight className="w-4 h-4" /></button>
+                )}
+              </div>
+              {(listings || []).length === 0 ? (
+                <div className="rounded-2xl bg-white px-6 py-12 text-center" style={{ border: `1.5px dashed ${CARD_BORDER}` }}>
+                  <Store className="w-9 h-9 mx-auto" style={{ color: FAINT }} />
+                  <p className="text-[15px] font-bold mt-3" style={{ color: INK }}>You haven't listed anything yet</p>
+                  <p className="text-[14px] mt-1" style={{ color: SUBTLE }}>Your listings will appear here with their views and enquiries.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {listings.map((l) => {
+                    const live = l.status === "live";
+                    return (
+                      <button key={l.id} type="button" onClick={onOpenSeller} className="rounded-2xl bg-white overflow-hidden text-left transition-all hover:-translate-y-0.5 hover:shadow-lg" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                        <div className="relative aspect-[16/9]" style={{ backgroundColor: CREAM }}>
+                          <img src={l.photos && l.photos.length ? l.photos[l.coverIndex] || l.photos[0] : marketCatOf(l.category).img} alt="" className="w-full h-full object-cover" />
+                          <span className="absolute left-3 top-3 text-[11px] font-bold px-2 py-1 rounded-md" style={{ color: live ? GREEN : SUBTLE, backgroundColor: "#fff" }}>
+                            {live ? "Live" : l.status === "sold" ? "Sold" : "Hidden"}
+                          </span>
+                        </div>
+                        <div className="p-4">
+                          <p className="text-[15px] font-bold truncate" style={{ color: INK }}>{l.name}</p>
+                          <p className="text-[17px] font-extrabold mt-0.5" style={{ color: INK }}>PKR {l.price}</p>
+                          <div className="flex items-center gap-4 mt-2 text-[12.5px]" style={{ color: SUBTLE }}>
+                            <span className="inline-flex items-center gap-1"><Eye className="w-3.5 h-3.5" /> {l.views || 0} views</span>
+                            <span className="inline-flex items-center gap-1"><MessageSquareText className="w-3.5 h-3.5" /> {l.enquiries || 0} enquiries</span>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ================= SERVICES ================= */}
         {tab === "services" && (
           <>
-            <p className="text-[14px] font-bold mb-2" style={{ color: INK, letterSpacing: "-0.01em" }}>
-              {services.length} provider{services.length !== 1 ? "s" : ""}{city ? ` near ${city}` : ""}
-            </p>
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <p className="text-[14.5px] mr-auto" style={{ color: SUBTLE }}>
+                <b className="text-[16px]" style={{ color: INK }}>{services.length}</b> service {services.length === 1 ? "provider" : "providers"}{location ? <> in <b style={{ color: INK }}>{location}</b></> : " across Pakistan"}
+              </p>
+              {chips.length > 0 && <button type="button" onClick={clearAll} className="text-[13px] font-bold px-2 h-8" style={{ color: RED }}>Clear search</button>}
+            </div>
             {services.length === 0 ? (
-              <div className="rounded-2xl bg-white p-6 text-center" style={{ border: `1px solid ${CARD_BORDER}` }}>
-                <p className="text-[13.5px]" style={{ color: SUBTLE }}>No providers match. Try another city.</p>
+              <div className="rounded-2xl bg-white px-6 py-14 text-center" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                <Wrench className="w-8 h-8 mx-auto" style={{ color: FAINT }} />
+                <p className="text-[16px] font-bold mt-3" style={{ color: INK }}>No providers match</p>
+                <p className="text-[14px] mt-1" style={{ color: SUBTLE }}>Try another city or a broader search.</p>
               </div>
             ) : (
-              <div className="flex flex-col gap-2.5">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {services.map((sv) => (
-                  <div key={sv.id} className="rounded-2xl bg-white p-3.5" style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: SOFT_SHADOW }}>
+                  <article key={sv.id} className="rounded-2xl bg-white p-5 flex flex-col transition-all hover:-translate-y-0.5 hover:shadow-lg" style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: SOFT_SHADOW }}>
                     <div className="flex items-start gap-3">
-                      <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 text-white font-bold text-[14px]" style={{ backgroundColor: VIOLET }}>
-                        {sv.provider[0]}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[15px] font-semibold leading-snug" style={{ color: INK }}>{sv.name}</p>
-                        <p className="text-[12.5px] mt-0.5" style={{ color: VIOLET }}>{sv.provider}</p>
-                        <p className="text-[12px] mt-0.5 truncate" style={{ color: SUBTLE }}><IconText icon={MapPin}>{sv.area}, {sv.city} · {sv.rating}★ ({sv.jobs} jobs)</IconText></p>
-                        <p className="text-[12px] mt-1 leading-snug" style={{ color: "#4B4A45" }}>{sv.note}</p>
+                      <span className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: VIOLET_TINT }}>
+                        <Wrench className="w-6 h-6" style={{ color: VIOLET }} />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[16px] font-bold leading-snug" style={{ color: INK }}>{sv.name}</p>
+                        <p className="text-[13.5px] font-semibold mt-0.5" style={{ color: VIOLET }}>{sv.provider}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 mt-2.5 pt-2.5" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
-                      <button onClick={() => setMsgTarget(sv)}
-                        className="flex-1 py-2.5 rounded-full text-[12.5px] font-semibold flex items-center justify-center gap-1.5"
-                        style={{ backgroundColor: sentTo[sv.id] ? GREEN_TINT : VIOLET, color: sentTo[sv.id] ? GREEN : "white" }}>
-                        {sentTo[sv.id] ? <><Check className="w-3.5 h-3.5" /> Request sent</> : <><MessageSquareText className="w-3.5 h-3.5" /> Request service</>}
+                    <p className="text-[14px] mt-3 leading-relaxed flex-1" style={{ color: INK_2 }}>{sv.note}</p>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3 text-[13px]" style={{ color: INK_2 }}>
+                      <span className="inline-flex items-center gap-1 font-bold" style={{ color: INK }}><Star className="w-4 h-4" fill={STAR} stroke="none" /> {sv.rating}</span>
+                      <span>{sv.jobs} jobs done</span>
+                      <span className="inline-flex items-center gap-1"><MapPin className="w-4 h-4" style={{ color: FAINT }} />{sv.area}, {sv.city}</span>
+                    </div>
+                    <div className="flex gap-2 mt-4 pt-4" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+                      <button type="button" onClick={() => requireAuth("request this service", () => setMsgTarget(sv))}
+                        className="flex-1 h-10 rounded-xl text-[13.5px] font-bold inline-flex items-center justify-center gap-1.5"
+                        style={{ backgroundColor: sentTo[sv.id] ? GREEN_TINT : VIOLET, color: sentTo[sv.id] ? GREEN : "#fff" }}>
+                        {sentTo[sv.id] ? <><Check className="w-4 h-4" /> Request sent</> : <><MessageSquareText className="w-4 h-4" /> Request service</>}
                       </button>
-                      <ReportButton reported={reportedIds && reportedIds.has(sv.id)}
-                        onClick={() => onReport({ id: sv.id, type: "service", title: sv.name, subtitle: sv.provider })} />
+                      {sv.showPhone && sv.phone && (
+                        <a href={`tel:${sv.phone.replace(/\s/g, "")}`} aria-label={`Call ${sv.provider}`} className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                          <Phone className="w-4 h-4" style={{ color: INK_2 }} />
+                        </a>
+                      )}
+                      <button type="button" onClick={() => onReport({ id: sv.id, type: "service", title: sv.name, subtitle: sv.provider })} aria-label="Report"
+                        className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ border: `1px solid ${CARD_BORDER}`, backgroundColor: reportedIds && reportedIds.has(sv.id) ? RED_TINT : "#fff" }}>
+                        <Flag className="w-4 h-4" style={{ color: reportedIds && reportedIds.has(sv.id) ? RED : INK_2 }} />
+                      </button>
                     </div>
-                    {sv.showPhone && sv.phone && <p className="text-[12px] mt-2" style={{ color: SUBTLE }}><IconText icon={Phone}>{sv.phone}</IconText></p>}
-                  </div>
+                  </article>
                 ))}
               </div>
             )}
@@ -2351,179 +2912,75 @@ function MarketHubScreen({ initialQuery, onBack, onMenu, onOpenSeller, onSendMes
         )}
       </div>
 
-      {openItem && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center">
-          <div className="absolute inset-0 bg-black/45" onClick={() => setOpenItem(null)} />
-          <div className="relative w-full max-w-[390px] bg-white rounded-t-3xl flex flex-col" style={{ height: "88%", fontFamily: FONT }}>
-            <div className="flex items-center justify-between px-4 pt-3 pb-2 shrink-0">
-              <span className="w-9" />
-              <span className="w-10 h-1 rounded-full" style={{ backgroundColor: "#D0D5DD" }} />
-              <button onClick={() => setOpenItem(null)} className="w-9 h-9 rounded-full flex items-center justify-center" aria-label="Close">
-                <X className="w-5 h-5" style={{ color: SUBTLE }} />
+      {filtersOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Filters">
+          <div className="absolute inset-0 bg-black/45" onClick={() => setFiltersOpen(false)} />
+          <div className="absolute inset-x-0 bottom-0 max-h-[88dvh] bg-white rounded-t-3xl flex flex-col auth-step">
+            <div className="flex items-center justify-between px-5 h-14 shrink-0" style={{ borderBottom: `1px solid ${CARD_BORDER}` }}>
+              <p className="text-[17px] font-extrabold" style={{ color: INK }}>Filters</p>
+              <button type="button" onClick={() => setFiltersOpen(false)} aria-label="Close filters" className="w-9 h-9 rounded-full flex items-center justify-center" style={{ backgroundColor: CREAM }}>
+                <X className="w-5 h-5" style={{ color: INK }} />
               </button>
             </div>
-
-            <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
-              {/* gallery */}
-              {openItem.photos && openItem.photos.length ? (
-                <>
-                  <div className="rounded-2xl overflow-hidden" style={{ aspectRatio: "4 / 3", border: `1px solid ${CARD_BORDER}` }}>
-                    <img src={openItem.photos[photoIdx] || openItem.photos[0]} alt="" className="w-full h-full object-cover" />
-                  </div>
-                  {openItem.photos.length > 1 && (
-                    <div className="flex gap-1.5 mt-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
-                      {openItem.photos.map((src, k) => (
-                        <button key={k} onClick={() => setPhotoIdx(k)} className="shrink-0 rounded-lg overflow-hidden"
-                          style={{ width: 54, height: 54, border: `2px solid ${k === photoIdx ? BRAND : "transparent"}` }}>
-                          <img src={src} alt="" className="w-full h-full object-cover" />
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="rounded-2xl flex flex-col items-center justify-center" style={{ aspectRatio: "4 / 3", backgroundColor: CREAM, border: `1px solid ${CARD_BORDER}` }}>
-                  <Store className="w-10 h-10" style={{ color: FAINT }} />
-                  <p className="text-[12px] mt-2" style={{ color: FAINT }}>No photos added</p>
-                </div>
-              )}
-
-              <div className="flex items-center gap-1.5 mt-3.5 flex-wrap">
-                <span className="text-[11px] font-bold px-2 py-0.5 rounded-md"
-                  style={{ color: openItem.condition === "New" ? GREEN : INK_2, backgroundColor: openItem.condition === "New" ? GREEN_TINT : CREAM, border: `1px solid ${CARD_BORDER}` }}>
-                  {openItem.condition}
-                </span>
-                {openItem.category && <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md" style={{ color: INK_2, backgroundColor: CREAM, border: `1px solid ${CARD_BORDER}` }}>{openItem.category}</span>}
-                {openItem.stock && <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md" style={{ color: VIOLET, backgroundColor: VIOLET_TINT }}>{openItem.stock}</span>}
-              </div>
-
-              <p className="text-[20px] font-extrabold mt-2 leading-tight" style={{ color: INK, letterSpacing: "-0.025em" }}>{openItem.name}</p>
-              <p className="text-[22px] font-extrabold mt-1" style={{ color: INK }}>
-                PKR {openItem.price}{openItem.priceTo ? ` – ${openItem.priceTo}` : ""}
-              </p>
-
-              {(openItem.delivery && openItem.delivery.length > 0) || openItem.warranty ? (
-                <div className="mt-3.5 rounded-xl" style={{ border: `1px solid ${CARD_BORDER}` }}>
-                  {openItem.delivery && openItem.delivery.length > 0 && (
-                    <div className="flex gap-3 px-3 py-2.5">
-                      <span className="text-[12.5px] w-[34%] shrink-0" style={{ color: SUBTLE }}>Delivery</span>
-                      <span className="text-[13px] font-semibold" style={{ color: INK }}>{openItem.delivery.join(", ")}</span>
-                    </div>
-                  )}
-                  {openItem.warranty && (
-                    <div className="flex gap-3 px-3 py-2.5" style={{ borderTop: openItem.delivery && openItem.delivery.length ? `1px solid ${CARD_BORDER}` : "none" }}>
-                      <span className="text-[12.5px] w-[34%] shrink-0" style={{ color: SUBTLE }}>Warranty</span>
-                      <span className="text-[13px] font-semibold" style={{ color: INK }}>{openItem.warranty}</span>
-                    </div>
-                  )}
-                </div>
-              ) : null}
-
-              {openItem.note && (
-                <>
-                  <p className="text-[14px] font-bold mt-4 mb-1" style={{ color: INK }}>Description</p>
-                  <p className="text-[13.5px] leading-relaxed" style={{ color: INK_2 }}>{openItem.note}</p>
-                </>
-              )}
-
-              {/* seller block */}
-              <p className="text-[14px] font-bold mt-4 mb-2" style={{ color: INK }}>Seller</p>
-              <div className="rounded-xl p-3 flex items-center gap-3" style={{ border: `1px solid ${CARD_BORDER}` }}>
-                <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 text-white font-extrabold" style={{ backgroundColor: VIOLET }}>
-                  {(openItem.seller || "?")[0]}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[14px] font-bold truncate" style={{ color: INK }}>{openItem.seller}</p>
-                  <p className="text-[12px] flex items-center gap-1 truncate" style={{ color: SUBTLE }}>
-                    <MapPin className="w-3 h-3 shrink-0" /> {[openItem.area, openItem.city].filter(Boolean).join(", ") || "Location shared on contact"}
-                  </p>
-                </div>
-              </div>
-
-              <div className="rounded-xl p-3 mt-3" style={{ backgroundColor: AMBER_TINT }}>
-                <p className="text-[12px] leading-snug" style={{ color: AMBER }}>
-                  <b>Stay safe:</b> inspect items before paying, and never send an advance payment to someone you haven't met.
-                </p>
-              </div>
-            </div>
-
-            {/* actions */}
-            <div className="shrink-0 bg-white" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
-              <div className="flex items-center px-2 pt-1.5">
-                {[
-                  { k: "save", icon: Bookmark, label: isSaved("market", openItem.id) ? "Saved" : "Save", on: isSaved("market", openItem.id),
-                    fn: () => onToggleSave("market", openItem) },
-                  { k: "share", icon: Repeat2, label: "Share", fn: () => requireAuth("share this listing", () => setShareItem(openItem)) },
-                  ...(!openItem.mine ? [{ k: "report", icon: Flag, label: reportedIds && reportedIds.has(openItem.id) ? "Reported" : "Report",
-                    on: reportedIds && reportedIds.has(openItem.id),
-                    fn: () => onReport({ id: openItem.id, type: "listing", title: openItem.name, subtitle: `${openItem.seller} · ${openItem.city}` }) }] : []),
-                ].map((a) => (
-                  <button key={a.k} onClick={a.fn} className="flex-1 flex flex-col items-center gap-0.5 py-1.5">
-                    <a.icon className="w-5 h-5" strokeWidth={2} fill={a.on ? (a.k === "report" ? RED : BRAND) : "none"} stroke={a.on ? (a.k === "report" ? RED : BRAND) : INK_2} />
-                    <span className="text-[11px] font-medium" style={{ color: a.on ? (a.k === "report" ? RED : BRAND) : SUBTLE }}>{a.label}</span>
-                  </button>
-                ))}
-              </div>
-              <div className="px-4 pt-1 pb-3 flex gap-2">
-                {openItem.mine ? (
-                  <button onClick={() => { setOpenItem(null); onOpenSeller(); }} className="flex-1 h-12 rounded-xl text-[14px] font-bold text-white flex items-center justify-center gap-2" style={{ backgroundColor: BRAND }}>
-                    <Pencil className="w-4 h-4" /> Edit listing
-                  </button>
-                ) : (
-                  <>
-                    {openItem.showPhone && openItem.phone && (
-                      <button
-                        onClick={() => requireAuth("contact this seller", () => { try { window.open(waLink(openItem.phone, openItem), "_blank"); } catch (e) {} })}
-                        className="px-4 h-12 rounded-xl text-[14px] font-bold flex items-center justify-center gap-1.5"
-                        style={{ color: "#128C3E", border: "1.5px solid #1DA851" }}>
-                        <svg viewBox="0 0 24 24" width="20" height="20" fill="#1DA851"><path d={ICON_PATHS.whatsapp} /></svg>
-                        WhatsApp
-                      </button>
-                    )}
-                    <button
-                      onClick={() => requireAuth("contact this seller", () => { setMsgTarget(openItem); setOpenItem(null); })}
-                      className="flex-1 h-12 rounded-xl text-[14px] font-bold text-white flex items-center justify-center gap-2" style={{ backgroundColor: BRAND }}>
-                      <MessageSquareText className="w-4 h-4" /> Message seller
-                    </button>
-                  </>
-                )}
-              </div>
+            <div className="flex-1 overflow-y-auto px-5 pt-4">{Panel}</div>
+            <div className="p-4 shrink-0" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+              <button type="button" onClick={() => setFiltersOpen(false)} className="w-full h-12 rounded-xl text-[15px] font-bold text-white" style={{ backgroundColor: VIOLET }}>
+                Show {items.length} {items.length === 1 ? "item" : "items"}
+              </button>
             </div>
           </div>
         </div>
       )}
 
       {shareItem && <ShareSheet card={{ id: shareItem.id, title: `${shareItem.name} — PKR ${shareItem.price}` }} onClose={() => setShareItem(null)} />}
+      {msgTarget && <MarketMessageModal target={msgTarget} draft={msgDraft} setDraft={setMsgDraft} onSend={send} onClose={() => setMsgTarget(null)} />}
+    </div>
+  );
+}
 
-      {sheet === "city" && (
-        <FilterSheet title="Choose city" options={cityOptions} selected={city} onSelect={setCity} onClose={() => setSheet(null)} allowFree freeLabel="Search any city…" />
-      )}
-
-      {msgTarget && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center">
-          <div className="absolute inset-0 bg-black/45" onClick={() => setMsgTarget(null)} />
-          <div className="relative w-full max-w-[390px] bg-white rounded-t-3xl">
-            <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b" style={{ borderColor: CARD_BORDER }}>
-              <span className="w-8" />
-              <p className="font-bold text-[15px]" style={{ color: INK }}>Send a message</p>
-              <button onClick={() => setMsgTarget(null)}><X className="w-5 h-5" style={{ color: SUBTLE }} /></button>
-            </div>
-            <div className="p-5">
-              <p className="text-[13.5px] font-semibold" style={{ color: INK }}>{msgTarget.seller || msgTarget.provider}</p>
-              <p className="text-[11.5px] mb-3" style={{ color: SUBTLE }}>Re: {msgTarget.name}</p>
-              <textarea value={msgDraft} onChange={(e) => setMsgDraft(e.target.value)} rows={4}
-                placeholder={`Is the ${msgTarget.name} still available? What's your best price?`}
-                className="w-full text-[14px] rounded-xl px-3.5 py-3 outline-none resize-none"
-                style={{ backgroundColor: "#F4F6FC", color: INK, border: `1px solid ${CARD_BORDER}` }} />
-              <button onClick={send} disabled={!msgDraft.trim()}
-                className="w-full mt-3 py-3.5 rounded-full font-semibold text-[14px] transition-opacity"
-                style={{ backgroundColor: INK, color: "white", opacity: msgDraft.trim() ? 1 : 0.4 }}>
-                Send message
-              </button>
-            </div>
+function MarketMessageModal({ target, draft, setDraft, onSend, onClose }) {
+  useEffect(() => {
+    const onKey = (e) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  const isService = !!target.provider;
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Send a message">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={onClose} />
+      <div className="relative w-full max-w-[520px] bg-white rounded-3xl auth-step" style={{ boxShadow: "0 30px 80px -20px rgba(16,24,40,0.45)", fontFamily: FONT }}>
+        <div className="flex items-center gap-3 px-6 pt-5 pb-4" style={{ borderBottom: `1px solid ${CARD_BORDER}` }}>
+          <span className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-white font-extrabold" style={{ backgroundColor: VIOLET }}>{(target.seller || target.provider || "?")[0]}</span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[16px] font-extrabold truncate" style={{ color: INK }}>{isService ? "Request service" : "Message seller"}</p>
+            <p className="text-[13px] truncate" style={{ color: SUBTLE }}>{target.seller || target.provider} · {target.name}</p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close" className="w-9 h-9 rounded-full flex items-center justify-center" style={{ backgroundColor: CREAM }}>
+            <X className="w-5 h-5" style={{ color: INK }} />
+          </button>
+        </div>
+        <div className="p-6">
+          <div className="flex flex-wrap gap-2 mb-3">
+            {(isService
+              ? ["What are your charges for a visit?", "Can you come this week?", "Do you offer an annual contract?"]
+              : ["Is this still available?", "What's your best price?", "Can you deliver to my city?"]).map((t) => (
+              <button key={t} type="button" onClick={() => setDraft(t)} className="h-8 px-3 rounded-full text-[12.5px] font-semibold" style={{ color: VIOLET, backgroundColor: VIOLET_TINT }}>{t}</button>
+            ))}
+          </div>
+          <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={4}
+            placeholder={isService ? "Describe the equipment and the problem…" : `Is the ${target.name} still available? What's your best price?`}
+            className="pm-input w-full text-[15px] rounded-xl px-4 py-3 outline-none resize-none bg-white"
+            style={{ color: INK, border: `1.5px solid ${CARD_BORDER}` }} />
+          <div className="flex gap-2 mt-4">
+            <button type="button" onClick={onClose} className="h-11 px-5 rounded-xl text-[14px] font-bold" style={{ color: INK_2, border: `1px solid ${CARD_BORDER}` }}>Cancel</button>
+            <button type="button" onClick={onSend} disabled={!draft.trim()}
+              className="flex-1 h-11 rounded-xl text-[14.5px] font-bold text-white inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed"
+              style={{ backgroundColor: VIOLET, opacity: draft.trim() ? 1 : 0.45 }}>
+              <Send className="w-4 h-4" /> Send message
+            </button>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -3366,7 +3823,7 @@ function ProfileHubScreen({ onBack, onMenu, profiles, onOpenProfile, username, o
 
         <p className="text-[14px] font-bold mb-2" style={{ color: INK, letterSpacing: "-0.01em" }}>Your profiles</p>
 
-        <div className="flex flex-col gap-2.5">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
           {order.map((k) => {
             const meta = PROFILE_META[k];
             const Icon = meta.icon;
@@ -3410,7 +3867,7 @@ function ProfileHubScreen({ onBack, onMenu, profiles, onOpenProfile, username, o
         {(liveScores.doctor >= GATE_THRESHOLD || liveScores.employer >= GATE_THRESHOLD || liveScores.seller >= GATE_THRESHOLD) && (
           <>
             <p className="text-[14px] font-bold mb-2 mt-4" style={{ color: INK, letterSpacing: "-0.01em" }}>Your panels</p>
-            <div className="flex flex-col gap-2.5">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
               {[
                 liveScores.doctor >= GATE_THRESHOLD && { key: "physicianPanel", label: "Physician Panel", sub: "Practice locations, timings and fees", icon: Stethoscope, color: "#B3202C", tint: RED_TINT },
                 liveScores.employer >= GATE_THRESHOLD && { key: "employerPanel", label: "Employer Panel", sub: "Your job posts, stats and institute profile", icon: Briefcase, color: TEAL, tint: TEAL_TINT },
@@ -4468,7 +4925,14 @@ const PAY_UNITS = [
   { key: "day",   label: "Per Day" },
 ];
 
-const CITIES = ["Karachi", "Lahore", "Islamabad", "Rawalpindi", "Faisalabad", "Multan", "Peshawar", "Quetta", "Hyderabad", "Sialkot", "Gujranwala", "Bahawalpur"];
+const CITIES = [
+  "Karachi", "Lahore", "Islamabad", "Rawalpindi", "Faisalabad", "Multan", "Peshawar", "Quetta",
+  "Hyderabad", "Sialkot", "Gujranwala", "Bahawalpur", "Sukkur", "Larkana", "Nawabshah", "Mirpur Khas",
+  "Abbottabad", "Mardan", "Mingora", "Kohat", "Dera Ismail Khan", "Mansehra", "Swat",
+  "Rahim Yar Khan", "Sahiwal", "Okara", "Sheikhupura", "Gujrat", "Jhelum", "Sargodha", "Jhang",
+  "Dera Ghazi Khan", "Kasur", "Vehari", "Wah Cantonment", "Muzaffarabad", "Mirpur", "Gilgit", "Skardu",
+  "Gwadar", "Turbat", "Chitral", "Attock", "Chakwal", "Mianwali", "Khuzdar",
+];
 
 const COMMON_REQUIREMENTS = [
   "PMDC / PNC registered", "Fresh graduates welcome", "1+ year experience",
@@ -4570,6 +5034,11 @@ function JobShareSheet({ job, onClose, onShared }) {
   const title = job.jobTitle;
   const text = `We are hiring: ${title} at ${job.facilityName}, ${job.city}. PKR ${job.payAmount} ${job.payUnitLabel || ""}. Apply on PakMed.`;
   const url = `https://pakmed.app/job/${job.id || "new"}`;
+  useEffect(() => {
+    const onKey = (e) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   const open = (u) => { try { window.open(u, "_blank", "noopener"); } catch (e) {} onShared && onShared(); };
   const copy = () => {
@@ -4588,18 +5057,20 @@ function JobShareSheet({ job, onClose, onShared }) {
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative w-full max-w-[390px] bg-white rounded-t-3xl">
-        <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b" style={{ borderColor: CARD_BORDER }}>
-          <span className="w-8" />
-          <p className="font-bold text-[15px]" style={{ color: INK }}>Share job post</p>
-          <button onClick={onClose} aria-label="Close"><X className="w-5 h-5" style={{ color: SUBTLE }} /></button>
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Share job post">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={onClose} />
+      <div className="relative w-full max-w-[420px] bg-white rounded-3xl flex flex-col auth-step" style={{ boxShadow: "0 30px 80px -20px rgba(16,24,40,0.45)", fontFamily: FONT }}>
+        <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-1">
+          <p className="font-extrabold text-[18px]" style={{ color: INK }}>Share job post</p>
+          <button type="button" onClick={onClose} aria-label="Close" className="w-9 h-9 rounded-full flex items-center justify-center transition-colors hover:bg-[#EEF1F5]" style={{ backgroundColor: CREAM }}>
+            <X className="w-5 h-5" style={{ color: INK }} />
+          </button>
         </div>
-        <div className="px-5 py-5">
+        <div className="px-5 pt-2 pb-6">
+          <p className="text-[14px] mb-5 line-clamp-2" style={{ color: SUBTLE }}>{title} · {job.facilityName}</p>
           <div className="grid grid-cols-3 gap-y-5">
             {opts.map((o) => (
-              <button key={o.key} onClick={o.act} className="flex flex-col items-center gap-2">
+              <button key={o.key} type="button" onClick={o.act} className="flex flex-col items-center gap-2 rounded-2xl py-2 transition-colors hover:bg-[#F5F7FA]">
                 <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background: o.bg, border: o.key === "cp" ? `1px solid ${CARD_BORDER}` : "none" }}>
                   {o.icon}
                 </div>
@@ -4607,11 +5078,12 @@ function JobShareSheet({ job, onClose, onShared }) {
               </button>
             ))}
           </div>
-          {copied && (
-            <p className="text-center text-[12.5px] font-medium mt-4 py-2 rounded-full" style={{ color: GREEN, backgroundColor: GREEN_TINT }}>
-              Job text copied — paste it into your post
-            </p>
-          )}
+          <div className="mt-5 flex items-center gap-2 p-1.5 pl-3.5 rounded-xl" style={{ backgroundColor: CREAM, border: `1px solid ${CARD_BORDER}` }}>
+            <span className="flex-1 min-w-0 truncate text-[13.5px]" style={{ color: INK_2 }}>{url}</span>
+            <button type="button" onClick={copy} className="h-9 px-3.5 rounded-lg text-[13px] font-bold text-white shrink-0" style={{ backgroundColor: copied ? GREEN : BRAND }}>
+              {copied ? "Copied" : "Copy link"}
+            </button>
+          </div>
           <p className="text-[11px] text-center mt-3 leading-snug" style={{ color: SUBTLE }}>
             To post the card as an image, take a screenshot of the preview — image export comes in the full app.
           </p>
@@ -4691,25 +5163,64 @@ function SearchPicker({
   );
 }
 
-/* ---------- the funnel ---------- */
-const FUNNEL_STEPS = ["Facility", "Role", "Timing", "Salary", "Requirements", "Photos", "Preview"];
+/* ---------- the job-posting wizard ---------- */
+const POST_STEPS = [
+  { key: "facility", label: "Facility", hint: "Where is the job?", icon: Building2 },
+  { key: "role", label: "Role & type", hint: "Who are you hiring?", icon: Briefcase },
+  { key: "pay", label: "Schedule & pay", hint: "Shifts and salary", icon: Wallet },
+  { key: "reqs", label: "Requirements & documents", hint: "What applicants need", icon: ClipboardList },
+  { key: "contact", label: "Contact & photos", hint: "How to reach you", icon: Phone },
+  { key: "review", label: "Review & publish", hint: "Check and go live", icon: CheckCircle2 },
+];
+const START_OPTIONS = ["Immediately", "Within 2 weeks", "Next month"];
+const NEW_JOB = () => ({
+  ...EMPTY_JOB, id: `job-${Date.now()}`, jobType: "Full-time", openings: 1, urgent: false,
+  specialty: "", documents: null, deadline: "", status: "saved",
+});
 
 function PostJobScreen({ onBack, onMenu, postedJobs, onPublish, canPost, onNeedProfile, known = {} }) {
-  const [view, setView] = useState("list");   // list | funnel
+  const [view, setView] = useState("list");   // list | editor
   const [step, setStep] = useState(0);
-  const [job, setJob] = useState({ ...EMPTY_JOB });
-  const [shareOpen, setShareOpen] = useState(false);
+  const [job, setJob] = useState(NEW_JOB);
+  const [shareJob, setShareJob] = useState(null);
   const [toast, setToast] = useState("");
   const [cardNote, setCardNote] = useState("");
+  const [customTitle, setCustomTitle] = useState("");
+  const [reqDraft, setReqDraft] = useState("");
+  const [docDraft, setDocDraft] = useState("");
+  const [cityDraft, setCityDraft] = useState("");
+  const [photoError, setPhotoError] = useState("");
   const cardRef = useRef(null);
-  const [q, setQ] = useState({ facility: "", city: "", title: "", shift: "", pay: "", req: "" });
-  const [extra, setExtra] = useState({ facility: [], city: [], title: [], shift: [], pay: [], req: [] });
-  const setQuery = (k, v) => setQ((p) => ({ ...p, [k]: v }));
-
   const galleryRef = useRef(null);
   const cameraRef = useRef(null);
-  const [photoError, setPhotoError] = useState("");
+  const toastRef = useRef(null);
   const MAX_PHOTOS = 6;
+
+  useEffect(() => () => clearTimeout(toastRef.current), []);
+  useEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: "instant" }); }, [view, step]);
+
+  const set = (k, v) => setJob((p) => ({ ...p, [k]: v }));
+  const toggleIn = (k, v) => setJob((p) => ({ ...p, [k]: (p[k] || []).includes(v) ? p[k].filter((x) => x !== v) : [...(p[k] || []), v] }));
+  const flash = (m) => { setToast(m); clearTimeout(toastRef.current); toastRef.current = setTimeout(() => setToast(""), 3200); };
+  const tpl = CARD_TEMPLATES.find((t) => t.id === job.templateId) || CARD_TEMPLATES[0];
+
+  const kind = jobRoleKind(job.jobTitle);
+  const docs = Array.isArray(job.documents) ? job.documents : jobDocumentsFor({ ...job, documents: null });
+  const setDocs = (next) => set("documents", next);
+  const suggestedReqs = [...new Set([...(ROLE_REQUIREMENTS[kind] || []), ...COMMON_REQUIREMENTS])];
+  const unitLabel = job.payUnitLabel || "Per Month";
+
+  const valid = {
+    facility: !!(job.facilityTypeLabel && job.facilityName.trim() && job.city),
+    role: !!(job.jobTitle && job.jobType),
+    pay: job.shifts.length > 0 && !!job.payAmount,
+    reqs: docs.some((d) => d.required),
+    contact: true,
+    review: true,
+  };
+  const doneCount = ["facility", "role", "pay", "reqs"].filter((k) => valid[k]).length;
+  const ready = valid.facility && valid.role && valid.pay;
+  const cur = POST_STEPS[step];
 
   const handlePhotos = (e) => {
     const files = Array.from(e.target.files || []);
@@ -4717,18 +5228,14 @@ function PostJobScreen({ onBack, onMenu, postedJobs, onPublish, canPost, onNeedP
     if (!files.length) return;
     const room = MAX_PHOTOS - job.photos.length;
     if (room <= 0) { setPhotoError(`You can add up to ${MAX_PHOTOS} photos.`); return; }
-    const take = files.slice(0, room);
-    if (files.length > room) setPhotoError(`Only ${room} more photo${room > 1 ? "s" : ""} could be added.`);
-    else setPhotoError("");
-
-    take.forEach((f) => {
+    setPhotoError(files.length > room ? `Only ${room} more photo${room > 1 ? "s" : ""} could be added.` : "");
+    files.slice(0, room).forEach((f) => {
       if (!f.type.startsWith("image/")) { setPhotoError("Only image files can be added."); return; }
       if (f.size > 8 * 1024 * 1024) { setPhotoError(`"${f.name}" is over 8 MB.`); return; }
       const reader = new FileReader();
       reader.onload = () => {
         const img = new Image();
         img.onload = () => {
-          // downscale to keep storage small
           const max = 1200;
           const scale = Math.min(1, max / Math.max(img.width, img.height));
           const cv = document.createElement("canvas");
@@ -4743,536 +5250,689 @@ function PostJobScreen({ onBack, onMenu, postedJobs, onPublish, canPost, onNeedP
       reader.readAsDataURL(f);
     });
   };
-
   const removePhoto = (i) => setJob((prev) => {
     const photos = prev.photos.filter((_, idx) => idx !== i);
     const coverIndex = prev.coverIndex >= photos.length ? 0 : (i < prev.coverIndex ? prev.coverIndex - 1 : prev.coverIndex);
     return { ...prev, photos, coverIndex };
   });
-  const addExtra = (k, v, apply) => {
-    setExtra((p) => (p[k].some((x) => (x.label || x).toLowerCase() === v.toLowerCase()) ? p : { ...p, [k]: [...p[k], v] }));
-    apply(v);
+
+  const record = (status) => ({
+    ...job,
+    documents: docs,
+    posted: status === "posted" ? "Just now" : job.posted || "Draft",
+    applicants: job.applicants || 0,
+    status,
+  });
+  const saveDraft = () => { onPublish(record(job.status === "posted" ? "posted" : "saved")); flash("Draft saved to your job posts."); };
+  const publish = () => {
+    const go = () => { onPublish(record("posted")); setView("list"); flash(`“${job.jobTitle}” is live on PakMed.`); };
+    if (canPost) go();
+    else onNeedProfile(go, {
+      facilityName: job.facilityName, facilityType: job.facilityTypeLabel,
+      city: job.city, address: job.area, area: job.area,
+      contactPerson: job.contactName, phone: job.contactNumber,
+    });
   };
-
-  const set = (k, v) => setJob((p) => ({ ...p, [k]: v }));
-  const toggleIn = (k, v) => set(k, job[k].includes(v) ? job[k].filter((x) => x !== v) : [...job[k], v]);
-  const tpl = CARD_TEMPLATES.find((t) => t.id === job.templateId);
-
-  const flash = (m) => { setToast(m); setTimeout(() => setToast(""), 3000); };
-
-  const stepValid = [
-    job.facilityName && job.facilityTypeLabel && job.city,
-    !!job.jobTitle,
-    job.shifts.length > 0,
-    !!job.payAmount,
-    true,
-    true,
-    true,
-  ];
-
-  const saveJob = (status) => {
-    const rec = { ...job, id: `job-${Date.now()}`, posted: "Just now", applicants: 0, status };
-    onPublish(rec);
-    return rec;
-  };
-
-  const startNew = () => { setJob({ ...EMPTY_JOB }); setStep(0); setView("funnel"); };
+  const startNew = () => { setJob(NEW_JOB()); setStep(0); setCustomTitle(""); setView("editor"); };
+  const editJob = (j) => { setJob({ ...NEW_JOB(), ...j }); setStep(0); setView("editor"); };
 
   const downloadCard = () => {
     const html = cardRef.current ? cardRef.current.innerHTML : "";
     if (!html) return;
     const w = window.open("", "_blank");
-    if (!w) { setCardNote("Pop-ups are blocked. Allow pop-ups, then tap Download again."); return; }
+    if (!w) { setCardNote("Pop-ups are blocked. Allow pop-ups, then try again."); return; }
     w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Job Card</title>
       <style>@page{size:A5;margin:8mm}html,body{margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-      body{display:flex;align-items:center;justify-content:center}
-      .wrap{width:340px}</style></head><body><div class="wrap">${html}</div></body></html>`);
+      body{display:flex;align-items:center;justify-content:center}.wrap{width:340px}</style></head><body><div class="wrap">${html}</div></body></html>`);
     w.document.close();
-    setCardNote("Print dialog opened — choose \u201cSave as PDF\u201d or your printer.");
-    setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 400);
+    setCardNote("Print dialog opened — choose “Save as PDF” or your printer.");
+    setTimeout(() => { try { w.focus(); w.print(); } catch (e) { /* closed */ } }, 400);
+  };
+  const writeDescription = () => {
+    const shifts = job.shifts.join(", ").toLowerCase();
+    set("notes", [
+      `${job.facilityName || "Our facility"} is looking for ${job.openings > 1 ? `${job.openings} ` : "a "}${job.jobTitle || "healthcare professional"}${job.openings > 1 ? "s" : ""}${job.specialty ? ` (${job.specialty})` : ""} to join our team in ${[job.area, job.city].filter(Boolean).join(", ") || "Pakistan"}.`,
+      `This is a ${job.jobType.toLowerCase()} position${shifts ? ` covering ${shifts} shifts` : ""}, paying PKR ${job.payAmount || "—"} ${unitLabel.toLowerCase()}.`,
+      "You will work with a supportive clinical team, follow facility protocols and maintain accurate patient records.",
+    ].join(" "));
   };
 
-  /* ---- big tappable option button ---- */
-  const OptionCard = ({ on, onClick, icon, label, sub }) => (
-    <button
-      onClick={onClick}
-      className="rounded-2xl p-3.5 flex items-center gap-3 text-left transition-colors active:scale-[0.97]"
-      style={{ backgroundColor: on ? NAVY : "white", border: `1.5px solid ${on ? NAVY : CARD_BORDER}` }}
-    >
-      {icon && (
-        <span className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: on ? "rgba(255,255,255,.18)" : BRAND_50 }}>
-          <Glyph icon={icon} size={19} color={on ? "#fff" : BRAND} />
-        </span>
-      )}
-      <div className="flex-1 min-w-0">
-        <p className="text-[14.5px] font-semibold" style={{ color: on ? "white" : INK }}>{label}</p>
-        {sub && <p className="text-[11.5px] mt-0.5" style={{ color: on ? "#FFFFFFAA" : SUBTLE }}>{sub}</p>}
-      </div>
-      {on && <Check className="w-5 h-5 shrink-0 text-white" strokeWidth={3} />}
+  /* ---------- small building blocks ---------- */
+  const Label = ({ children, opt, help }) => (
+    <div className="mb-2.5">
+      <p className="text-[15px] font-bold" style={{ color: INK }}>{children}{opt && <span className="text-[13px] font-medium ml-1" style={{ color: FAINT }}>(optional)</span>}</p>
+      {help && <p className="text-[13px] mt-0.5" style={{ color: SUBTLE }}>{help}</p>}
+    </div>
+  );
+  const inputCls = "pm-input w-full h-12 text-[15px] rounded-xl px-4 outline-none bg-white";
+  const inputStyle = { color: INK, border: `1.5px solid ${CARD_BORDER}` };
+  const Chip = ({ on, onClick, children, icon: Icon }) => (
+    <button type="button" onClick={onClick} aria-pressed={on}
+      className="h-10 px-4 rounded-full text-[14px] font-semibold inline-flex items-center gap-1.5 transition-colors"
+      style={{ color: on ? "#fff" : INK_2, backgroundColor: on ? BRAND : "#fff", border: `1.5px solid ${on ? BRAND : CARD_BORDER}` }}>
+      {Icon && <Icon className="w-4 h-4" />}{children}{on && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
+    </button>
+  );
+  const Toggle = ({ on, onClick, title, sub, icon: Icon, color = BRAND }) => (
+    <button type="button" onClick={onClick} aria-pressed={on}
+      className="w-full rounded-2xl p-4 flex items-center gap-3 text-left transition-colors"
+      style={{ border: `1.5px solid ${on ? color : CARD_BORDER}`, backgroundColor: on ? `${color}10` : "#fff" }}>
+      {Icon && <span className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: on ? "#fff" : CREAM }}><Icon className="w-5 h-5" style={{ color: on ? color : INK_2 }} /></span>}
+      <span className="flex-1 min-w-0">
+        <span className="block text-[14.5px] font-bold" style={{ color: INK }}>{title}</span>
+        {sub && <span className="block text-[12.5px] mt-0.5" style={{ color: SUBTLE }}>{sub}</span>}
+      </span>
+      <span className="w-11 h-6 rounded-full flex items-center px-0.5 shrink-0 transition-colors" style={{ backgroundColor: on ? color : "#D0D5DD", justifyContent: on ? "flex-end" : "flex-start" }}>
+        <span className="w-5 h-5 rounded-full bg-white block shadow-sm" />
+      </span>
     </button>
   );
 
-  const inputCls = "w-full text-[15px] rounded-xl px-4 py-3 outline-none";
-  const inputStyle = { backgroundColor: "#F4F6FC", color: INK, border: `1px solid ${CARD_BORDER}` };
-  const Q = ({ children }) => <p className="text-[16px] font-bold mb-2.5" style={{ color: INK }}>{children}</p>;
-
-  /* ================= LIST ================= */
+  /* ================= DASHBOARD ================= */
   if (view === "list") {
+    const live = postedJobs.filter((j) => j.status === "posted");
+    const drafts = postedJobs.filter((j) => j.status !== "posted");
+    const applicantsTotal = postedJobs.reduce((n, j) => n + (j.applicants || 0), 0);
     return (
-      <div className="flex flex-col h-full min-h-0">
-        <ScreenHeader title="Post a Job" subtitle="Your vacancies" onBack={onBack} onMenu={onMenu} />
-        <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-4">
+      <div className="w-full min-w-0" style={{ fontFamily: FONT }}>
+        <section className="relative overflow-hidden" style={{ background: "linear-gradient(135deg, #0B4D33 0%, #12805C 55%, #0B57B7 100%)" }}>
+          <div className="pointer-events-none absolute -right-24 -top-24 w-80 h-80 rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.07)" }} />
+          <img src="/images/landing/offer-job.jpg" alt="" className="hidden lg:block absolute right-0 top-0 h-full w-[36%] object-cover opacity-25" style={{ maskImage: "linear-gradient(90deg, transparent, #000 60%)", WebkitMaskImage: "linear-gradient(90deg, transparent, #000 60%)" }} />
+          <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-6 pb-8 sm:pt-8 sm:pb-10">
+            <div className="flex items-center gap-2 mb-5">
+              {onBack && (
+                <button type="button" onClick={onBack} aria-label="Back" className="w-9 h-9 rounded-xl flex items-center justify-center bg-white/15 hover:bg-white/25 transition-colors">
+                  <ChevronLeft className="w-5 h-5 text-white" />
+                </button>
+              )}
+              <p className="text-[13px] font-semibold text-white/80">Home <span className="mx-1 text-white/50">/</span> <span className="text-white">Offer a Job</span></p>
+            </div>
+            <div className="flex flex-col lg:flex-row lg:items-end gap-6">
+              <div className="flex-1 min-w-0">
+                <h1 className="text-[28px] sm:text-[38px] font-extrabold tracking-[-0.03em] leading-tight text-white">Hire verified healthcare staff</h1>
+                <p className="text-[14.5px] sm:text-[16px] mt-2 text-white/85 max-w-xl">Post a job in about two minutes. Choose the documents applicants must upload, and review CVs from PMDC-registered professionals.</p>
+                <button type="button" onClick={startNew} className="mt-6 h-12 px-6 rounded-xl text-[15px] font-bold inline-flex items-center gap-2 bg-white transition-transform hover:-translate-y-0.5" style={{ color: GREEN }}>
+                  <Plus className="w-5 h-5" /> Post a new job
+                </button>
+              </div>
+              <div className="grid grid-cols-3 gap-2.5 lg:w-[380px]">
+                {[["Live jobs", live.length, Briefcase], ["Drafts", drafts.length, Pencil], ["Applicants", applicantsTotal, Users]].map(([l, n, Icon]) => (
+                  <div key={l} className="rounded-2xl p-3.5" style={{ backgroundColor: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)" }}>
+                    <Icon className="w-5 h-5 text-white/80" />
+                    <p className="text-[26px] font-extrabold leading-none mt-2 text-white">{n}</p>
+                    <p className="text-[12.5px] font-semibold mt-1 text-white/75">{l}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
           {toast && (
-            <div className="rounded-xl p-3 mb-3 flex items-start gap-2" style={{ backgroundColor: GREEN_TINT }}>
-              <Check className="w-4 h-4 mt-0.5 shrink-0" style={{ color: GREEN }} />
-              <p className="text-[12.5px]" style={{ color: GREEN }}>{toast}</p>
+            <div className="rounded-2xl p-4 mb-5 flex items-center gap-3 auth-step" style={{ backgroundColor: GREEN_TINT, border: "1px solid #C7E8D9" }}>
+              <CheckCircle2 className="w-5 h-5 shrink-0" style={{ color: GREEN }} />
+              <p className="text-[14.5px] font-semibold" style={{ color: GREEN }}>{toast}</p>
             </div>
           )}
-
-          <button onClick={startNew} className="w-full rounded-2xl p-4 flex items-center gap-3.5 mb-3 active:scale-[0.98] transition-transform" style={{ backgroundColor: NAVY }}>
-            <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "#FFFFFF22" }}>
-              <Briefcase className="w-6 h-6 text-white" />
-            </div>
-            <div className="flex-1 text-left">
-              <p className="text-[15.5px] font-semibold text-white">Post a job</p>
-              <p className="text-[12.5px] mt-0.5 text-white/70">Takes about 2 minutes</p>
-            </div>
-            <ChevronRight className="w-5 h-5 shrink-0 text-white/60" />
-          </button>
-
-          <div className="flex items-center justify-between mt-4 mb-1.5">
-            <p className="text-[13px] font-semibold" style={{ color: INK_2 }}>Your job posts</p>
-            <span className="text-[12px]" style={{ color: SUBTLE }}>{postedJobs.length}</span>
-          </div>
 
           {postedJobs.length === 0 ? (
-            <div className="rounded-2xl bg-white p-6 text-center" style={{ border: `1px solid ${CARD_BORDER}` }}>
-              <Briefcase className="w-8 h-8 mx-auto mb-2" style={{ color: SUBTLE }} />
-              <p className="text-[13.5px]" style={{ color: SUBTLE }}>Nothing posted yet. Saved and posted jobs appear here.</p>
+            <div className="rounded-3xl bg-white p-6 sm:p-10" style={{ border: `1px solid ${CARD_BORDER}` }}>
+              <div className="text-center max-w-lg mx-auto">
+                <span className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto" style={{ backgroundColor: GREEN_TINT }}><Briefcase className="w-8 h-8" style={{ color: GREEN }} /></span>
+                <h2 className="text-[22px] font-extrabold mt-4" style={{ color: INK }}>You haven't posted a job yet</h2>
+                <p className="text-[15px] mt-1.5" style={{ color: SUBTLE }}>Here's how hiring on PakMed works.</p>
+              </div>
+              <ol className="grid md:grid-cols-3 gap-4 mt-8">
+                {[
+                  ["Describe the role", "Facility, role, shifts and salary — with smart suggestions.", Briefcase],
+                  ["Choose required documents", "CV, CNIC, degree, PMDC/PNC and more — applicants upload them when they apply.", ClipboardList],
+                  ["Review applicants", "Shortlist candidates and message them directly.", Users],
+                ].map(([t, d, Icon], i) => (
+                  <li key={t} className="rounded-2xl p-5" style={{ backgroundColor: CREAM }}>
+                    <span className="w-10 h-10 rounded-xl flex items-center justify-center bg-white"><Icon className="w-5 h-5" style={{ color: GREEN }} /></span>
+                    <p className="text-[12px] font-bold mt-3" style={{ color: GREEN }}>Step {i + 1}</p>
+                    <p className="text-[15.5px] font-bold mt-0.5" style={{ color: INK }}>{t}</p>
+                    <p className="text-[13.5px] mt-1 leading-relaxed" style={{ color: SUBTLE }}>{d}</p>
+                  </li>
+                ))}
+              </ol>
+              <div className="text-center mt-8">
+                <button type="button" onClick={startNew} className="h-12 px-6 rounded-xl text-[15px] font-bold text-white inline-flex items-center gap-2" style={{ backgroundColor: GREEN }}>
+                  <Plus className="w-5 h-5" /> Post your first job
+                </button>
+              </div>
             </div>
           ) : (
-            <div className="flex flex-col gap-2.5">
-              {postedJobs.map((j) => {
-                const t = CARD_TEMPLATES.find((x) => x.id === j.templateId) || CARD_TEMPLATES[0];
-                const jt = j.jobTitle;
-                return (
-                  <div key={j.id} className="rounded-2xl bg-white p-3.5 flex gap-3" style={{ border: `1px solid ${CARD_BORDER}` }}>
-                    <div style={{ width: 52, borderRadius: 10, overflow: "hidden", flexShrink: 0, position: "relative", height: 65 }}>
-                      <div style={{ transform: "scale(0.19)", transformOrigin: "top left", width: 274, position: "absolute", top: 0, left: 0 }}>
-                        <JobPostCard job={j} tpl={t} scale={1} />
+            <>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-[20px] font-extrabold" style={{ color: INK }}>Your job posts <span style={{ color: FAINT }}>({postedJobs.length})</span></h2>
+                <button type="button" onClick={startNew} className="h-10 px-4 rounded-xl text-[13.5px] font-bold text-white inline-flex items-center gap-1.5" style={{ backgroundColor: GREEN }}>
+                  <Plus className="w-4 h-4" /> New job
+                </button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {postedJobs.map((j) => {
+                  const isLive = j.status === "posted";
+                  const vis = jobRoleVisual(j.jobTitle);
+                  return (
+                    <article key={j.id} className="rounded-2xl bg-white p-5 flex flex-col transition-all hover:-translate-y-0.5 hover:shadow-lg" style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: SOFT_SHADOW }}>
+                      <div className="flex items-start gap-3">
+                        <span className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: vis.tint }}><vis.Icon className="w-6 h-6" style={{ color: vis.color }} /></span>
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-md" style={{ color: isLive ? GREEN : AMBER, backgroundColor: isLive ? GREEN_TINT : AMBER_TINT }}>{isLive ? "Live" : "Draft"}</span>
+                          <p className="text-[16px] font-bold leading-snug mt-1.5 truncate" style={{ color: INK }}>{j.jobTitle || "Untitled job"}</p>
+                          <p className="text-[13px] truncate" style={{ color: SUBTLE }}>{[j.facilityName, j.city].filter(Boolean).join(" · ") || "Facility not set"}</p>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                          style={{ color: j.status === "posted" ? GREEN : SUBTLE, backgroundColor: j.status === "posted" ? GREEN_TINT : "#EFF2FA" }}>
-                          {j.status === "posted" ? "Posted" : "Saved"}
-                        </span>
+                      <div className="flex flex-wrap gap-1.5 mt-3">
+                        {j.jobType && <span className="text-[11.5px] font-bold px-2 py-1 rounded-md" style={{ color: BRAND, backgroundColor: BRAND_50 }}>{j.jobType}</span>}
+                        {(j.shifts || []).slice(0, 2).map((s) => <span key={s} className="text-[11.5px] font-semibold px-2 py-1 rounded-md" style={{ color: INK_2, backgroundColor: CREAM }}>{s}</span>)}
+                        {Array.isArray(j.documents) && <span className="text-[11.5px] font-semibold px-2 py-1 rounded-md inline-flex items-center gap-1" style={{ color: INK_2, backgroundColor: CREAM }}><FileText className="w-3 h-3" /> {j.documents.filter((d) => d.required).length} docs</span>}
                       </div>
-                      <p className="text-[14.5px] font-semibold leading-snug truncate" style={{ color: INK }}>{jt}</p>
-                      <p className="text-[12.5px] mt-0.5 truncate" style={{ color: SUBTLE }}>{j.facilityName} · {j.city}</p>
-                      <p className="text-[13px] font-bold mt-1" style={{ color: NAVY }}>
-                        PKR {j.payAmount} <span className="text-[11px] font-medium" style={{ color: SUBTLE }}>{j.payUnitLabel || ""}</span>
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                      <div className="flex items-end justify-between gap-3 mt-4 pt-3.5" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+                        <div>
+                          <p className="text-[17px] font-extrabold leading-none" style={{ color: GREEN }}>{j.payAmount ? `PKR ${j.payAmount}` : "Salary not set"}</p>
+                          <p className="text-[12px] mt-1.5" style={{ color: FAINT }}>{isLive ? `${j.applicants || 0} applicants · ${j.posted}` : "Not published yet"}</p>
+                        </div>
+                        <div className="flex gap-1.5">
+                          {isLive && (
+                            <button type="button" onClick={() => setShareJob(j)} aria-label="Share job" className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors hover:bg-[#F5F7FA]" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                              <Repeat2 className="w-4 h-4" style={{ color: INK_2 }} />
+                            </button>
+                          )}
+                          <button type="button" onClick={() => editJob(j)} className="h-9 px-3.5 rounded-xl text-[13px] font-bold inline-flex items-center gap-1.5" style={{ color: isLive ? INK_2 : "#fff", backgroundColor: isLive ? "#fff" : GREEN, border: `1px solid ${isLive ? CARD_BORDER : GREEN}` }}>
+                            <Pencil className="w-3.5 h-3.5" /> {isLive ? "Edit" : "Continue"}
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </>
           )}
         </div>
+        {shareJob && <JobShareSheet job={shareJob} onClose={() => setShareJob(null)} />}
       </div>
     );
   }
 
-  /* ================= FUNNEL ================= */
-  const isLast = step === FUNNEL_STEPS.length - 1;
+  /* ================= EDITOR ================= */
+  const Preview = (
+    <div className="space-y-4">
+      <div className="rounded-2xl bg-white p-4" style={{ border: `1px solid ${CARD_BORDER}` }}>
+        <p className="text-[12px] font-bold uppercase tracking-[0.07em] mb-3" style={{ color: SUBTLE }}>How applicants see it</p>
+        {(() => {
+          const vis = jobRoleVisual(job.jobTitle);
+          return (
+            <div className="rounded-xl p-3.5" style={{ border: `1px solid ${CARD_BORDER}` }}>
+              <div className="flex items-start gap-3">
+                <span className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: vis.tint }}><vis.Icon className="w-5 h-5" style={{ color: vis.color }} /></span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[15px] font-bold leading-snug truncate" style={{ color: job.jobTitle ? INK : FAINT }}>{job.jobTitle || "Job title"}{job.specialty ? ` · ${job.specialty}` : ""}</p>
+                  <p className="text-[12.5px] truncate" style={{ color: SUBTLE }}>{job.facilityName || "Facility name"}</p>
+                </div>
+                {job.urgent && <span className="text-[10.5px] font-bold px-1.5 py-0.5 rounded-full shrink-0" style={{ color: RED, backgroundColor: RED_TINT }}>Urgent</span>}
+              </div>
+              <p className="text-[12.5px] mt-2.5 flex items-center gap-1" style={{ color: INK_2 }}><MapPin className="w-3.5 h-3.5" style={{ color: FAINT }} />{[job.area, job.city].filter(Boolean).join(", ") || "Location"}</p>
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-md" style={{ color: BRAND, backgroundColor: BRAND_50 }}>{job.jobType}</span>
+                {job.shifts.map((s) => <span key={s} className="text-[11px] font-semibold px-2 py-0.5 rounded-md" style={{ color: INK_2, backgroundColor: CREAM }}>{s}</span>)}
+              </div>
+              <p className="text-[16px] font-extrabold mt-3" style={{ color: job.payAmount ? GREEN : FAINT }}>
+                {job.payAmount ? `PKR ${job.payAmount}` : "PKR —"} <span className="text-[11.5px] font-semibold" style={{ color: SUBTLE }}>/ {unitLabel.replace(/^Per /i, "").toLowerCase()}</span>
+              </p>
+            </div>
+          );
+        })()}
+      </div>
+      <div className="rounded-2xl bg-white p-4" style={{ border: `1px solid ${CARD_BORDER}` }}>
+        <p className="text-[12px] font-bold uppercase tracking-[0.07em] mb-3" style={{ color: SUBTLE }}>Applicants will upload</p>
+        <ul className="space-y-2">
+          {docs.map((d) => (
+            <li key={d.id} className="flex items-start gap-2 text-[13.5px]" style={{ color: INK_2 }}>
+              <FileText className="w-4 h-4 shrink-0 mt-0.5" style={{ color: d.required ? BRAND : FAINT }} />
+              <span>{d.label}{!d.required && <span style={{ color: FAINT }}> (optional)</span>}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div className="rounded-2xl p-4" style={{ backgroundColor: ready ? GREEN_TINT : CREAM }}>
+        <p className="text-[13.5px] font-bold" style={{ color: ready ? GREEN : INK }}>{ready ? "Ready to publish" : `${doneCount} of 4 key sections complete`}</p>
+        <div className="h-1.5 rounded-full overflow-hidden mt-2 bg-white">
+          <div className="h-full rounded-full transition-all duration-500" style={{ width: `${(doneCount / 4) * 100}%`, backgroundColor: ready ? GREEN : BRAND }} />
+        </div>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="flex flex-col h-full min-h-0">
-      <ScreenHeader
-        title={FUNNEL_STEPS[step]}
-        subtitle={`Step ${step + 1} of ${FUNNEL_STEPS.length}`}
-        onBack={() => (step === 0 ? setView("list") : setStep(step - 1))}
-        onMenu={onMenu}
-      />
-
-      {/* progress */}
-      <div className="px-3 pb-2 shrink-0">
-        <div className="flex gap-1">
-          {FUNNEL_STEPS.map((_, i) => (
-            <span key={i} className="h-1.5 rounded-full flex-1 transition-colors" style={{ backgroundColor: i <= step ? NAVY : "#D3D9EC" }} />
-          ))}
-        </div>
-      </div>
-
-      <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-4">
-
-        {/* ---- 0 FACILITY ---- */}
-        {step === 0 && (
-          <>
-            <Q>What kind of place is hiring?</Q>
-            <SearchPicker
-              query={q.facility}
-              onQuery={(v) => setQuery("facility", v)}
-              placeholder="Search type or add your own…"
-              options={[...FACILITY_TYPES.map((f) => ({ label: f.label, icon: f.icon })), ...extra.facility.map((l) => ({ label: l, icon: Plus }))]}
-              selected={job.facilityTypeLabel || ""}
-              onSelect={(v) => { set("facilityTypeLabel", v); set("facilityType", (FACILITY_TYPES.find((f) => f.label === v) || {}).key || "other"); }}
-              onAddCustom={(v) => addExtra("facility", v, (val) => { set("facilityTypeLabel", val); set("facilityType", "other"); })}
-            />
-
-            <div className="mt-5">
-              <Q>Name of the place</Q>
-              <input value={job.facilityName} onChange={(e) => set("facilityName", e.target.value)} placeholder="e.g. Aga Care Hospital" className={inputCls} style={inputStyle} />
-            </div>
-
-            <div className="mt-5">
-              <Q>City</Q>
-              <SearchPicker
-                query={q.city}
-                onQuery={(v) => setQuery("city", v)}
-                placeholder="Search city or add your own…"
-                options={[...CITIES, ...extra.city]}
-                selected={job.city}
-                onSelect={(v) => set("city", v)}
-                onAddCustom={(v) => addExtra("city", v, (val) => set("city", val))}
-              />
-            </div>
-
-            <Q>Area or road <span className="text-[13px] font-normal" style={{ color: SUBTLE }}>(optional)</span></Q>
-            <input value={job.area} onChange={(e) => set("area", e.target.value)} placeholder="e.g. Susan Road" className={inputCls} style={inputStyle} />
-            <AutoFill hint={known.facilityArea} current={job.area} onUse={(v) => set("area", v)} />
-          </>
-        )}
-
-        {/* ---- 1 ROLE ---- */}
-        {step === 1 && (
-          <>
-            <Q>Who do you need to hire?</Q>
-            <SearchPicker
-              query={q.title}
-              onQuery={(v) => setQuery("title", v)}
-              placeholder="Search role or add your own…"
-              options={[...JOB_TITLES.filter((t) => t !== "Other"), ...extra.title]}
-              selected={job.jobTitle}
-              onSelect={(v) => set("jobTitle", v)}
-              onAddCustom={(v) => addExtra("title", v, (val) => set("jobTitle", val))}
-            />
-          </>
-        )}
-
-        {/* ---- 2 TIMING ---- */}
-        {step === 2 && (
-          <>
-            <Q>Which shift? <span className="text-[13px] font-normal" style={{ color: SUBTLE }}>Choose one or more</span></Q>
-            <SearchPicker
-              query={q.shift}
-              onQuery={(v) => setQuery("shift", v)}
-              placeholder="Search shift or add your own…"
-              multi
-              options={[...SHIFTS.map((sh) => ({ label: sh.label, icon: sh.icon, sub: sh.sub })), ...extra.shift.map((l) => ({ label: l, icon: Clock }))]}
-              selected={job.shifts}
-              onSelect={(v) => toggleIn("shifts", v)}
-              onAddCustom={(v) => addExtra("shift", v, (val) => toggleIn("shifts", val))}
-              renderOption={(list, isOn, onSel) => (
-                <div className="flex flex-col gap-2">
-                  {list.map((o) => (
-                    <OptionCard key={o.label} on={isOn(o.label)} onClick={() => onSel(o.label)} icon={o.icon} label={o.label} sub={o.sub} />
-                  ))}
-                </div>
-              )}
-            />
-            <div className="mb-5" />
-            <Q>When does it start? <span className="text-[13px] font-normal" style={{ color: SUBTLE }}>(optional)</span></Q>
-            <input value={job.startDate} onChange={(e) => set("startDate", e.target.value)} placeholder="e.g. Immediately / 1 September" className={inputCls} style={inputStyle} />
-          </>
-        )}
-
-        {/* ---- 3 SALARY ---- */}
-        {step === 3 && (
-          <>
-            <Q>How much is the pay?</Q>
-            <div className="relative mb-4">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[15px] font-bold" style={{ color: SUBTLE }}>PKR</span>
-              <input
-                value={job.payAmount}
-                onChange={(e) => set("payAmount", e.target.value.replace(/[^0-9,]/g, ""))}
-                placeholder="50,000"
-                inputMode="numeric"
-                className="w-full text-[19px] font-bold rounded-xl pl-14 pr-4 py-3.5 outline-none"
-                style={inputStyle}
-              />
-            </div>
-            <Q>Paid how often?</Q>
-            <SearchPicker
-              query={q.pay}
-              onQuery={(v) => setQuery("pay", v)}
-              placeholder="Search or add your own…"
-              options={[...PAY_UNITS.map((u) => u.label), ...extra.pay]}
-              selected={job.payUnitLabel || (PAY_UNITS.find((u) => u.key === job.payUnit) || {}).label || ""}
-              onSelect={(v) => { set("payUnitLabel", v); set("payUnit", (PAY_UNITS.find((u) => u.label === v) || {}).key || "custom"); }}
-              onAddCustom={(v) => addExtra("pay", v, (val) => { set("payUnitLabel", val); set("payUnit", "custom"); })}
-            />
-            <div className="mb-4" />
-            <p className="text-[12.5px] leading-snug px-1" style={{ color: SUBTLE }}>
-              Posts that show a salary get far more applications than ones that say "negotiable".
-            </p>
-          </>
-        )}
-
-        {/* ---- 4 REQUIREMENTS ---- */}
-        {step === 4 && (
-          <>
-            <Q>Any requirements? <span className="text-[13px] font-normal" style={{ color: SUBTLE }}>(optional)</span></Q>
-            <SearchPicker
-              query={q.req}
-              onQuery={(v) => setQuery("req", v)}
-              placeholder="Search requirement or add your own…"
-              multi
-              options={[...COMMON_REQUIREMENTS, ...extra.req]}
-              selected={job.requirements}
-              onSelect={(v) => toggleIn("requirements", v)}
-              onAddCustom={(v) => addExtra("req", v, (val) => toggleIn("requirements", val))}
-            />
-            <div className="mb-5" />
-
-            <Q>Anything else to add?</Q>
-            <textarea
-              value={job.notes}
-              onChange={(e) => set("notes", e.target.value)}
-              placeholder="Duties, department, or anything applicants should know"
-              rows={3}
-              className="w-full text-[15px] rounded-xl px-4 py-3 outline-none resize-none mb-5"
-              style={inputStyle}
-            />
-
-            <Q>Who should they contact?</Q>
-            <AutoFillAll
-              label="Use my contact details"
-              pairs={[
-                { hint: known.contactPerson, current: job.contactName,   set: (v) => set("contactName", v) },
-                { hint: known.facilityPhone, current: job.contactNumber, set: (v) => set("contactNumber", v) },
-              ]}
-            />
-            <input value={job.contactName} onChange={(e) => set("contactName", e.target.value)} placeholder="Name or department" className={inputCls} style={inputStyle} />
-            <AutoFill hint={known.contactPerson} current={job.contactName} onUse={(v) => set("contactName", v)} />
-            <input value={job.contactNumber} onChange={(e) => set("contactNumber", e.target.value)} placeholder="03XX XXXXXXX" inputMode="tel" className={inputCls + " mt-2.5"} style={inputStyle} />
-            <AutoFill hint={known.facilityPhone} current={job.contactNumber} onUse={(v) => set("contactNumber", v)} />
-            <button onClick={() => set("showNumber", !job.showNumber)} className="w-full flex items-center gap-3 mt-3">
-              <span className="w-12 h-7 rounded-full flex items-center px-0.5 shrink-0 transition-colors"
-                style={{ backgroundColor: job.showNumber ? GREEN : "#D3D9EC", justifyContent: job.showNumber ? "flex-end" : "flex-start" }}>
-                <span className="w-6 h-6 rounded-full bg-white block" />
-              </span>
-              <span className="text-[13px] text-left flex-1" style={{ color: "#4B4A45" }}>
-                Show my number on the post
-              </span>
-            </button>
-          </>
-        )}
-
-        {/* ---- 5 PHOTOS ---- */}
-        {step === 5 && (
-          <>
-            <input ref={galleryRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePhotos} />
-            <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotos} />
-
-            <Q>Add photos <span className="text-[13px] font-normal" style={{ color: SUBTLE }}>(optional)</span></Q>
-            <p className="text-[13px] mb-3 leading-snug" style={{ color: SUBTLE }}>
-              A picture of your facility, department or team helps your post stand out. Up to {MAX_PHOTOS} photos.
-            </p>
-
-            <div className="flex gap-2.5 mb-4">
-              <button
-                onClick={() => cameraRef.current?.click()}
-                className="flex-1 rounded-2xl py-4 flex flex-col items-center gap-2 active:scale-[0.97] transition-transform"
-                style={{ backgroundColor: NAVY }}
-              >
-                <Camera className="w-6 h-6 text-white" />
-                <span className="text-[13.5px] font-semibold text-white">Take Photo</span>
-              </button>
-              <button
-                onClick={() => galleryRef.current?.click()}
-                className="flex-1 rounded-2xl py-4 flex flex-col items-center gap-2 active:scale-[0.97] transition-transform"
-                style={{ backgroundColor: "white", border: `1.5px solid ${CARD_BORDER}` }}
-              >
-                <Upload className="w-6 h-6" style={{ color: NAVY }} />
-                <span className="text-[13.5px] font-semibold" style={{ color: INK }}>Choose from Gallery</span>
-              </button>
-            </div>
-
-            {photoError && (
-              <div className="rounded-xl p-3 mb-3 flex items-start gap-2" style={{ backgroundColor: "#FBEBEC" }}>
-                <X className="w-4 h-4 mt-0.5 shrink-0" style={{ color: RED }} />
-                <p className="text-[12.5px]" style={{ color: RED }}>{photoError}</p>
-              </div>
-            )}
-
-            {job.photos.length === 0 ? (
-              <div className="rounded-2xl p-8 flex flex-col items-center text-center" style={{ border: `1.5px dashed ${CARD_BORDER}`, backgroundColor: "white" }}>
-                <Camera className="w-9 h-9 mb-2" style={{ color: SUBTLE }} />
-                <p className="text-[13.5px] font-semibold" style={{ color: INK }}>No photos yet</p>
-                <p className="text-[12px] mt-1" style={{ color: SUBTLE }}>You can skip this and post without photos.</p>
-              </div>
-            ) : (
-              <>
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-[13px] font-semibold" style={{ color: INK_2 }}>
-                    {job.photos.length} of {MAX_PHOTOS}
-                  </p>
-                  <p className="text-[11.5px]" style={{ color: SUBTLE }}>Tap a photo to make it the cover</p>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {job.photos.map((src, i) => (
-                    <div key={i} className="relative rounded-xl overflow-hidden" style={{ aspectRatio: "1 / 1", border: `2px solid ${i === job.coverIndex ? NAVY : "transparent"}` }}>
-                      <button onClick={() => set("coverIndex", i)} className="w-full h-full">
-                        <img src={src} alt="" className="w-full h-full object-cover" />
-                      </button>
-                      {i === job.coverIndex && (
-                        <span className="absolute bottom-1 left-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: NAVY, color: "white" }}>
-                          COVER
-                        </span>
-                      )}
-                      <button
-                        onClick={() => removePhoto(i)}
-                        className="absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center"
-                        style={{ backgroundColor: "rgba(0,0,0,.55)" }}
-                        aria-label="Remove photo"
-                      >
-                        <X className="w-3 h-3 text-white" strokeWidth={3} />
-                      </button>
-                    </div>
-                  ))}
-                  {job.photos.length < MAX_PHOTOS && (
-                    <button
-                      onClick={() => galleryRef.current?.click()}
-                      className="rounded-xl flex flex-col items-center justify-center gap-1"
-                      style={{ aspectRatio: "1 / 1", border: `1.5px dashed ${CARD_BORDER}`, backgroundColor: "white" }}
-                    >
-                      <span className="text-[20px] font-bold" style={{ color: SUBTLE }}>+</span>
-                      <span className="text-[10.5px]" style={{ color: SUBTLE }}>Add</span>
-                    </button>
-                  )}
-                </div>
-              </>
-            )}
-
-            <p className="text-[11.5px] mt-3 leading-snug px-1" style={{ color: SUBTLE }}>
-              Photos are resized automatically. Avoid images showing patients or confidential records.
-            </p>
-          </>
-        )}
-
-        {/* ---- 6 PREVIEW ---- */}
-        {step === 6 && (
-          <>
-            <p className="text-[14px] font-bold mb-2" style={{ color: INK, letterSpacing: "-0.01em" }}>Choose a design</p>
-            <div className="flex gap-2 overflow-x-auto pb-2 mb-3" style={{ scrollbarWidth: "none" }}>
-              {CARD_TEMPLATES.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => set("templateId", t.id)}
-                  className="shrink-0 rounded-xl px-3 py-2 text-[12.5px] font-semibold transition-colors"
-                  style={{
-                    background: t.bordered ? "white" : t.bg,
-                    color: t.bordered ? INK : t.fg,
-                    border: `2px solid ${job.templateId === t.id ? NAVY : "transparent"}`,
-                  }}
-                >
-                  {t.name}
-                </button>
-              ))}
-            </div>
-
-            <div ref={cardRef}><JobPostCard job={job} tpl={tpl} scale={1} /></div>
-
-            <div className="rounded-2xl bg-white p-3.5 mt-3" style={{ border: `1px solid ${CARD_BORDER}` }}>
-              <p className="text-[13px] font-semibold mb-1.5" style={{ color: INK_2 }}>What next?</p>
-              <div className="rounded-xl p-2.5 mb-1.5 flex items-start gap-2" style={{ backgroundColor: GREEN_TINT }}>
-                <Check className="w-3.5 h-3.5 mt-0.5 shrink-0" style={{ color: GREEN }} />
-                <p className="text-[11.5px] leading-snug" style={{ color: GREEN }}>
-                  Saved to your job posts automatically. Choose any option below as well.
-                </p>
-              </div>
-
-              <button
-                onClick={() => {
-                  const go = () => { saveJob("posted"); flash("Posted on PakMed and saved."); setView("list"); };
-                  if (canPost) go(); else onNeedProfile(go, {
-                    facilityName: job.facilityName, facilityType: job.facilityTypeLabel,
-                    city: job.city, address: job.area, area: job.area,
-                    contactPerson: job.contactName, phone: job.contactNumber,
-                  });
-                }}
-                className="w-full flex items-center gap-3 py-3 active:opacity-70"
-              >
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: GREEN_TINT }}>
-                  <Check className="w-5 h-5" strokeWidth={3} style={{ color: GREEN }} />
-                </div>
-                <div className="flex-1 text-left">
-                  <p className="text-[14.5px] font-semibold" style={{ color: INK }}>Post on PakMed</p>
-                  <p className="text-[11.5px]" style={{ color: SUBTLE }}>Doctors can see and apply · saves automatically</p>
-                </div>
-              </button>
-
-              <div className="h-px ml-[52px]" style={{ backgroundColor: CARD_BORDER }} />
-
-              <button onClick={() => setShareOpen(true)} className="w-full flex items-center gap-3 py-3 active:opacity-70">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: VIOLET_TINT }}>
-                  <Repeat2 className="w-5 h-5" style={{ color: VIOLET }} />
-                </div>
-                <div className="flex-1 text-left">
-                  <p className="text-[14.5px] font-semibold" style={{ color: INK }}>Share</p>
-                  <p className="text-[11.5px]" style={{ color: SUBTLE }}>WhatsApp, Facebook, Instagram, TikTok</p>
-                </div>
-              </button>
-
-              <div className="h-px ml-[52px]" style={{ backgroundColor: CARD_BORDER }} />
-
-              <button onClick={downloadCard} className="w-full flex items-center gap-3 py-3 active:opacity-70">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: NAVY_TINT }}>
-                  <Upload className="w-5 h-5" style={{ color: NAVY, transform: "rotate(180deg)" }} />
-                </div>
-                <div className="flex-1 text-left">
-                  <p className="text-[14.5px] font-semibold" style={{ color: INK }}>Download</p>
-                  <p className="text-[11.5px]" style={{ color: SUBTLE }}>Save the job card to your device</p>
-                </div>
-              </button>
-            </div>
-
-            {cardNote && (
-              <p className="text-[11.5px] text-center mt-2.5 px-2 py-2 rounded-xl" style={{ color: NAVY, backgroundColor: NAVY_TINT }}>{cardNote}</p>
-            )}
-          </>
-        )}
-      </div>
-
-      {/* funnel footer nav */}
-      {!isLast && (
-        <div className="px-3 pb-3 pt-2 shrink-0 flex gap-2.5">
-          {step > 0 && (
-            <button onClick={() => setStep(step - 1)} className="px-5 py-3.5 rounded-full font-semibold text-[14px] flex items-center gap-1.5" style={{ backgroundColor: "#EFF2FA", color: INK }}>
-              <ArrowLeft className="w-4 h-4" /> Back
-            </button>
-          )}
-          <button
-            onClick={() => { const n = step + 1; if (n === FUNNEL_STEPS.length - 1) saveJob("saved"); setStep(n); }}
-            disabled={!stepValid[step]}
-            className="flex-1 py-3.5 rounded-full font-semibold text-[14px] flex items-center justify-center gap-2 transition-opacity"
-            style={{ backgroundColor: NAVY, color: "white", opacity: stepValid[step] ? 1 : 0.4 }}
-          >
-            {step === FUNNEL_STEPS.length - 2 ? (job.photos.length ? "See preview" : "Skip & preview") : "Next"} <ArrowRight className="w-4 h-4" />
+    <div className="w-full min-w-0" style={{ fontFamily: FONT }}>
+      {/* editor top bar */}
+      <div className="bg-white" style={{ borderBottom: `1px solid ${CARD_BORDER}` }}>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center gap-3">
+          <button type="button" onClick={() => setView("list")} aria-label="Back to job posts" className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors hover:bg-[#F5F7FA]" style={{ border: `1px solid ${CARD_BORDER}` }}>
+            <ChevronLeft className="w-5 h-5" style={{ color: INK }} />
+          </button>
+          <div className="min-w-0 flex-1">
+            <p className="text-[18px] sm:text-[20px] font-extrabold leading-tight truncate" style={{ color: INK }}>{postedJobs.some((j) => j.id === job.id) ? "Edit job post" : "Post a new job"}</p>
+            <p className="text-[13px]" style={{ color: SUBTLE }}>Step {step + 1} of {POST_STEPS.length} · {cur.label}</p>
+          </div>
+          <button type="button" onClick={saveDraft} className="h-10 px-4 rounded-xl text-[13.5px] font-bold inline-flex items-center gap-1.5 shrink-0 transition-colors hover:bg-[#F5F7FA]" style={{ color: INK_2, border: `1px solid ${CARD_BORDER}` }}>
+            <Save className="w-4 h-4" /> <span className="hidden sm:inline">Save draft</span>
           </button>
         </div>
+        <div className="lg:hidden h-1" style={{ backgroundColor: CREAM }}>
+          <div className="h-full transition-all duration-500" style={{ width: `${((step + 1) / POST_STEPS.length) * 100}%`, backgroundColor: GREEN }} />
+        </div>
+      </div>
+
+      {toast && (
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-4">
+          <div className="rounded-xl p-3 flex items-center gap-2.5 auth-step" style={{ backgroundColor: GREEN_TINT }}>
+            <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: GREEN }} />
+            <p className="text-[13.5px] font-semibold" style={{ color: GREEN }}>{toast}</p>
+          </div>
+        </div>
       )}
 
-      {shareOpen && (
-        <JobShareSheet
-          job={job}
-          onClose={() => setShareOpen(false)}
-          onShared={() => { saveJob("posted"); flash("Shared and saved to your job posts."); setShareOpen(false); setView("list"); }}
-        />
-      )}
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 grid lg:grid-cols-[220px_1fr_320px] gap-6 items-start">
+        {/* stepper */}
+        <nav className="hidden lg:block sticky top-[88px]" aria-label="Steps">
+          <ol className="space-y-1">
+            {POST_STEPS.map((s, i) => {
+              const on = i === step;
+              const ok = i < step && valid[s.key];
+              return (
+                <li key={s.key}>
+                  <button type="button" onClick={() => setStep(i)}
+                    className="w-full flex items-center gap-3 p-2.5 rounded-xl text-left transition-colors hover:bg-white"
+                    style={{ backgroundColor: on ? "#fff" : "transparent", boxShadow: on ? `inset 0 0 0 1.5px ${GREEN}` : "none" }}>
+                    <span className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-[13px] font-bold"
+                      style={{ backgroundColor: on ? GREEN : ok ? GREEN_TINT : "#fff", color: on ? "#fff" : ok ? GREEN : SUBTLE, border: on || (ok) ? "none" : `1px solid ${CARD_BORDER}` }}>
+                      {ok ? <Check className="w-4 h-4" strokeWidth={3} /> : i + 1}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-[13.5px] font-bold leading-tight" style={{ color: on ? INK : INK_2 }}>{s.label}</span>
+                      <span className="block text-[11.5px]" style={{ color: FAINT }}>{s.hint}</span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </nav>
+
+        {/* form */}
+        <div className="min-w-0">
+          <div className="rounded-3xl bg-white p-5 sm:p-7 auth-step" key={step} style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: SOFT_SHADOW }}>
+            <div className="flex items-center gap-3 mb-6">
+              <span className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: GREEN_TINT }}><cur.icon className="w-5 h-5" style={{ color: GREEN }} /></span>
+              <div>
+                <h2 className="text-[20px] sm:text-[22px] font-extrabold tracking-[-0.02em]" style={{ color: INK }}>{cur.label}</h2>
+                <p className="text-[13.5px]" style={{ color: SUBTLE }}>{cur.hint}</p>
+              </div>
+            </div>
+
+            {/* 1 FACILITY */}
+            {cur.key === "facility" && (
+              <div className="space-y-6">
+                <div>
+                  <Label>Type of facility</Label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {FACILITY_TYPES.map((t) => {
+                      const on = job.facilityTypeLabel === t.label;
+                      return (
+                        <button key={t.key} type="button" onClick={() => setJob((p) => ({ ...p, facilityTypeLabel: t.label, facilityType: t.key }))} aria-pressed={on}
+                          className="rounded-xl p-3 flex flex-col items-start gap-2 text-left transition-colors min-h-[84px]"
+                          style={{ border: `1.5px solid ${on ? GREEN : CARD_BORDER}`, backgroundColor: on ? GREEN_TINT : "#fff" }}>
+                          <t.icon className="w-5 h-5" style={{ color: on ? GREEN : INK_2 }} />
+                          <span className="text-[13px] font-bold leading-tight" style={{ color: on ? GREEN : INK }}>{t.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div>
+                  <Label>Facility name</Label>
+                  <input value={job.facilityName} onChange={(e) => set("facilityName", e.target.value)} placeholder="e.g. Aga Care Hospital" className={inputCls} style={inputStyle} />
+                  <AutoFill hint={known.facilityName} current={job.facilityName} onUse={(v) => set("facilityName", v)} />
+                </div>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label>City</Label>
+                    <div className="rounded-xl bg-white" style={{ border: `1.5px solid ${job.city ? GREEN : CARD_BORDER}` }}>
+                      <SearchSuggestInput
+                        icon={MapPin}
+                        value={cityDraft || job.city}
+                        onChange={(v) => { setCityDraft(v); set("city", ""); }}
+                        onPick={(v) => { setCityDraft(""); set("city", v); }}
+                        onClear={() => { setCityDraft(""); set("city", ""); }}
+                        placeholder="Search a city"
+                        suggestions={CITIES}
+                        srLabel="City"
+                      />
+                    </div>
+                    {cityDraft && !job.city && (
+                      <button type="button" onClick={() => { set("city", cityDraft.trim()); setCityDraft(""); }} className="mt-2 text-[13px] font-bold" style={{ color: GREEN }}>Use “{cityDraft.trim()}”</button>
+                    )}
+                  </div>
+                  <div>
+                    <Label opt>Area or road</Label>
+                    <input value={job.area} onChange={(e) => set("area", e.target.value)} placeholder="e.g. Gulshan-e-Iqbal" className={inputCls} style={inputStyle} />
+                    <AutoFill hint={known.facilityArea} current={job.area} onUse={(v) => set("area", v)} />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 2 ROLE */}
+            {cur.key === "role" && (
+              <div className="space-y-6">
+                <div>
+                  <Label>Job title</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {JOB_TITLES.filter((t) => t !== "Other").map((t) => (
+                      <Chip key={t} on={job.jobTitle === t} onClick={() => { set("jobTitle", t); setCustomTitle(""); set("documents", null); }}>{t}</Chip>
+                    ))}
+                  </div>
+                  <input value={customTitle || (!JOB_TITLES.includes(job.jobTitle) ? job.jobTitle : "")}
+                    onChange={(e) => { setCustomTitle(e.target.value); set("jobTitle", e.target.value); }}
+                    placeholder="Or type another title, e.g. Anesthesia Technician" className={`${inputCls} mt-3`} style={inputStyle} />
+                </div>
+                {["doctor", "consultant", "house", "dentist"].includes(kind) && (
+                  <div>
+                    <Label opt help="Helps the right specialists find your post">Specialty</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {DOCTOR_SPECIALTIES.slice(0, 10).map((sp) => (
+                        <Chip key={sp} on={job.specialty === sp} onClick={() => set("specialty", job.specialty === sp ? "" : sp)}>{sp}</Chip>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div>
+                  <Label>Job type</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {JOB_TYPES.map((t) => <Chip key={t} on={job.jobType === t} onClick={() => set("jobType", t)}>{t}</Chip>)}
+                  </div>
+                </div>
+                <div className="grid sm:grid-cols-2 gap-4 items-start">
+                  <div>
+                    <Label>Number of openings</Label>
+                    <div className="inline-flex items-center rounded-xl overflow-hidden" style={{ border: `1.5px solid ${CARD_BORDER}` }}>
+                      <button type="button" onClick={() => set("openings", Math.max(1, (job.openings || 1) - 1))} aria-label="Fewer" className="w-12 h-12 flex items-center justify-center hover:bg-[#F5F7FA]"><Minus className="w-4 h-4" style={{ color: INK }} /></button>
+                      <span className="w-14 text-center text-[17px] font-extrabold" style={{ color: INK }}>{job.openings || 1}</span>
+                      <button type="button" onClick={() => set("openings", Math.min(50, (job.openings || 1) + 1))} aria-label="More" className="w-12 h-12 flex items-center justify-center hover:bg-[#F5F7FA]"><Plus className="w-4 h-4" style={{ color: INK }} /></button>
+                    </div>
+                  </div>
+                  <Toggle on={job.urgent} onClick={() => set("urgent", !job.urgent)} title="Urgent hiring" sub="Shows an Urgent badge and appears in the urgent filter" icon={Zap} color={RED} />
+                </div>
+              </div>
+            )}
+
+            {/* 3 PAY */}
+            {cur.key === "pay" && (
+              <div className="space-y-6">
+                <div>
+                  <Label help="Choose one or more">Shifts</Label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {SHIFTS.map((sh) => {
+                      const on = job.shifts.includes(sh.label);
+                      return (
+                        <button key={sh.key} type="button" onClick={() => toggleIn("shifts", sh.label)} aria-pressed={on}
+                          className="rounded-xl p-3 flex flex-col items-start gap-1.5 text-left transition-colors"
+                          style={{ border: `1.5px solid ${on ? GREEN : CARD_BORDER}`, backgroundColor: on ? GREEN_TINT : "#fff" }}>
+                          <sh.icon className="w-5 h-5" style={{ color: on ? GREEN : INK_2 }} />
+                          <span className="text-[14px] font-bold" style={{ color: on ? GREEN : INK }}>{sh.label}</span>
+                          <span className="text-[12px]" style={{ color: SUBTLE }}>{sh.sub}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div>
+                  <Label>Start date</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {START_OPTIONS.map((o) => <Chip key={o} on={job.startDate === o} onClick={() => set("startDate", o)}>{o}</Chip>)}
+                  </div>
+                  <input value={START_OPTIONS.includes(job.startDate) ? "" : job.startDate} onChange={(e) => set("startDate", e.target.value)}
+                    placeholder="Or type a date, e.g. 1 November" className={`${inputCls} mt-3`} style={inputStyle} />
+                </div>
+                <div className="grid sm:grid-cols-[1fr_auto] gap-4 items-start">
+                  <div>
+                    <Label>Salary</Label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[15px] font-bold" style={{ color: SUBTLE }}>PKR</span>
+                      <input value={job.payAmount} onChange={(e) => set("payAmount", e.target.value.replace(/[^0-9,]/g, ""))}
+                        placeholder="e.g. 150,000" inputMode="numeric" className={`${inputCls} pl-14 text-[17px] font-bold`} style={inputStyle} />
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <Label>Paid</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {PAY_UNITS.map((u) => <Chip key={u.key} on={unitLabel === u.label} onClick={() => setJob((p) => ({ ...p, payUnit: u.key, payUnitLabel: u.label }))}>{u.label}</Chip>)}
+                  </div>
+                  <p className="text-[13px] mt-3 flex items-start gap-2" style={{ color: SUBTLE }}><Info className="w-4 h-4 shrink-0 mt-0.5" /> Posts that show a salary get far more applications than ones that say "negotiable".</p>
+                </div>
+              </div>
+            )}
+
+            {/* 4 REQUIREMENTS & DOCUMENTS */}
+            {cur.key === "reqs" && (
+              <div className="space-y-7">
+                <div>
+                  <Label help={job.jobTitle ? `Suggested for ${job.jobTitle} — tap to add or remove` : "Tap to add or remove"}>Requirements</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {[...new Set([...suggestedReqs, ...job.requirements])].map((r) => (
+                      <Chip key={r} on={job.requirements.includes(r)} onClick={() => toggleIn("requirements", r)}>{r}</Chip>
+                    ))}
+                  </div>
+                  <form className="flex gap-2 mt-3" onSubmit={(e) => { e.preventDefault(); const v = reqDraft.trim(); if (v && !job.requirements.includes(v)) set("requirements", [...job.requirements, v]); setReqDraft(""); }}>
+                    <input value={reqDraft} onChange={(e) => setReqDraft(e.target.value)} placeholder="Add your own requirement" className={inputCls} style={inputStyle} />
+                    <button type="submit" disabled={!reqDraft.trim()} className="h-12 px-4 rounded-xl text-[14px] font-bold text-white shrink-0 disabled:opacity-40" style={{ backgroundColor: GREEN }}>Add</button>
+                  </form>
+                </div>
+
+                <div>
+                  <div className="flex items-end justify-between gap-3 mb-2.5">
+                    <div>
+                      <p className="text-[15px] font-bold" style={{ color: INK }}>Documents applicants must submit</p>
+                      <p className="text-[13px] mt-0.5" style={{ color: SUBTLE }}>Applicants upload these when they tap Apply. Mark each as required or optional.</p>
+                    </div>
+                    {Array.isArray(job.documents) && (
+                      <button type="button" onClick={() => set("documents", null)} className="text-[13px] font-bold shrink-0" style={{ color: GREEN }}>Reset to suggested</button>
+                    )}
+                  </div>
+                  <ul className="space-y-2">
+                    {docs.map((d) => (
+                      <li key={d.id} className="flex items-center gap-3 rounded-xl px-3.5 py-2.5" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                        <span className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: d.required ? BRAND_50 : CREAM }}>
+                          <FileText className="w-[18px] h-[18px]" style={{ color: d.required ? BRAND : SUBTLE }} />
+                        </span>
+                        <span className="flex-1 min-w-0 text-[14.5px] font-semibold truncate" style={{ color: INK }}>{d.label}</span>
+                        <div className="inline-flex p-0.5 rounded-lg shrink-0" style={{ backgroundColor: CREAM }}>
+                          {[[true, "Required"], [false, "Optional"]].map(([val, label]) => (
+                            <button key={label} type="button" onClick={() => setDocs(docs.map((x) => (x.id === d.id ? { ...x, required: val } : x)))}
+                              className="h-8 px-2.5 rounded-md text-[12px] font-bold transition-all"
+                              style={{ backgroundColor: d.required === val ? "#fff" : "transparent", color: d.required === val ? (val ? BRAND : INK_2) : FAINT, boxShadow: d.required === val ? "0 1px 2px rgba(16,24,40,0.12)" : "none" }}>
+                              <span className="hidden sm:inline">{label}</span><span className="sm:hidden">{val ? "Req." : "Opt."}</span>
+                            </button>
+                          ))}
+                        </div>
+                        <button type="button" onClick={() => setDocs(docs.filter((x) => x.id !== d.id))} aria-label={`Remove ${d.label}`} className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 hover:bg-[#F5F7FA]">
+                          <X className="w-4 h-4" style={{ color: SUBTLE }} />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  <form className="flex gap-2 mt-3" onSubmit={(e) => { e.preventDefault(); const v = docDraft.trim(); if (v) setDocs([...docs, { id: `doc-${Date.now()}`, label: v, required: true }]); setDocDraft(""); }}>
+                    <input value={docDraft} onChange={(e) => setDocDraft(e.target.value)} placeholder="Add a document, e.g. BLS / ACLS certificate" className={inputCls} style={inputStyle} />
+                    <button type="submit" disabled={!docDraft.trim()} className="h-12 px-4 rounded-xl text-[14px] font-bold text-white shrink-0 disabled:opacity-40" style={{ backgroundColor: GREEN }}>Add</button>
+                  </form>
+                  {!valid.reqs && <p className="text-[13px] mt-2 font-semibold" style={{ color: RED }}>Mark at least one document as required.</p>}
+                </div>
+
+                <div>
+                  <div className="flex items-end justify-between gap-3 mb-2.5">
+                    <p className="text-[15px] font-bold" style={{ color: INK }}>Job description <span className="text-[13px] font-medium" style={{ color: FAINT }}>(optional)</span></p>
+                    <button type="button" onClick={writeDescription} className="h-8 px-3 rounded-lg text-[12.5px] font-bold inline-flex items-center gap-1.5" style={{ color: VIOLET, backgroundColor: VIOLET_TINT }}>
+                      <Sparkles className="w-3.5 h-3.5" /> Write it for me
+                    </button>
+                  </div>
+                  <textarea value={job.notes} onChange={(e) => set("notes", e.target.value)} rows={4}
+                    placeholder="Duties, department, team size, benefits…" className="pm-input w-full text-[15px] rounded-xl px-4 py-3 outline-none resize-none bg-white" style={inputStyle} />
+                </div>
+              </div>
+            )}
+
+            {/* 5 CONTACT & PHOTOS */}
+            {cur.key === "contact" && (
+              <div className="space-y-6">
+                <AutoFillAll
+                  label="Use my contact details"
+                  pairs={[
+                    { hint: known.contactPerson, current: job.contactName, set: (v) => set("contactName", v) },
+                    { hint: known.facilityPhone, current: job.contactNumber, set: (v) => set("contactNumber", v) },
+                  ]}
+                />
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label>Contact person</Label>
+                    <input value={job.contactName} onChange={(e) => set("contactName", e.target.value)} placeholder="Name or department" className={inputCls} style={inputStyle} />
+                  </div>
+                  <div>
+                    <Label>Phone</Label>
+                    <input value={job.contactNumber} onChange={(e) => set("contactNumber", e.target.value)} placeholder="03XX XXXXXXX" inputMode="tel" className={inputCls} style={inputStyle} />
+                  </div>
+                </div>
+                <Toggle on={job.showNumber} onClick={() => set("showNumber", !job.showNumber)} title="Show my number on the post" sub="Otherwise applicants contact you through PakMed messages" icon={Phone} color={GREEN} />
+                <div className="sm:w-1/2">
+                  <Label opt>Apply before</Label>
+                  <input type="date" value={job.deadline} onChange={(e) => set("deadline", e.target.value)} className={inputCls} style={inputStyle} />
+                </div>
+
+                <div>
+                  <Label opt help={`Your facility, department or team — up to ${MAX_PHOTOS} photos`}>Photos</Label>
+                  <input ref={galleryRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePhotos} />
+                  <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotos} />
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
+                    {job.photos.map((src, i) => (
+                      <div key={i} className="relative rounded-xl overflow-hidden aspect-square" style={{ border: `2px solid ${i === job.coverIndex ? GREEN : "transparent"}` }}>
+                        <button type="button" onClick={() => set("coverIndex", i)} className="w-full h-full" aria-label="Use as cover"><img src={src} alt="" className="w-full h-full object-cover" /></button>
+                        {i === job.coverIndex && <span className="absolute bottom-1.5 left-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-md text-white" style={{ backgroundColor: GREEN }}>COVER</span>}
+                        <button type="button" onClick={() => removePhoto(i)} aria-label="Remove photo" className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,.55)" }}>
+                          <X className="w-3.5 h-3.5 text-white" strokeWidth={3} />
+                        </button>
+                      </div>
+                    ))}
+                    {job.photos.length < MAX_PHOTOS && (
+                      <>
+                        <button type="button" onClick={() => galleryRef.current?.click()} className="aspect-square rounded-xl flex flex-col items-center justify-center gap-1.5 transition-colors hover:bg-[#F5F7FA]" style={{ border: `1.5px dashed ${CARD_BORDER}` }}>
+                          <Upload className="w-5 h-5" style={{ color: GREEN }} /><span className="text-[12px] font-semibold" style={{ color: INK_2 }}>Upload</span>
+                        </button>
+                        <button type="button" onClick={() => cameraRef.current?.click()} className="aspect-square rounded-xl flex flex-col items-center justify-center gap-1.5 transition-colors hover:bg-[#F5F7FA] sm:hidden" style={{ border: `1.5px dashed ${CARD_BORDER}` }}>
+                          <Camera className="w-5 h-5" style={{ color: GREEN }} /><span className="text-[12px] font-semibold" style={{ color: INK_2 }}>Camera</span>
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  {photoError && <p className="text-[13px] mt-2 font-semibold" style={{ color: RED }}>{photoError}</p>}
+                  <p className="text-[12.5px] mt-2" style={{ color: FAINT }}>Avoid photos showing patients or confidential records.</p>
+                </div>
+              </div>
+            )}
+
+            {/* 6 REVIEW */}
+            {cur.key === "review" && (
+              <div className="space-y-5">
+                {!ready && (
+                  <div className="rounded-xl p-3.5 flex items-start gap-2.5" style={{ backgroundColor: AMBER_TINT }}>
+                    <Info className="w-5 h-5 shrink-0" style={{ color: AMBER }} />
+                    <p className="text-[14px]" style={{ color: "#6B4B22" }}>A few details are missing. Complete <b>{["facility", "role", "pay"].filter((k) => !valid[k]).map((k) => POST_STEPS.find((s) => s.key === k).label).join(", ")}</b> to publish.</p>
+                  </div>
+                )}
+                {[
+                  { k: "facility", rows: [["Facility", `${job.facilityName || "—"}${job.facilityTypeLabel ? ` · ${job.facilityTypeLabel}` : ""}`], ["Location", [job.area, job.city].filter(Boolean).join(", ") || "—"]] },
+                  { k: "role", rows: [["Role", `${job.jobTitle || "—"}${job.specialty ? ` · ${job.specialty}` : ""}`], ["Type", `${job.jobType}${job.openings > 1 ? ` · ${job.openings} openings` : ""}${job.urgent ? " · Urgent" : ""}`]] },
+                  { k: "pay", rows: [["Shifts", job.shifts.join(", ") || "—"], ["Salary", job.payAmount ? `PKR ${job.payAmount} ${unitLabel.toLowerCase()}` : "—"], ["Starts", job.startDate || "Flexible"]] },
+                  { k: "reqs", rows: [["Requirements", job.requirements.join(", ") || "None added"], ["Documents", `${docs.filter((d) => d.required).length} required · ${docs.filter((d) => !d.required).length} optional`]] },
+                  { k: "contact", rows: [["Contact", [job.contactName, job.showNumber ? job.contactNumber : ""].filter(Boolean).join(" · ") || "Via PakMed messages"], ["Photos", job.photos.length ? `${job.photos.length} added` : "None"]] },
+                ].map((sec) => {
+                  const idx = POST_STEPS.findIndex((s) => s.key === sec.k);
+                  const ok = valid[sec.k];
+                  return (
+                    <div key={sec.k} className="rounded-2xl overflow-hidden" style={{ border: `1px solid ${ok ? CARD_BORDER : "#F3B7B2"}` }}>
+                      <div className="flex items-center justify-between px-4 py-2.5" style={{ backgroundColor: ok ? CREAM : RED_TINT }}>
+                        <p className="text-[13.5px] font-bold flex items-center gap-2" style={{ color: ok ? INK : RED }}>
+                          {ok ? <CheckCircle2 className="w-4 h-4" style={{ color: GREEN }} /> : <Info className="w-4 h-4" />} {POST_STEPS[idx].label}
+                        </p>
+                        <button type="button" onClick={() => setStep(idx)} className="text-[13px] font-bold" style={{ color: BRAND }}>Edit</button>
+                      </div>
+                      <dl>
+                        {sec.rows.map(([k, v]) => (
+                          <div key={k} className="flex gap-4 px-4 py-2.5 text-[14px]" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+                            <dt className="w-28 shrink-0 font-semibold" style={{ color: SUBTLE }}>{k}</dt>
+                            <dd className="flex-1 min-w-0" style={{ color: INK }}>{v}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </div>
+                  );
+                })}
+
+                <div className="rounded-2xl p-4" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                  <p className="text-[15px] font-bold mb-3" style={{ color: INK }}>Shareable job poster</p>
+                  <div className="flex gap-2 overflow-x-auto pb-2 mb-3" style={{ scrollbarWidth: "none" }}>
+                    {CARD_TEMPLATES.map((t) => (
+                      <button key={t.id} type="button" onClick={() => set("templateId", t.id)}
+                        className="shrink-0 h-9 px-3.5 rounded-lg text-[12.5px] font-bold"
+                        style={{ background: t.bordered ? "#fff" : t.bg, color: t.bordered ? INK : t.fg, border: `2px solid ${job.templateId === t.id ? GREEN : CARD_BORDER}` }}>
+                        {t.name}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="max-w-[320px] mx-auto" ref={cardRef}><JobPostCard job={job} tpl={tpl} scale={1} /></div>
+                  <div className="flex gap-2 mt-4 justify-center">
+                    <button type="button" onClick={() => setShareJob(job)} className="h-10 px-4 rounded-xl text-[13.5px] font-bold inline-flex items-center gap-1.5" style={{ color: INK_2, border: `1px solid ${CARD_BORDER}` }}><Repeat2 className="w-4 h-4" /> Share</button>
+                    <button type="button" onClick={downloadCard} className="h-10 px-4 rounded-xl text-[13.5px] font-bold inline-flex items-center gap-1.5" style={{ color: INK_2, border: `1px solid ${CARD_BORDER}` }}><Upload className="w-4 h-4 rotate-180" /> Download</button>
+                  </div>
+                  {cardNote && <p className="text-[12.5px] text-center mt-2.5" style={{ color: BRAND }}>{cardNote}</p>}
+                </div>
+              </div>
+            )}
+
+            {/* footer nav */}
+            <div className="flex items-center gap-2 mt-8 pt-5" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+              {step > 0 && (
+                <button type="button" onClick={() => setStep(step - 1)} className="h-12 px-5 rounded-xl text-[14.5px] font-bold inline-flex items-center gap-1.5" style={{ color: INK_2, border: `1px solid ${CARD_BORDER}` }}>
+                  <ArrowLeft className="w-4 h-4" /> Back
+                </button>
+              )}
+              <span className="flex-1" />
+              {cur.key !== "review" ? (
+                <button type="button" onClick={() => setStep(step + 1)} disabled={!valid[cur.key]}
+                  className="h-12 px-6 rounded-xl text-[15px] font-bold text-white inline-flex items-center gap-2 transition-all enabled:hover:brightness-110 disabled:cursor-not-allowed"
+                  style={{ backgroundColor: GREEN, opacity: valid[cur.key] ? 1 : 0.45 }}>
+                  {step === POST_STEPS.length - 2 ? "Review" : "Continue"} <ArrowRight className="w-4 h-4" />
+                </button>
+              ) : (
+                <button type="button" onClick={publish} disabled={!ready}
+                  className="h-12 px-6 rounded-xl text-[15px] font-bold text-white inline-flex items-center gap-2 transition-all enabled:hover:brightness-110 disabled:cursor-not-allowed"
+                  style={{ backgroundColor: GREEN, opacity: ready ? 1 : 0.45, boxShadow: ready ? "0 8px 20px -10px rgba(18,128,92,0.6)" : "none" }}>
+                  <Send className="w-4 h-4" /> {job.status === "posted" ? "Update job" : "Publish job"}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* live preview */}
+        <aside className="hidden lg:block sticky top-[88px]">{Preview}</aside>
+      </div>
+
+      {shareJob && <JobShareSheet job={shareJob} onClose={() => setShareJob(null)} />}
     </div>
   );
 }
@@ -5292,6 +5952,83 @@ const SEED_JOBS = [
   { id: "sj9", jobTitle: "Operation Theatre Assistant", facilityName: "Ittefaq Hospital", facilityTypeLabel: "Hospital", city: "Lahore", area: "Model Town", shifts: ["Morning", "Night"], payAmount: "40,000", payUnitLabel: "Per Month", requirements: ["Male candidates", "1+ year experience"], contactName: "OT Incharge", contactNumber: "0333 4455667", showNumber: true, startDate: "Immediately", templateId: "c1", status: "posted", posted: "Today", applicants: 2, photos: [], coverIndex: 0 },
   { id: "sj10", jobTitle: "Dentist", facilityName: "Bright Smile Dental", facilityTypeLabel: "Clinic", city: "Islamabad", area: "F-10 Markaz", shifts: ["Evening"], payAmount: "1,500", payUnitLabel: "Per Visit", requirements: ["PMDC / PNC registered"], contactName: "Dr. Ayesha", contactNumber: "0345 1122334", showNumber: true, startDate: "Immediately", templateId: "c4", status: "posted", posted: "Today", applicants: 1, photos: [], coverIndex: 0 },
 ];
+
+/* ---------- extra sample listings (frontend-only demo data) ---------- */
+const sj = (id, jobTitle, facilityName, facilityTypeLabel, city, area, shifts, payAmount, payUnitLabel, jobType, requirements, posted, applicants, extra = {}) => ({
+  id, jobTitle, facilityName, facilityTypeLabel, city, area, shifts, payAmount, payUnitLabel, jobType, requirements, posted, applicants,
+  contactName: "HR Department", contactNumber: "", showNumber: false, startDate: "Immediately",
+  templateId: ["c1", "c2", "c3", "c4", "c5", "c6"][id.length % 6], status: "posted", photos: [], coverIndex: 0, ...extra,
+});
+
+const MORE_SEED_JOBS = [
+  // Karachi
+  sj("xk1", "Medical Officer", "Seaview Medical Centre", "Hospital", "Karachi", "Clifton Block 5", ["Night"], "9,000", "Per Shift", "Locum", ["PMDC / PNC registered", "1+ year experience"], "3 hours ago", 11, { urgent: true }),
+  sj("xk2", "Consultant", "Crescent Women's Hospital", "Hospital", "Karachi", "Gulshan-e-Iqbal Block 13", ["Morning"], "350,000", "Per Month", "Full-time", ["FCPS Gynae", "3+ years experience", "Female candidates"], "1 day ago", 5, { specialty: "Gynecology" }),
+  sj("xk3", "Nurse", "Korangi Community Hospital", "Hospital", "Karachi", "Korangi Industrial Area", ["Night"], "60,000", "Per Month", "Full-time", ["PMDC / PNC registered", "1+ year experience"], "5 hours ago", 18),
+  sj("xk4", "Pharmacist", "Saddar Family Pharmacy", "Pharmacy", "Karachi", "Saddar", ["Evening"], "70,000", "Per Month", "Full-time", ["Pharmacy Council registered", "Fresh graduates welcome"], "2 days ago", 23),
+  sj("xk5", "Physiotherapist", "Karsaz Rehab Centre", "Clinic", "Karachi", "Shahrah-e-Faisal", ["Evening"], "2,000", "Per Visit", "Part-time", ["DPT", "Female candidates"], "4 days ago", 6),
+  // Lahore
+  sj("xl1", "House Officer", "Johar Town Medical Complex", "Hospital", "Lahore", "Johar Town", ["Morning", "Night"], "75,000", "Per Month", "Internship", ["Fresh graduates welcome", "PMDC / PNC registered"], "6 hours ago", 42),
+  sj("xl2", "Consultant", "Gulberg Heart & Vascular", "Hospital", "Lahore", "Gulberg III", ["Evening"], "400,000", "Per Month", "Full-time", ["FCPS Cardiology", "3+ years experience"], "2 days ago", 4, { specialty: "Cardiology" }),
+  sj("xl3", "Dentist", "Model Town Dental Studio", "Clinic", "Lahore", "Model Town", ["Evening"], "120,000", "Per Month", "Full-time", ["BDS", "PMDC / PNC registered"], "Yesterday", 12),
+  sj("xl4", "Lab Technician", "Ravi Diagnostics", "Diagnostic Lab", "Lahore", "Shahdara", ["Morning"], "48,000", "Per Month", "Full-time", ["1+ year experience", "Computer literate"], "3 days ago", 15),
+  sj("xl5", "Medical Officer", "DHA Emergency Clinic", "Clinic", "Lahore", "DHA Phase 6", ["Night"], "7,500", "Per Shift", "Locum", ["PMDC / PNC registered"], "Today", 9, { urgent: true }),
+  // Islamabad
+  sj("xi1", "Medical Officer", "Margalla Medical Centre", "Hospital", "Islamabad", "F-8 Markaz", ["Morning"], "160,000", "Per Month", "Full-time", ["PMDC / PNC registered", "1+ year experience"], "1 day ago", 27),
+  sj("xi2", "Radiographer", "Capital Diagnostics", "Diagnostic Lab", "Islamabad", "G-9 Markaz", ["Evening"], "65,000", "Per Month", "Full-time", ["Diploma in Radiography"], "4 days ago", 8),
+  sj("xi3", "Physiotherapist", "Blue Area Physio Clinic", "Clinic", "Islamabad", "Blue Area", ["Morning"], "90,000", "Per Month", "Contract", ["DPT", "1+ year experience"], "1 week ago", 13),
+  sj("xi4", "Receptionist", "Sector E-11 Family Clinic", "Clinic", "Islamabad", "E-11/2", ["Morning"], "38,000", "Per Month", "Full-time", ["Urdu & English", "Computer literate"], "2 days ago", 34),
+  // Rawalpindi
+  sj("xr1", "Doctor", "Saddar Medical Complex", "Hospital", "Rawalpindi", "Saddar", ["Evening"], "6,500", "Per Shift", "Locum", ["PMDC / PNC registered"], "Today", 7, { urgent: true }),
+  sj("xr2", "Nurse", "Bahria Care Hospital", "Hospital", "Rawalpindi", "Bahria Town Phase 7", ["Morning", "Evening"], "58,000", "Per Month", "Full-time", ["PMDC / PNC registered", "Female candidates"], "3 days ago", 19),
+  sj("xr3", "Pharmacist", "Satellite Town Pharmacy", "Pharmacy", "Rawalpindi", "Satellite Town", ["Morning"], "62,000", "Per Month", "Full-time", ["Pharmacy Council registered"], "5 days ago", 10),
+  // Faisalabad
+  sj("xf1", "Medical Officer", "Lyallpur General Hospital", "Hospital", "Faisalabad", "Peoples Colony", ["Night"], "130,000", "Per Month", "Full-time", ["PMDC / PNC registered", "Own transport"], "2 days ago", 16),
+  sj("xf2", "Operation Theatre Assistant", "Canal Road Surgical", "Hospital", "Faisalabad", "Canal Road", ["Morning"], "38,000", "Per Month", "Full-time", ["1+ year experience"], "6 days ago", 5),
+  sj("xf3", "Lab Technician", "D Ground Diagnostics", "Diagnostic Lab", "Faisalabad", "D Ground", ["Evening"], "1,800", "Per Shift", "Part-time", ["Fresh graduates welcome"], "Yesterday", 3),
+  // Multan
+  sj("xm1", "Consultant", "Multan Kidney Centre", "Hospital", "Multan", "Bosan Road", ["Morning"], "300,000", "Per Month", "Full-time", ["FCPS Nephrology", "3+ years experience"], "4 days ago", 2, { specialty: "Nephrology" }),
+  sj("xm2", "Nurse", "Cantt Children's Hospital", "Hospital", "Multan", "Multan Cantt", ["Night"], "52,000", "Per Month", "Full-time", ["PMDC / PNC registered"], "Today", 8),
+  sj("xm3", "Medical Officer", "Shah Rukn-e-Alam Clinic", "Clinic", "Multan", "Shah Rukn-e-Alam Colony", ["Evening"], "5,500", "Per Shift", "Locum", ["PMDC / PNC registered"], "2 days ago", 6),
+  // Peshawar
+  sj("xp1", "Medical Officer", "Khyber Valley Hospital", "Hospital", "Peshawar", "Hayatabad Phase 3", ["Morning"], "140,000", "Per Month", "Full-time", ["PMDC / PNC registered", "Local residents preferred"], "1 day ago", 22),
+  sj("xp2", "Lab Technician", "Hayatabad Medical Lab", "Diagnostic Lab", "Peshawar", "Hayatabad Phase 5", ["Night"], "45,000", "Per Month", "Full-time", ["1+ year experience"], "3 days ago", 9),
+  sj("xp3", "Demonstrator", "Frontier College of Nursing", "Medical / Diploma College", "Peshawar", "University Town", ["Morning"], "80,000", "Per Month", "Contract", ["MSc Nursing", "3+ years experience"], "1 week ago", 4),
+  // Quetta
+  sj("xq1", "Doctor", "Bolan Care Hospital", "Hospital", "Quetta", "Jinnah Road", ["Morning"], "150,000", "Per Month", "Full-time", ["PMDC / PNC registered", "Local residents preferred"], "2 days ago", 6),
+  sj("xq2", "Pharmacist", "Quetta Cantt Pharmacy", "Pharmacy", "Quetta", "Quetta Cantt", ["Evening"], "60,000", "Per Month", "Full-time", ["Pharmacy Council registered"], "5 days ago", 3),
+  sj("xq3", "LHV", "Satellite Town Maternity Home", "Clinic", "Quetta", "Satellite Town", ["Morning"], "40,000", "Per Month", "Full-time", ["LHV diploma", "Female candidates"], "Today", 2, { urgent: true }),
+  // Hyderabad
+  sj("xh1", "Medical Officer", "Latifabad Medical Centre", "Hospital", "Hyderabad", "Latifabad Unit 7", ["Night"], "6,000", "Per Shift", "Locum", ["PMDC / PNC registered"], "Yesterday", 5),
+  sj("xh2", "Consultant", "Qasimabad Children's Clinic", "Clinic", "Hyderabad", "Qasimabad", ["Evening"], "3,000", "Per Visit", "Part-time", ["FCPS Pediatrics"], "3 days ago", 3, { specialty: "Pediatrics" }),
+  sj("xh3", "Receptionist", "Auto Bhan Diagnostics", "Diagnostic Lab", "Hyderabad", "Auto Bhan Road", ["Morning"], "32,000", "Per Month", "Full-time", ["Urdu & English"], "6 days ago", 17),
+  // Sialkot
+  sj("xs1", "Consultant", "Sialkot Eye Clinic", "Clinic", "Sialkot", "Paris Road", ["Evening"], "250,000", "Per Month", "Full-time", ["FCPS Ophthalmology"], "4 days ago", 3, { specialty: "Ophthalmology" }),
+  sj("xs2", "Nurse", "Cantt Women's Hospital", "Hospital", "Sialkot", "Sialkot Cantt", ["Morning", "Night"], "50,000", "Per Month", "Full-time", ["PMDC / PNC registered", "Female candidates"], "Yesterday", 11),
+  // Gujranwala
+  sj("xg1", "Medical Officer", "GT Road Medical Centre", "Hospital", "Gujranwala", "GT Road", ["Night"], "110,000", "Per Month", "Full-time", ["PMDC / PNC registered"], "2 days ago", 14),
+  sj("xg2", "Dentist", "Gujranwala Dental Care", "Clinic", "Gujranwala", "Satellite Town", ["Evening"], "1,200", "Per Visit", "Part-time", ["BDS"], "5 days ago", 4),
+  // Bahawalpur
+  sj("xb1", "Doctor", "Cholistan Health Centre", "Hospital", "Bahawalpur", "Model Town A", ["Morning"], "135,000", "Per Month", "Contract", ["PMDC / PNC registered", "Own transport"], "3 days ago", 7),
+  sj("xb2", "Lab Technician", "Bahawalpur City Lab", "Diagnostic Lab", "Bahawalpur", "Circular Road", ["Evening"], "42,000", "Per Month", "Full-time", ["Fresh graduates welcome"], "1 week ago", 5),
+];
+
+SEED_JOBS.push(...MORE_SEED_JOBS);
+
+function jobRoleVisual(title = "") {
+  const t = String(title).toLowerCase();
+  if (t.includes("nurse")) return { Icon: Heart, tint: RED_TINT, color: RED };
+  if (t.includes("pharmacist") || t.includes("pharmacy")) return { Icon: Pill, tint: GREEN_TINT, color: GREEN };
+  if (t.includes("receptionist") || t.includes("front desk")) return { Icon: Phone, tint: AMBER_TINT, color: AMBER };
+  if (t.includes("consultant")) return { Icon: GraduationCap, tint: VIOLET_TINT, color: VIOLET };
+  if (t.includes("lab") || t.includes("technician")) return { Icon: FlaskConical, tint: TEAL_TINT, color: TEAL };
+  if (t.includes("dentist") || t.includes("dental")) return { Icon: Scissors, tint: AMBER_TINT, color: AMBER };
+  if (t.includes("demonstrator") || t.includes("lecturer") || t.includes("professor")) return { Icon: GraduationCap, tint: VIOLET_TINT, color: VIOLET };
+  if (t.includes("theatre") || t.includes("operation") || t.includes("surgeon")) return { Icon: Activity, tint: RED_TINT, color: RED };
+  if (t.includes("medical officer")) return { Icon: FileText, tint: TEAL_TINT, color: TEAL };
+  if (t.includes("doctor") || t.includes("physician") || t.includes("mo ")) return { Icon: Stethoscope, tint: BRAND_50, color: BRAND };
+  return { Icon: Briefcase, tint: BRAND_50, color: BRAND };
+}
 
 const DOCTOR_SPECIALTIES = [
   "General Physician", "Surgery", "Dermatology", "ENT", "Cardiology", "Pediatrics",
@@ -5402,206 +6139,690 @@ function FilterSheet({ title, options, selected, onSelect, onClose, allowFree, f
 /* =========================================================
    FIND A JOB
    ========================================================= */
+/* ---------- branded dropdowns (replace native selects) ---------- */
+function useClickOutside(ref, onOutside, active) {
+  useEffect(() => {
+    if (!active) return;
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) onOutside(); };
+    document.addEventListener("mousedown", handler);
+    document.addEventListener("touchstart", handler, { passive: true });
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("touchstart", handler);
+    };
+  }, [ref, onOutside, active]);
+}
+
+function Dropdown({ value, options, onChange, icon: Icon, label, align = "right", size = "md", className = "" }) {
+  const [open, setOpen] = useState(false);
+  const [hi, setHi] = useState(0);
+  const rootRef = useRef(null);
+  const listRef = useRef(null);
+  const close = useCallback(() => setOpen(false), []);
+  useClickOutside(rootRef, close, open);
+
+  const current = options.find((o) => o.value === value) || options[0];
+  const openMenu = () => { setHi(Math.max(0, options.findIndex((o) => o.value === value))); setOpen(true); };
+  const pick = (o) => { onChange(o.value); setOpen(false); };
+
+  useEffect(() => {
+    if (!open || !listRef.current) return;
+    const el = listRef.current.children[hi];
+    if (el) el.scrollIntoView({ block: "nearest" });
+  }, [hi, open]);
+
+  const onKeyDown = (e) => {
+    if (!open && ["ArrowDown", "ArrowUp", "Enter", " "].includes(e.key)) { e.preventDefault(); openMenu(); return; }
+    if (!open) return;
+    if (e.key === "ArrowDown") { e.preventDefault(); setHi((i) => Math.min(options.length - 1, i + 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setHi((i) => Math.max(0, i - 1)); }
+    else if (e.key === "Home") { e.preventDefault(); setHi(0); }
+    else if (e.key === "End") { e.preventDefault(); setHi(options.length - 1); }
+    else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(options[hi]); }
+    else if (e.key === "Escape" || e.key === "Tab") setOpen(false);
+  };
+
+  const h = size === "sm" ? "h-9" : "h-10";
+  return (
+    <div ref={rootRef} className={`relative inline-block ${className}`}>
+      <button
+        type="button"
+        onClick={() => (open ? setOpen(false) : openMenu())}
+        onKeyDown={onKeyDown}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={label}
+        className={`${h} w-full pl-3 pr-2.5 rounded-xl inline-flex items-center gap-2 bg-white text-[13.5px] font-semibold transition-all`}
+        style={{
+          color: INK,
+          border: `1px solid ${open ? BRAND : CARD_BORDER}`,
+          boxShadow: open ? "0 0 0 4px rgba(11,87,183,0.12)" : "none",
+        }}
+      >
+        {Icon && <Icon className="w-4 h-4 shrink-0" style={{ color: open ? BRAND : SUBTLE }} />}
+        <span className="truncate flex-1 text-left">{current && current.label}</span>
+        <ChevronDown className="w-4 h-4 shrink-0 transition-transform duration-200" style={{ color: open ? BRAND : SUBTLE, transform: open ? "rotate(180deg)" : "none" }} />
+      </button>
+      {open && (
+        <ul
+          ref={listRef}
+          role="listbox"
+          aria-label={label}
+          className={`dropdown-pop absolute z-50 mt-2 min-w-full w-max max-w-[280px] max-h-72 overflow-y-auto p-1.5 rounded-xl bg-white ${align === "left" ? "left-0" : "right-0"}`}
+          style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: "0 16px 40px -12px rgba(16,24,40,0.25)" }}
+        >
+          {options.map((o, i) => {
+            const selected = o.value === value;
+            const active = i === hi;
+            return (
+              <li
+                key={o.value}
+                role="option"
+                aria-selected={selected}
+                onMouseEnter={() => setHi(i)}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => pick(o)}
+                className="flex items-center gap-2.5 h-10 px-3 rounded-lg cursor-pointer text-[14px] transition-colors"
+                style={{
+                  color: selected ? BRAND : INK,
+                  fontWeight: selected ? 700 : 500,
+                  backgroundColor: active ? (selected ? BRAND_50 : CREAM) : selected ? BRAND_50 : "transparent",
+                }}
+              >
+                <span className="flex-1 whitespace-nowrap">{o.label}</span>
+                {selected && <Check className="w-4 h-4 shrink-0" style={{ color: BRAND }} />}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+const JOB_TYPES = ["Full-time", "Part-time", "Contract", "Internship"];
+const JOB_SHIFT_LABELS = ["Morning", "Evening", "Night", "On Call"];
+const JOB_FACILITY_LABELS = ["Hospital", "Clinic", "Diagnostic Lab", "Pharmacy", "Medical / Diploma College"];
+const JOB_POSTED_WINDOWS = [
+  { key: "any", label: "Any time", hours: Infinity },
+  { key: "24h", label: "Last 24 hours", hours: 24 },
+  { key: "3d", label: "Last 3 days", hours: 72 },
+  { key: "7d", label: "Last 7 days", hours: 168 },
+];
+const JOB_SORTS = [
+  { key: "newest", label: "Newest first" },
+  { key: "pay", label: "Highest pay" },
+  { key: "applicants", label: "Fewest applicants" },
+];
+const JOB_PAGE_SIZE = 12;
+
+function jobTypeOf(j) {
+  const raw = j.jobType || "";
+  if (raw && raw !== "Locum") return raw;
+  const unit = (j.payUnitLabel || "").toLowerCase();
+  if (raw === "Locum" || unit.includes("shift") || unit.includes("visit") || unit.includes("hour")) return "Part-time";
+  return "Full-time";
+}
+
+function jobPostedHours(posted = "") {
+  const p = String(posted).toLowerCase();
+  if (!p || p.includes("just") || p === "today") return p === "today" ? 6 : 0;
+  if (p.includes("yesterday")) return 30;
+  const n = parseFloat(p) || 1;
+  if (p.includes("min")) return n / 60;
+  if (p.includes("hour")) return n;
+  if (p.includes("day")) return n * 24;
+  if (p.includes("week")) return n * 168;
+  if (p.includes("month")) return n * 720;
+  return 9999;
+}
+
+// rough monthly equivalent so different pay units can be compared
+function jobMonthlyPay(j) {
+  const amt = parseFloat(String(j.payAmount || "").replace(/,/g, "")) || 0;
+  const unit = (j.payUnitLabel || "").toLowerCase();
+  if (unit.includes("shift")) return amt * 22;
+  if (unit.includes("day")) return amt * 26;
+  if (unit.includes("hour")) return amt * 8 * 26;
+  if (unit.includes("visit")) return amt * 40;
+  return amt;
+}
+
+function JobFilterGroup({ title, options, selected, onToggle, counts, labels, defaultOpen = true }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const activeCount = (selected || []).length;
+  return (
+    <div className="py-1" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-2 min-h-[44px] text-left"
+        aria-expanded={open}
+      >
+        <p className="flex-1 text-[13px] font-bold uppercase tracking-[0.06em]" style={{ color: INK }}>{title}</p>
+        {activeCount > 0 && (
+          <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-md" style={{ color: BRAND, backgroundColor: BRAND_50 }}>{activeCount}</span>
+        )}
+        <ChevronDown className="w-4 h-4 shrink-0 transition-transform duration-200" style={{ color: SUBTLE, transform: open ? "rotate(180deg)" : "none" }} />
+      </button>
+      {open && (
+        <div className="space-y-1 pb-3">
+          {options.map((o) => {
+            const on = selected.includes(o);
+            const n = counts ? counts[o] || 0 : null;
+            return (
+              <label key={o} className="flex items-center gap-2.5 min-h-[36px] px-2 -mx-2 rounded-lg cursor-pointer hover:bg-[#F5F7FA]">
+                <input type="checkbox" checked={on} onChange={() => onToggle(o)} className="w-4 h-4 rounded accent-[#0B57B7] shrink-0" />
+                <span className="flex-1 text-[14px]" style={{ color: on ? INK : INK_2, fontWeight: on ? 600 : 500 }}>{labels ? labels[o] : o}</span>
+                {n !== null && <span className="text-[12px] font-semibold" style={{ color: FAINT }}>{n}</span>}
+              </label>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function JobFilterSection({ title, defaultOpen = false, badge, children }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="py-1" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-2 min-h-[44px] text-left"
+        aria-expanded={open}
+      >
+        <p className="flex-1 text-[13px] font-bold uppercase tracking-[0.06em]" style={{ color: INK }}>{title}</p>
+        {badge > 0 && (
+          <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-md" style={{ color: BRAND, backgroundColor: BRAND_50 }}>{badge}</span>
+        )}
+        <ChevronDown className="w-4 h-4 shrink-0 transition-transform duration-200" style={{ color: SUBTLE, transform: open ? "rotate(180deg)" : "none" }} />
+      </button>
+      {open && <div className="pb-3">{children}</div>}
+    </div>
+  );
+}
+
+function JobFiltersPanel({ f, setF, counts }) {
+  const toggle = (key) => (v) => setF((prev) => ({ ...prev, [key]: prev[key].includes(v) ? prev[key].filter((x) => x !== v) : [...prev[key], v] }));
+  const moreBadge = (f.urgentOnly ? 1 : 0) + (f.freshers ? 1 : 0) + (f.pmdc ? 1 : 0);
+  return (
+    <div>
+      <JobFilterGroup title="Job type" options={JOB_TYPES} selected={f.types} onToggle={toggle("types")} counts={counts.types} defaultOpen />
+      <JobFilterGroup title="Shift" options={JOB_SHIFT_LABELS} selected={f.shifts} onToggle={toggle("shifts")} counts={counts.shifts} defaultOpen />
+      <JobFilterGroup title="Facility" options={JOB_FACILITY_LABELS} selected={f.facilities} onToggle={toggle("facilities")} counts={counts.facilities} defaultOpen={false} />
+      <JobFilterSection title="Date posted" defaultOpen={false} badge={f.posted !== "any" ? 1 : 0}>
+        <div className="space-y-1">
+          {JOB_POSTED_WINDOWS.map((w) => (
+            <label key={w.key} className="flex items-center gap-2.5 min-h-[36px] px-2 -mx-2 rounded-lg cursor-pointer hover:bg-[#F5F7FA]">
+              <input type="radio" name="job-posted" checked={f.posted === w.key} onChange={() => setF((p) => ({ ...p, posted: w.key }))} className="w-4 h-4 accent-[#0B57B7] shrink-0" />
+              <span className="text-[14px]" style={{ color: f.posted === w.key ? INK : INK_2, fontWeight: f.posted === w.key ? 600 : 500 }}>{w.label}</span>
+            </label>
+          ))}
+        </div>
+      </JobFilterSection>
+      <JobFilterSection title="More filters" defaultOpen={false} badge={moreBadge}>
+        <div className="space-y-1">
+          {[["urgentOnly", "Urgent hiring only"], ["freshers", "Fresh graduates welcome"], ["pmdc", "PMDC / PNC registration"]].map(([k, label]) => (
+            <label key={k} className="flex items-center justify-between gap-3 min-h-[40px] cursor-pointer">
+              <span className="text-[14px] font-medium" style={{ color: INK_2 }}>{label}</span>
+              <button type="button" role="switch" aria-checked={f[k]} onClick={() => setF((p) => ({ ...p, [k]: !p[k] }))}
+                className="w-10 h-6 rounded-full flex items-center px-0.5 shrink-0 transition-colors"
+                style={{ backgroundColor: f[k] ? BRAND : "#D0D5DD", justifyContent: f[k] ? "flex-end" : "flex-start" }}>
+                <span className="w-5 h-5 rounded-full bg-white block shadow-sm" />
+              </button>
+            </label>
+          ))}
+        </div>
+      </JobFilterSection>
+    </div>
+  );
+}
+
+const EMPTY_JOB_FILTERS = { types: [], shifts: [], facilities: [], posted: "any", urgentOnly: false, freshers: false, pmdc: false };
+
+function filterSuggestions(list, query, limit = 8) {
+  const q = String(query || "").trim().toLowerCase();
+  const ranked = list.filter(Boolean);
+  if (!q) return ranked.slice(0, limit);
+  const starts = [];
+  const contains = [];
+  ranked.forEach((item) => {
+    const s = String(item).toLowerCase();
+    if (s.startsWith(q)) starts.push(item);
+    else if (s.includes(q)) contains.push(item);
+  });
+  return [...starts, ...contains].slice(0, limit);
+}
+
+function SearchSuggestInput({
+  icon: Icon,
+  value,
+  onChange,
+  onPick,
+  onClear,
+  placeholder,
+  suggestions,
+  srLabel,
+  className = "",
+  style,
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
+  const matches = filterSuggestions(suggestions, value, 8);
+  const show = open && matches.length > 0;
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDoc = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  return (
+    <div ref={wrapRef} className={`relative ${className}`} style={style}>
+      <label className="flex items-center gap-3 h-12 px-3 rounded-xl">
+        <Icon className="w-5 h-5 shrink-0" style={{ color: BRAND }} />
+        <span className="sr-only">{srLabel}</span>
+        <input
+          value={value}
+          onChange={(e) => { onChange(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setOpen(false);
+            if (e.key === "Enter" && show && matches[0]) {
+              e.preventDefault();
+              onPick(matches[0]);
+              setOpen(false);
+            }
+          }}
+          placeholder={placeholder}
+          autoComplete="off"
+          className="flex-1 min-w-0 bg-transparent outline-none text-[15px]"
+          style={{ color: INK }}
+        />
+        {value && (
+          <button type="button" onClick={() => { onClear(); setOpen(false); }} aria-label={`Clear ${srLabel}`}>
+            <X className="w-4 h-4" style={{ color: FAINT }} />
+          </button>
+        )}
+      </label>
+      {show && (
+        <ul
+          className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 max-h-64 overflow-y-auto rounded-xl bg-white py-1.5"
+          style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: "0 16px 36px -14px rgba(16,24,40,0.28)" }}
+          role="listbox"
+        >
+          {matches.map((item) => (
+            <li key={item}>
+              <button
+                type="button"
+                role="option"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => { onPick(item); setOpen(false); }}
+                className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-left text-[14px] font-semibold hover:bg-[#EAF2FC]"
+                style={{ color: INK }}
+              >
+                <Icon className="w-4 h-4 shrink-0" style={{ color: BRAND }} />
+                <span className="truncate">{item}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function FindJobScreen({ initialQuery, userCity, onBack, onMenu, postedJobs, onReport, reportedIds, jobSocial, onToggleLike, onToggleFav, onAddComment, onContact, onApply, hasApplied }) {
   const gate = useContext(AuthGate);
   const authed = gate.authed;
-  // default to the user's city — unless they arrived with a specific search
-  const [city, setCity] = useState(initialQuery ? "" : (userCity || ""));
-  const [title, setTitle] = useState("");
-  const [text, setText] = useState(initialQuery || "");
-  const [sheet, setSheet] = useState(null);
+
+  // committed search (what the results use) vs. what's typed in the two boxes
+  const [keyword, setKeyword] = useState(initialQuery || "");
+  const [location, setLocation] = useState(initialQuery ? "" : (userCity || ""));
+  const [kwDraft, setKwDraft] = useState(initialQuery || "");
+  const [locDraft, setLocDraft] = useState(initialQuery ? "" : (userCity || ""));
+  const [typeTab, setTypeTab] = useState("All");
+  const [f, setF] = useState(EMPTY_JOB_FILTERS);
+  const [sort, setSort] = useState("newest");
+  const [limit, setLimit] = useState(JOB_PAGE_SIZE);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [openJob, setOpenJob] = useState(null);
   const [shareJob, setShareJob] = useState(null);
+  const resultsRef = useRef(null);
 
   const all = [...postedJobs.filter((j) => j.status === "posted"), ...SEED_JOBS];
-  const cityOptions = [...new Set([...CITIES, ...all.map((j) => j.city)])].filter(Boolean).sort();
-  const titleOptions = [...new Set([...JOB_TITLES.filter((t) => t !== "Other"), ...all.map((j) => j.jobTitle)])].filter(Boolean).sort();
+  const cityOptions = [...new Set([...CITIES, ...all.map((j) => j.city), ...all.map((j) => j.area).filter(Boolean)])].filter(Boolean).sort();
+  const titleOptions = [...new Set([
+    ...JOB_TITLES.filter((t) => t !== "Other"),
+    ...all.map((j) => j.jobTitle),
+    ...all.map((j) => j.facilityName),
+    ...all.map((j) => j.facilityTypeLabel),
+  ])].filter(Boolean).sort();
+  const cityCounts = all.reduce((acc, j) => ({ ...acc, [j.city]: (acc[j.city] || 0) + 1 }), {});
 
-  const t = text.trim().toLowerCase();
-  const results = all.filter((j) => {
-    const cityOk = !city || (j.city || "").toLowerCase() === city.toLowerCase();
-    const titleOk = !title || (j.jobTitle || "").toLowerCase().includes(title.toLowerCase());
-    const textOk = !t || [j.jobTitle, j.facilityName, j.city, j.area, j.facilityTypeLabel, ...(j.requirements || [])]
-      .filter(Boolean).some((v) => String(v).toLowerCase().includes(t));
-    return cityOk && titleOk && textOk;
+  useEffect(() => { setLimit(JOB_PAGE_SIZE); }, [keyword, location, typeTab, f, sort]);
+
+  useEffect(() => {
+    if (!filtersOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [filtersOpen]);
+
+  const kw = keyword.trim().toLowerCase();
+  const loc = location.trim().toLowerCase();
+  const postedLimit = (JOB_POSTED_WINDOWS.find((w) => w.key === f.posted) || JOB_POSTED_WINDOWS[0]).hours;
+
+  // everything except the job-type tab, so tab counts stay meaningful
+  const base = all.filter((j) => {
+    const reqs = (j.requirements || []).join(" ").toLowerCase();
+    if (kw && ![j.jobTitle, j.facilityName, j.facilityTypeLabel, j.specialty, ...(j.requirements || [])]
+      .filter(Boolean).some((v) => String(v).toLowerCase().includes(kw))) return false;
+    if (loc && ![j.city, j.area].filter(Boolean).some((v) => String(v).toLowerCase().includes(loc))) return false;
+    if (f.types.length && !f.types.includes(jobTypeOf(j))) return false;
+    if (f.shifts.length && !(j.shifts || []).some((s) => f.shifts.includes(s))) return false;
+    if (f.facilities.length && !f.facilities.includes(j.facilityTypeLabel)) return false;
+    if (jobPostedHours(j.posted) > postedLimit) return false;
+    if (f.urgentOnly && !j.urgent) return false;
+    if (f.freshers && !reqs.includes("fresh")) return false;
+    if (f.pmdc && !reqs.includes("pmdc")) return false;
+    return true;
   });
+  const results = (typeTab === "All" ? base : base.filter((j) => jobTypeOf(j) === typeTab)).slice().sort((a, b) => {
+    if (sort === "pay") return jobMonthlyPay(b) - jobMonthlyPay(a);
+    if (sort === "applicants") return (a.applicants || 0) - (b.applicants || 0);
+    return jobPostedHours(a.posted) - jobPostedHours(b.posted);
+  });
+  const shown = results.slice(0, limit);
 
-  // if the default city has nothing, show everything (newest first) rather than an empty screen
-  const cityFellBack = city && city === userCity && results.length === 0 && !title && !t;
-  const shown = cityFellBack ? all : results;
-  const narrowed = city || title || t;
+  const countBy = (fn) => base.reduce((acc, j) => { [].concat(fn(j)).forEach((k) => { acc[k] = (acc[k] || 0) + 1; }); return acc; }, {});
+  const counts = { types: countBy(jobTypeOf), shifts: countBy((j) => j.shifts || []), facilities: countBy((j) => j.facilityTypeLabel) };
+  const tabCounts = countBy(jobTypeOf);
+
+  const activeChips = [
+    keyword && { label: `“${keyword}”`, clear: () => { setKeyword(""); setKwDraft(""); } },
+    location && { label: location, icon: MapPin, clear: () => { setLocation(""); setLocDraft(""); } },
+    ...f.types.map((v) => ({ label: v, clear: () => setF((p) => ({ ...p, types: p.types.filter((x) => x !== v) })) })),
+    ...f.shifts.map((v) => ({ label: v, clear: () => setF((p) => ({ ...p, shifts: p.shifts.filter((x) => x !== v) })) })),
+    ...f.facilities.map((v) => ({ label: v, clear: () => setF((p) => ({ ...p, facilities: p.facilities.filter((x) => x !== v) })) })),
+    f.posted !== "any" && { label: JOB_POSTED_WINDOWS.find((w) => w.key === f.posted).label, clear: () => setF((p) => ({ ...p, posted: "any" })) },
+    f.urgentOnly && { label: "Urgent", clear: () => setF((p) => ({ ...p, urgentOnly: false })) },
+    f.freshers && { label: "Freshers welcome", clear: () => setF((p) => ({ ...p, freshers: false })) },
+    f.pmdc && { label: "PMDC / PNC", clear: () => setF((p) => ({ ...p, pmdc: false })) },
+  ].filter(Boolean);
+  const panelFilterCount = f.types.length + f.shifts.length + f.facilities.length + (f.posted !== "any") + f.urgentOnly + f.freshers + f.pmdc;
+
+  const clearAll = () => {
+    setKeyword(""); setKwDraft(""); setLocation(""); setLocDraft(""); setTypeTab("All"); setF(EMPTY_JOB_FILTERS);
+  };
+  const runSearch = (e) => {
+    if (e) e.preventDefault();
+    setKeyword(kwDraft.trim());
+    setLocation(locDraft.trim());
+    if (resultsRef.current && window.innerWidth < 1024) resultsRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+  const pickKeyword = (v) => { setKwDraft(v); setKeyword(v); };
+  const pickLocation = (v) => { setLocDraft(v); setLocation(v); };
+  const open = (j) => gate.require("see the employer and apply", () => setOpenJob(j));
 
   return (
-    <div className="flex flex-col h-full min-h-0">
-      <ScreenHeader title="Find a Job" subtitle="Filter to narrow your search" onBack={onBack} onMenu={onMenu} />
-
-      {/* search + filters */}
-      <div className="px-3 pb-2 shrink-0">
-        <div className="relative mb-2">
-          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: SUBTLE }} />
-          <input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Type to search jobs, hospitals, areas…"
-            className="w-full text-[14.5px] rounded-xl pl-10 pr-9 py-3 outline-none"
-            style={{ backgroundColor: "white", color: INK, border: `1px solid ${CARD_BORDER}` }}
-          />
-          {text && (
-            <button onClick={() => setText("")} className="absolute right-3.5 top-1/2 -translate-y-1/2" aria-label="Clear search">
-              <X className="w-4 h-4" style={{ color: SUBTLE }} />
-            </button>
-          )}
+    <div className="w-full min-w-0" style={{ fontFamily: FONT }}>
+      {/* search hero */}
+      <section className="relative z-10" style={{ background: `linear-gradient(135deg, ${BRAND_DK} 0%, ${BRAND} 70%, #2F7BDA 100%)` }}>
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div className="absolute -right-24 -top-24 w-80 h-80 rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.07)" }} />
         </div>
-        <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
-          <FilterPill label="City" value={city} onClick={() => setSheet("city")} onClear={() => setCity("")} />
-          <FilterPill label="Job Title" value={title} onClick={() => setSheet("title")} onClear={() => setTitle("")} />
-          {narrowed && (
-            <button onClick={() => { setCity(""); setTitle(""); setText(""); }} className="shrink-0 px-3 py-2 rounded-full text-[12.5px] font-semibold" style={{ color: RED, backgroundColor: "#FBEBEC" }}>
-              Reset
+        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-6 pb-8 sm:pt-8 sm:pb-10">
+          <div className="flex items-center gap-2 mb-5">
+            {onBack && (
+              <button type="button" onClick={onBack} aria-label="Back" className="w-9 h-9 rounded-xl flex items-center justify-center bg-white/15 hover:bg-white/25 transition-colors">
+                <ChevronLeft className="w-5 h-5 text-white" />
+              </button>
+            )}
+            <p className="text-[13px] font-semibold text-white/80">Home <span className="mx-1 text-white/50">/</span> <span className="text-white">Find a Job</span></p>
+          </div>
+          <h1 className="text-[28px] sm:text-[38px] font-extrabold tracking-[-0.03em] leading-tight text-white">Find your next healthcare job</h1>
+          <p className="text-[14.5px] sm:text-[16px] mt-2 text-white/80">{all.length} openings across {Object.keys(cityCounts).length} cities in Pakistan</p>
+
+          <form onSubmit={runSearch} className="mt-6 bg-white rounded-2xl p-2 grid grid-cols-1 md:grid-cols-[1.3fr_1fr_auto] gap-2 relative z-20" style={{ boxShadow: "0 20px 40px -20px rgba(0,0,0,0.4)" }}>
+            <SearchSuggestInput
+              icon={Briefcase}
+              value={kwDraft}
+              onChange={setKwDraft}
+              onPick={pickKeyword}
+              onClear={() => { setKwDraft(""); setKeyword(""); }}
+              placeholder="Job title, specialty or hospital"
+              suggestions={titleOptions}
+              srLabel="Job title or keyword"
+              className="md:border-r rounded-xl"
+              style={{ borderColor: CARD_BORDER }}
+            />
+            <SearchSuggestInput
+              icon={MapPin}
+              value={locDraft}
+              onChange={setLocDraft}
+              onPick={pickLocation}
+              onClear={() => { setLocDraft(""); setLocation(""); }}
+              placeholder="City or area in Pakistan"
+              suggestions={cityOptions}
+              srLabel="City or area"
+              className="rounded-xl"
+            />
+            <button type="submit" className="h-12 px-7 rounded-xl text-[15px] font-bold text-white inline-flex items-center justify-center gap-2 transition-all hover:brightness-110" style={{ backgroundColor: BRAND }}>
+              <Search className="w-4 h-4" /> Search jobs
             </button>
-          )}
+          </form>
         </div>
-      </div>
+      </section>
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-4">
-        {!narrowed && (
-          <div className="rounded-2xl p-4 mb-3" style={{ backgroundColor: "#EAF0F8" }}>
-            <p className="text-[13.5px] font-semibold mb-1" style={{ color: NAVY }}>Start with your city</p>
-            <p className="text-[12.5px] leading-snug" style={{ color: "#3A4A66" }}>
-              Pick a city, then a job title, to narrow {all.length} listings down to what's near you.
-            </p>
-          </div>
-        )}
+      <div ref={resultsRef} className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 scroll-mt-20">
+        {/* job type tabs */}
+        <div className="flex gap-2 overflow-x-auto pb-1 mb-5 -mx-4 px-4 sm:mx-0 sm:px-0" style={{ scrollbarWidth: "none" }} role="tablist" aria-label="Job type">
+          {["All", ...JOB_TYPES].map((t) => {
+            const on = typeTab === t;
+            const n = t === "All" ? base.length : tabCounts[t] || 0;
+            return (
+              <button key={t} type="button" role="tab" aria-selected={on} onClick={() => setTypeTab(t)}
+                className="shrink-0 h-10 px-4 rounded-xl text-[14px] font-bold inline-flex items-center gap-2 transition-all"
+                style={{ backgroundColor: on ? INK : "#fff", color: on ? "#fff" : INK_2, border: `1px solid ${on ? INK : CARD_BORDER}` }}>
+                {t}
+                <span className="text-[11.5px] font-bold px-1.5 py-0.5 rounded-md" style={{ backgroundColor: on ? "rgba(255,255,255,0.18)" : CREAM, color: on ? "#fff" : SUBTLE }}>{n}</span>
+              </button>
+            );
+          })}
+        </div>
 
-        <p className="text-[12.5px] mb-2" style={{ color: SUBTLE }}>
-          {cityFellBack
-            ? <>No jobs in <b style={{ color: INK }}>{city}</b> yet — showing the newest across Pakistan</>
-            : <><b style={{ color: INK }}>{shown.length} job{shown.length !== 1 ? "s" : ""}</b>{city ? ` in ${city}` : ""}{title ? ` · ${title}` : ""}{t ? ` · "${text.trim()}"` : ""}</>}
-        </p>
-        {!authed && (
-          <div className="rounded-xl p-3 mb-2.5 flex items-center gap-2.5" style={{ backgroundColor: BRAND_50, border: "1px solid #B9D3F2" }}>
-            <ShieldCheck className="w-4 h-4 shrink-0" style={{ color: BRAND }} />
-            <p className="text-[12.5px] flex-1 leading-snug" style={{ color: BRAND_DK }}>Sign in to see employers, locations and contact details, and to apply.</p>
-            <button onClick={() => gate.require("see full job details", null)} className="text-[12.5px] font-bold shrink-0" style={{ color: BRAND }}>Sign in</button>
-          </div>
-        )}
+        <div className="grid lg:grid-cols-[264px_1fr] gap-6 items-start">
+          {/* sidebar filters (desktop) */}
+          <aside className="hidden lg:block sticky top-[88px] rounded-2xl bg-white px-5 pt-4 pb-1" style={{ border: `1px solid ${CARD_BORDER}` }}>
+            <div className="flex items-center justify-between pb-3">
+              <p className="text-[16px] font-extrabold flex items-center gap-2" style={{ color: INK }}><SlidersHorizontal className="w-4 h-4" /> Filters</p>
+              {panelFilterCount > 0 && (
+                <button type="button" onClick={() => setF(EMPTY_JOB_FILTERS)} className="text-[13px] font-bold" style={{ color: BRAND }}>Clear</button>
+              )}
+            </div>
+            <JobFiltersPanel f={f} setF={setF} counts={counts} />
+          </aside>
 
-        {shown.length === 0 ? (
-          <div className="rounded-2xl bg-white p-6 text-center" style={{ border: `1px solid ${CARD_BORDER}` }}>
-            <Search className="w-8 h-8 mx-auto mb-2" style={{ color: SUBTLE }} />
-            <p className="text-[13.5px]" style={{ color: SUBTLE }}>No jobs match these filters. Try a nearby city or clear a filter.</p>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2.5">
-            {shown.map((j) => (
-              <div
-                key={j.id}
-                role="button"
-                tabIndex={0}
-                onClick={() => gate.require("see the employer and apply", () => setOpenJob(j))}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    gate.require("see the employer and apply", () => setOpenJob(j));
-                  }
-                }}
-                className="rounded-2xl bg-white p-3 text-left active:scale-[0.99] transition-transform cursor-pointer"
-                style={{ border: `1px solid ${CARD_BORDER}` }}
-              >
-                <div className="flex gap-3">
-                  {/* postcard thumbnail exactly as the employer designed it */}
-                  <div className="shrink-0 rounded-xl overflow-hidden relative" style={{ width: 72, height: 90, border: `1px solid ${CARD_BORDER}` }}>
-                    {!authed ? (
-                      <div className="w-full h-full flex flex-col justify-between p-2" style={{ background: `linear-gradient(160deg, ${BRAND}, ${BRAND_DK})` }}>
-                        <Briefcase className="w-4 h-4 text-white/80" />
-                        <div>
-                          <p className="text-[8.5px] font-bold text-white leading-tight line-clamp-2">{j.jobTitle}</p>
-                          <p className="text-[8px] text-white/75 mt-0.5">PKR {j.payAmount}</p>
-                        </div>
-                      </div>
-                    ) : j.photos && j.photos.length > 0 ? (
-                      <img src={j.photos[j.coverIndex] || j.photos[0]} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <div style={{ transform: "scale(0.26)", transformOrigin: "top left", width: 277, position: "absolute", top: 0, left: 0, pointerEvents: "none" }}>
-                        <JobPostCard job={j} tpl={CARD_TEMPLATES.find((t) => t.id === j.templateId) || CARD_TEMPLATES[0]} scale={1} />
-                      </div>
-                    )}
-                  </div>
+          <div className="min-w-0">
+            {/* toolbar */}
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <p className="text-[14.5px] mr-auto" style={{ color: SUBTLE }}>
+                <b className="text-[16px]" style={{ color: INK }}>{results.length}</b> {results.length === 1 ? "job" : "jobs"}
+                {location ? <> in <b style={{ color: INK }}>{location}</b></> : " across Pakistan"}
+              </p>
+              <button type="button" onClick={() => setFiltersOpen(true)}
+                className="lg:hidden h-10 px-3.5 rounded-xl text-[13.5px] font-bold inline-flex items-center gap-2 bg-white"
+                style={{ color: INK, border: `1px solid ${CARD_BORDER}` }}>
+                <SlidersHorizontal className="w-4 h-4" /> Filters
+                {panelFilterCount > 0 && <span className="w-5 h-5 rounded-full text-[11px] text-white flex items-center justify-center" style={{ backgroundColor: BRAND }}>{panelFilterCount}</span>}
+              </button>
+              <Dropdown
+                label="Sort jobs"
+                icon={ArrowUpDown}
+                value={sort}
+                onChange={setSort}
+                options={JOB_SORTS.map((o) => ({ value: o.key, label: o.label }))}
+              />
+            </div>
 
-                  <div className="flex-1 min-w-0 flex flex-col">
-                    <p className="text-[15.5px] font-bold leading-snug" style={{ color: INK }}>{j.jobTitle}</p>
-                    <p className="text-[16px] font-bold mt-1" style={{ color: NAVY }}>
-                      PKR {j.payAmount}
-                      <span className="text-[11.5px] font-medium ml-1" style={{ color: SUBTLE }}>{j.payUnitLabel}</span>
-                    </p>
-                    {authed ? (
-                      <p className="text-[12.5px] mt-1 truncate font-semibold" style={{ color: INK_2 }}>{j.facilityName}</p>
-                    ) : (
-                      <p className="text-[12px] mt-1 truncate flex items-center gap-1" style={{ color: SUBTLE }}>
-                        <ShieldCheck className="w-3.5 h-3.5 shrink-0" /> Employer shown after sign in
-                      </p>
-                    )}
-                    <p className="text-[11.5px] mt-0.5 truncate flex items-center gap-1" style={{ color: SUBTLE }}>
-                      <MapPin className="w-3 h-3 shrink-0" /> {authed ? [j.area, j.city].filter(Boolean).join(", ") : j.city}
-                    </p>
-                    <div className="flex flex-wrap gap-1 mt-1.5">
-                      {(j.shifts || []).slice(0, 2).map((sh) => (
-                        <span key={sh} className="text-[10.5px] font-semibold px-1.5 py-0.5 rounded" style={{ color: INK_2, backgroundColor: CREAM, border: `1px solid ${CARD_BORDER}` }}>{sh}</span>
-                      ))}
-                      {(j.requirements || []).slice(0, 2).map((rq) => (
-                        <span key={rq} className="text-[10.5px] font-semibold px-1.5 py-0.5 rounded" style={{ color: INK_2, backgroundColor: CREAM, border: `1px solid ${CARD_BORDER}` }}>{rq}</span>
-                      ))}
-                    </div>
-                    <span className="flex-1" />
-                    <div className="flex items-center justify-between mt-1.5">
-                      <p className="text-[11px]" style={{ color: SUBTLE }}>{j.posted}</p>
-                      <div className="flex items-center gap-1.5">
-                        {jobSocial[j.id] && jobSocial[j.id].likes > 0 && (
-                          <span className="flex items-center gap-1 text-[11px] mr-0.5" style={{ color: SUBTLE }}>
-                            <Heart className="w-3.5 h-3.5" fill={jobSocial[j.id].liked ? RED : "none"} stroke={jobSocial[j.id].liked ? RED : SUBTLE} /> {jobSocial[j.id].likes}
-                          </span>
-                        )}
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); onToggleFav(j.id); }}
-                          className="w-7 h-7 rounded-full flex items-center justify-center active:scale-90 transition-transform"
-                          style={{
-                            backgroundColor: jobSocial[j.id] && jobSocial[j.id].favourite ? NAVY_TINT : "#F1F3F9",
-                            border: `1px solid ${jobSocial[j.id] && jobSocial[j.id].favourite ? NAVY + "55" : CARD_BORDER}`,
-                          }}
-                          aria-label={jobSocial[j.id] && jobSocial[j.id].favourite ? "Remove from favourites" : "Add to favourites"}
-                        >
-                          <Bookmark
-                            className="w-3.5 h-3.5"
-                            strokeWidth={2.2}
-                            fill={jobSocial[j.id] && jobSocial[j.id].favourite ? NAVY : "none"}
-                            stroke={jobSocial[j.id] && jobSocial[j.id].favourite ? NAVY : SUBTLE}
-                          />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); gate.require("share this job", () => setShareJob(j)); }}
-                          className="w-7 h-7 rounded-full flex items-center justify-center active:scale-90 transition-transform"
-                          style={{ backgroundColor: "#F1F3F9", border: `1px solid ${CARD_BORDER}` }}
-                          aria-label="Share job"
-                        >
-                          <Repeat2 className="w-3.5 h-3.5" strokeWidth={2.2} style={{ color: SUBTLE }} />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+            {activeChips.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 mb-4">
+                {activeChips.map((c) => (
+                  <span key={c.label} className="inline-flex items-center gap-1.5 h-8 pl-3 pr-1.5 rounded-full text-[12.5px] font-semibold" style={{ color: BRAND_DK, backgroundColor: BRAND_50, border: "1px solid #B9D3F2" }}>
+                    {c.icon && <c.icon className="w-3.5 h-3.5" />} {c.label}
+                    <button type="button" onClick={c.clear} aria-label={`Remove ${c.label}`} className="w-5 h-5 rounded-full flex items-center justify-center hover:bg-white">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+                <button type="button" onClick={clearAll} className="text-[13px] font-bold px-2 h-8" style={{ color: RED }}>Clear all</button>
               </div>
-            ))}
+            )}
+
+            {!authed && (
+              <div className="rounded-2xl p-3.5 mb-4 flex items-center gap-3" style={{ backgroundColor: "#fff", border: "1px solid #B9D3F2" }}>
+                <span className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: BRAND_50 }}>
+                  <ShieldCheck className="w-[18px] h-[18px]" style={{ color: BRAND }} />
+                </span>
+                <p className="text-[13.5px] flex-1 leading-snug" style={{ color: INK_2 }}>Sign in to see employer names, exact locations and contact details, and to apply.</p>
+                <button type="button" onClick={() => gate.require("see full job details", null)} className="h-9 px-3.5 rounded-lg text-[13px] font-bold text-white shrink-0" style={{ backgroundColor: BRAND }}>Sign in</button>
+              </div>
+            )}
+
+            {results.length === 0 ? (
+              <div className="rounded-2xl bg-white px-6 py-14 text-center" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                <span className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: BRAND_50 }}>
+                  <Search className="w-6 h-6" style={{ color: BRAND }} />
+                </span>
+                <p className="text-[17px] font-bold" style={{ color: INK }}>No jobs match your search</p>
+                <p className="text-[14px] mt-1 mb-5" style={{ color: SUBTLE }}>Try a nearby city, a broader job title, or fewer filters.</p>
+                <button type="button" onClick={clearAll} className="h-11 px-5 rounded-xl text-[14px] font-bold text-white" style={{ backgroundColor: BRAND }}>Clear all filters</button>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  {shown.map((j) => {
+                    const vis = jobRoleVisual(j.jobTitle);
+                    const social = jobSocial[j.id] || {};
+                    const type = jobTypeOf(j);
+                    const applied = hasApplied ? hasApplied(j.id) : false;
+                    return (
+                      <article
+                        key={j.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => open(j)}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(j); } }}
+                        className="group rounded-2xl bg-white p-4 sm:p-5 flex flex-col cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+                        style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: SOFT_SHADOW }}
+                      >
+                        <div className="flex items-start gap-3">
+                          <span className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: vis.tint }}>
+                            <vis.Icon className="w-[22px] h-[22px]" style={{ color: vis.color }} />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start gap-2">
+                              <p className="text-[16px] font-bold leading-snug flex-1 min-w-0 group-hover:text-[#0B57B7] transition-colors" style={{ color: INK }}>
+                                {j.jobTitle}{j.specialty ? <span className="font-semibold" style={{ color: SUBTLE }}> · {j.specialty}</span> : null}
+                              </p>
+                              {j.urgent && (
+                                <span className="shrink-0 inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ color: RED, backgroundColor: RED_TINT }}>
+                                  <Zap className="w-3 h-3" /> Urgent
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[13.5px] mt-0.5 truncate" style={{ color: authed ? INK_2 : SUBTLE, fontWeight: authed ? 600 : 500 }}>
+                              {authed ? j.facilityName : `${j.facilityTypeLabel || "Facility"} · employer shown after sign in`}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3.5 text-[13px]" style={{ color: INK_2 }}>
+                          <span className="inline-flex items-center gap-1.5"><MapPin className="w-4 h-4" style={{ color: FAINT }} />{authed ? [j.area, j.city].filter(Boolean).join(", ") : j.city}</span>
+                          <span className="inline-flex items-center gap-1.5"><Clock className="w-4 h-4" style={{ color: FAINT }} />{(j.shifts || []).join(", ") || "Flexible"}</span>
+                        </div>
+
+                        <div className="flex flex-wrap gap-1.5 mt-3">
+                          <span className="text-[11.5px] font-bold px-2 py-1 rounded-md" style={{ color: BRAND, backgroundColor: BRAND_50 }}>{type}</span>
+                          {(j.requirements || []).slice(0, 2).map((rq) => (
+                            <span key={rq} className="text-[11.5px] font-semibold px-2 py-1 rounded-md" style={{ color: INK_2, backgroundColor: CREAM }}>{rq}</span>
+                          ))}
+                        </div>
+
+                        <div className="flex items-end justify-between gap-3 mt-4 pt-3.5" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+                          <div className="min-w-0">
+                            <p className="text-[17px] font-extrabold leading-none" style={{ color: GREEN }}>
+                              PKR {j.payAmount}
+                              <span className="text-[12px] font-semibold ml-1" style={{ color: SUBTLE }}>/ {(j.payUnitLabel || "").replace(/^Per /i, "").toLowerCase() || "month"}</span>
+                            </p>
+                            <p className="text-[12px] mt-1.5" style={{ color: FAINT }}>
+                              {j.posted}{typeof j.applicants === "number" ? ` · ${j.applicants} applied` : ""}{applied ? " · You applied" : ""}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button type="button" onClick={(e) => { e.stopPropagation(); onToggleFav(j.id); }}
+                              aria-label={social.favourite ? "Remove from saved" : "Save job"}
+                              className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors hover:bg-[#F5F7FA]"
+                              style={{ border: `1px solid ${social.favourite ? "#B9D3F2" : CARD_BORDER}`, backgroundColor: social.favourite ? BRAND_50 : "#fff" }}>
+                              <Bookmark className="w-4 h-4" fill={social.favourite ? BRAND : "none"} stroke={social.favourite ? BRAND : SUBTLE} />
+                            </button>
+                            <button type="button" onClick={(e) => { e.stopPropagation(); gate.require("share this job", () => setShareJob(j)); }}
+                              aria-label="Share job"
+                              className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors hover:bg-[#F5F7FA]"
+                              style={{ border: `1px solid ${CARD_BORDER}` }}>
+                              <Repeat2 className="w-4 h-4" style={{ color: SUBTLE }} />
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+                {results.length > shown.length && (
+                  <div className="text-center mt-6">
+                    <button type="button" onClick={() => setLimit((l) => l + JOB_PAGE_SIZE)}
+                      className="h-11 px-6 rounded-xl text-[14px] font-bold bg-white transition-shadow hover:shadow-md" style={{ color: BRAND, border: `1.5px solid ${BRAND}` }}>
+                      Show more jobs ({results.length - shown.length} left)
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
-      {sheet === "city" && (
-        <FilterSheet title="Select city" options={cityOptions} selected={city} onSelect={setCity} onClose={() => setSheet(null)} allowFree freeLabel="Search any city in Pakistan…" />
-      )}
-      {sheet === "title" && (
-        <FilterSheet title="Select job title" options={titleOptions} selected={title} onSelect={setTitle} onClose={() => setSheet(null)} allowFree freeLabel="Search or type a role…" />
+      {/* mobile filter sheet */}
+      {filtersOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Filters">
+          <div className="absolute inset-0 bg-black/45" onClick={() => setFiltersOpen(false)} />
+          <div className="absolute inset-x-0 bottom-0 max-h-[88dvh] bg-white rounded-t-3xl flex flex-col auth-step">
+            <div className="flex items-center justify-between px-5 h-14 shrink-0" style={{ borderBottom: `1px solid ${CARD_BORDER}` }}>
+              <p className="text-[17px] font-extrabold" style={{ color: INK }}>Filters</p>
+              <div className="flex items-center gap-2">
+                {panelFilterCount > 0 && <button type="button" onClick={() => setF(EMPTY_JOB_FILTERS)} className="text-[13.5px] font-bold px-2" style={{ color: BRAND }}>Clear</button>}
+                <button type="button" onClick={() => setFiltersOpen(false)} aria-label="Close filters" className="w-9 h-9 rounded-full flex items-center justify-center" style={{ backgroundColor: CREAM }}>
+                  <X className="w-5 h-5" style={{ color: INK }} />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 -mt-px">
+              <JobFiltersPanel f={f} setF={setF} counts={counts} />
+            </div>
+            <div className="p-4 shrink-0" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+              <button type="button" onClick={() => setFiltersOpen(false)} className="w-full h-12 rounded-xl text-[15px] font-bold text-white" style={{ backgroundColor: BRAND }}>
+                Show {results.length} {results.length === 1 ? "job" : "jobs"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {shareJob && <JobShareSheet job={shareJob} onClose={() => setShareJob(null)} />}
@@ -5625,6 +6846,331 @@ function FindJobScreen({ initialQuery, userCity, onBack, onMenu, postedJobs, onR
   );
 }
 
+/* ---------- role-based requirements & application documents ---------- */
+function jobRoleKind(title = "") {
+  const t = String(title).toLowerCase();
+  if (t.includes("consultant")) return "consultant";
+  if (t.includes("house officer")) return "house";
+  if (t.includes("doctor") || t.includes("medical officer") || t.includes("physician")) return "doctor";
+  if (t.includes("dentist")) return "dentist";
+  if (t.includes("nurse") || t.includes("lhv")) return "nurse";
+  if (t.includes("pharmac")) return "pharmacist";
+  if (t.includes("lab") || t.includes("technician")) return "lab";
+  if (t.includes("radiograph")) return "radiographer";
+  if (t.includes("physio")) return "physio";
+  if (t.includes("theatre") || t.includes("operation")) return "ot";
+  if (t.includes("demonstrator") || t.includes("lecturer")) return "academic";
+  return "admin";
+}
+
+const ROLE_REQUIREMENTS = {
+  consultant: ["MBBS from a PMDC-recognised institution", "FCPS / MCPS or equivalent postgraduate degree", "Valid PMDC registration"],
+  doctor: ["MBBS from a PMDC-recognised institution", "Valid PMDC registration", "House job completed"],
+  house: ["MBBS (final results awaited or completed)", "Provisional PMDC registration"],
+  dentist: ["BDS from a PMDC-recognised institution", "Valid PMDC registration"],
+  nurse: ["Diploma / BSc in Nursing", "Valid PNC registration"],
+  pharmacist: ["Pharm-D degree", "Pharmacy Council registration"],
+  lab: ["Diploma / BS in Medical Lab Technology", "Knowledge of lab safety & sample handling"],
+  radiographer: ["Diploma / BS in Radiography or Medical Imaging"],
+  physio: ["Doctor of Physical Therapy (DPT)"],
+  ot: ["OT Technician diploma", "Knowledge of sterilisation & theatre protocols"],
+  academic: ["Relevant postgraduate degree", "Teaching or demonstration experience"],
+  admin: ["Intermediate or above", "Computer skills (MS Office)"],
+};
+
+function jobRequirementsFor(job) {
+  const own = job.requirements || [];
+  const ownText = own.join(" ").toLowerCase();
+  const covers = (r) => ["pmdc", "pnc", "pharmacy council", "fcps", "bds", "dpt"].some((k) => r.toLowerCase().includes(k) && ownText.includes(k));
+  const extra = (ROLE_REQUIREMENTS[jobRoleKind(job.jobTitle)] || []).filter((r) => !covers(r));
+  const all = [...own, ...extra, "Valid CNIC", "Good communication in Urdu & English"];
+  const seen = new Set();
+  return all.filter((r) => {
+    const k = r.toLowerCase().replace(/[^a-z]/g, "").slice(0, 14);
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
+function jobDocumentsFor(job) {
+  if (Array.isArray(job.documents) && job.documents.length) return job.documents;
+  const kind = jobRoleKind(job.jobTitle);
+  const reqText = (job.requirements || []).join(" ").toLowerCase();
+  const degree = {
+    consultant: "MBBS & postgraduate degree (FCPS / MCPS)", doctor: "MBBS degree", house: "MBBS degree / result card",
+    dentist: "BDS degree", nurse: "Nursing diploma / degree", pharmacist: "Pharm-D degree", lab: "MLT diploma / degree",
+    radiographer: "Radiography diploma / degree", physio: "DPT degree", ot: "OT technician diploma", academic: "Highest degree", admin: "Highest education certificate",
+  }[kind];
+  const registration = {
+    consultant: "PMDC registration certificate", doctor: "PMDC registration certificate", house: "PMDC provisional registration",
+    dentist: "PMDC registration certificate", nurse: "PNC registration certificate", pharmacist: "Pharmacy Council registration",
+  }[kind];
+  const docs = [
+    { id: "cv", label: "Updated CV / Resume", required: true },
+    { id: "cnic", label: "CNIC (front & back)", required: true },
+    { id: "degree", label: degree, required: true },
+  ];
+  if (registration) docs.push({ id: "reg", label: registration, required: true });
+  if (kind === "doctor") docs.push({ id: "house", label: "House job completion certificate", required: true });
+  docs.push({ id: "exp", label: "Experience letter(s)", required: /experience/.test(reqText) && !/fresh/.test(reqText) });
+  if (/local/.test(reqText)) docs.push({ id: "domicile", label: "Domicile certificate", required: false });
+  docs.push({ id: "photo", label: "Passport-size photograph", required: false });
+  return docs;
+}
+
+function fmtBytes(n) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+const APPLY_MAX_BYTES = 5 * 1024 * 1024;
+
+/* ---------- application drafts (kept in this browser so people can finish later) ---------- */
+const applyDraftKey = (id) => `pakmed-apply-draft-${id}`;
+function loadApplyDraft(id) {
+  try { const raw = window.localStorage.getItem(applyDraftKey(id)); return raw ? JSON.parse(raw) : null; } catch (_) { return null; }
+}
+function saveApplyDraft(id, draft) {
+  try { window.localStorage.setItem(applyDraftKey(id), JSON.stringify({ ...draft, savedAt: Date.now() })); } catch (_) { /* storage unavailable */ }
+}
+function clearApplyDraft(id) {
+  try { window.localStorage.removeItem(applyDraftKey(id)); } catch (_) { /* storage unavailable */ }
+}
+
+/* read-only list shown inside the job details */
+function ApplyDocsChecklist({ job, hasApplied, draft, onApply }) {
+  const docs = jobDocumentsFor(job);
+  const files = (draft && draft.files) || {};
+  const required = docs.filter((d) => d.required);
+  const inDraft = required.filter((d) => files[d.id]).length;
+  const started = Object.keys(files).length > 0;
+
+  return (
+    <section className="mt-7">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <h3 className="text-[16.5px] font-extrabold tracking-[-0.01em]" style={{ color: INK }}>Documents you'll need</h3>
+        {!hasApplied && started && (
+          <span className="text-[12.5px] font-bold px-2.5 py-1 rounded-full" style={{ color: AMBER, backgroundColor: AMBER_TINT }}>
+            Draft · {inDraft}/{required.length} ready
+          </span>
+        )}
+      </div>
+      <div className="rounded-2xl p-4" style={{ backgroundColor: CREAM }}>
+        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-2.5">
+          {docs.map((d) => {
+            const have = !!files[d.id];
+            return (
+              <li key={d.id} className="flex items-start gap-2.5 text-[14.5px]" style={{ color: INK_2 }}>
+                {have
+                  ? <CheckCircle2 className="w-[18px] h-[18px] shrink-0 mt-0.5" style={{ color: GREEN }} />
+                  : <FileText className="w-[18px] h-[18px] shrink-0 mt-0.5" style={{ color: d.required ? BRAND : FAINT }} />}
+                <span>
+                  {d.label}
+                  {!d.required && <span style={{ color: FAINT }}> (optional)</span>}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 mt-4 pt-4" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+          <p className="flex-1 text-[13px] leading-snug" style={{ color: SUBTLE }}>
+            {hasApplied ? "You've already applied to this job." : "PDF, JPG or PNG · max 5 MB each. Tap Apply now below to upload them — you can save and finish later."}
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* the upload form that opens from "Apply now" */
+function ApplyFormModal({ job, onClose, onSubmit, onDraftChange }) {
+  const docs = jobDocumentsFor(job);
+  const initial = loadApplyDraft(job.id) || {};
+  const [files, setFiles] = useState(initial.files || {});
+  const [note, setNote] = useState(initial.note || "");
+  const [confirm, setConfirm] = useState(!!initial.confirm);
+  const [errors, setErrors] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+  const [done, setDone] = useState(false);
+  const [savedFlash, setSavedFlash] = useState(false);
+  const flashRef = useRef(null);
+  const firstRun = useRef(true);
+
+  const required = docs.filter((d) => d.required);
+  const ready = required.every((d) => files[d.id]);
+  const doneCount = required.filter((d) => files[d.id]).length;
+  const hasProgress = Object.keys(files).length > 0 || note.trim().length > 0;
+
+  // auto-save the draft on every change
+  useEffect(() => {
+    if (firstRun.current) { firstRun.current = false; return; }
+    if (done) return;
+    const d = { files, note, confirm };
+    if (Object.keys(files).length || note.trim()) saveApplyDraft(job.id, d); else clearApplyDraft(job.id);
+    onDraftChange && onDraftChange(loadApplyDraft(job.id));
+    setSavedFlash(true);
+    clearTimeout(flashRef.current);
+    flashRef.current = setTimeout(() => setSavedFlash(false), 1400);
+  }, [files, note, confirm]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => clearTimeout(flashRef.current), []);
+
+  useEffect(() => {
+    const onKey = (e) => e.key === "Escape" && !submitting && onClose();
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
+  }, [onClose, submitting]);
+
+  const pick = (id) => (e) => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!f) return;
+    if (f.size > APPLY_MAX_BYTES) { setErrors((p) => ({ ...p, [id]: "File is larger than 5 MB" })); return; }
+    if (!/\.(pdf|jpe?g|png)$/i.test(f.name)) { setErrors((p) => ({ ...p, [id]: "Use a PDF, JPG or PNG file" })); return; }
+    setErrors((p) => ({ ...p, [id]: "" }));
+    setFiles((p) => ({ ...p, [id]: { name: f.name, size: f.size } }));
+  };
+  const remove = (id) => setFiles((p) => { const n = { ...p }; delete n[id]; return n; });
+
+  const submit = () => {
+    if (!ready || !confirm || submitting) return;
+    setSubmitting(true);
+    setTimeout(() => {
+      clearApplyDraft(job.id);
+      onDraftChange && onDraftChange(null);
+      setSubmitting(false);
+      setDone(true);
+      onSubmit({ files, note });
+    }, 800);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center sm:p-6" role="dialog" aria-modal="true" aria-label={`Apply for ${job.jobTitle}`}>
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={() => !submitting && onClose()} />
+      <div className="relative w-full sm:max-w-[720px] h-[94dvh] sm:h-auto sm:max-h-[90dvh] bg-white rounded-t-3xl sm:rounded-3xl flex flex-col overflow-hidden auth-step"
+        style={{ boxShadow: "0 30px 80px -20px rgba(16,24,40,0.45)", fontFamily: FONT }}>
+
+        {/* header */}
+        <div className="px-5 sm:px-7 pt-5 pb-4 shrink-0" style={{ borderBottom: `1px solid ${CARD_BORDER}` }}>
+          <div className="flex items-start gap-3">
+            <span className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: done ? GREEN_TINT : BRAND_50 }}>
+              {done ? <CheckCircle2 className="w-6 h-6" style={{ color: GREEN }} /> : <Upload className="w-5 h-5" style={{ color: BRAND }} />}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[18px] font-extrabold leading-tight" style={{ color: INK }}>{done ? "Application submitted" : "Apply for this job"}</p>
+              <p className="text-[13.5px] mt-0.5 truncate" style={{ color: SUBTLE }}>{job.jobTitle} · {job.facilityName}, {job.city}</p>
+            </div>
+            <button type="button" onClick={onClose} disabled={submitting} aria-label="Close" className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-colors hover:bg-[#EEF1F5]" style={{ backgroundColor: CREAM }}>
+              <X className="w-5 h-5" style={{ color: INK }} />
+            </button>
+          </div>
+          {!done && (
+            <div className="mt-4">
+              <div className="flex items-center justify-between text-[12.5px] font-semibold mb-1.5">
+                <span style={{ color: doneCount === required.length ? GREEN : INK_2 }}>{doneCount} of {required.length} required documents</span>
+                <span className="inline-flex items-center gap-1 transition-opacity" style={{ color: GREEN, opacity: savedFlash ? 1 : 0 }}>
+                  <Check className="w-3.5 h-3.5" strokeWidth={3} /> Draft saved
+                </span>
+              </div>
+              <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: CREAM }}>
+                <div className="h-full rounded-full transition-all duration-500" style={{ width: `${(doneCount / Math.max(1, required.length)) * 100}%`, backgroundColor: doneCount === required.length ? GREEN : BRAND }} />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {done ? (
+          <div className="flex-1 overflow-y-auto px-5 sm:px-7 py-8 text-center">
+            <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 auth-pop" style={{ backgroundColor: GREEN_TINT }}>
+              <CheckCircle2 className="w-8 h-8" style={{ color: GREEN }} />
+            </div>
+            <p className="text-[20px] font-extrabold" style={{ color: INK }}>You're in the running!</p>
+            <p className="text-[14.5px] mt-2 max-w-md mx-auto leading-relaxed" style={{ color: SUBTLE }}>
+              {job.facilityName} has your documents. You'll get a message when they view or shortlist your application — track it any time in My profile.
+            </p>
+            <button type="button" onClick={onClose} className="mt-6 h-11 px-7 rounded-xl text-[14.5px] font-bold text-white" style={{ backgroundColor: BRAND }}>Done</button>
+          </div>
+        ) : (
+          <>
+            <div className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-7 py-5">
+              <ul className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                {docs.map((d) => {
+                  const f = files[d.id];
+                  const err = errors[d.id];
+                  return (
+                    <li key={d.id} className="rounded-2xl p-3.5 flex flex-col gap-2.5" style={{ border: `1.5px solid ${err ? RED : f ? "#C7E8D9" : CARD_BORDER}`, backgroundColor: f ? "#F6FBF8" : "#fff" }}>
+                      <div className="flex items-start gap-3">
+                        <span className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: f ? GREEN_TINT : CREAM }}>
+                          {f ? <CheckCircle2 className="w-5 h-5" style={{ color: GREEN }} /> : <FileText className="w-5 h-5" style={{ color: SUBTLE }} />}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[14.5px] font-semibold leading-snug" style={{ color: INK }}>
+                            {d.label} {d.required ? <span style={{ color: RED }}>*</span> : <span className="text-[12px] font-medium" style={{ color: FAINT }}>(optional)</span>}
+                          </p>
+                          <p className="text-[12.5px] truncate mt-0.5" style={{ color: err ? RED : f ? GREEN : SUBTLE }}>
+                            {err || (f ? `${f.name} · ${fmtBytes(f.size)}` : "PDF, JPG or PNG · max 5 MB")}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <label className="flex-1 h-9 rounded-lg text-[13px] font-bold inline-flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                          style={{ color: f ? INK_2 : BRAND, backgroundColor: f ? CREAM : BRAND_50 }}>
+                          <Upload className="w-4 h-4" /> {f ? "Replace file" : "Choose file"}
+                          <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="sr-only" onChange={pick(d.id)} />
+                        </label>
+                        {f && (
+                          <button type="button" onClick={() => remove(d.id)} aria-label={`Remove ${d.label}`} className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0 hover:bg-[#F5F7FA]" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                            <X className="w-4 h-4" style={{ color: SUBTLE }} />
+                          </button>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+
+              <label className="block mt-5">
+                <span className="text-[14.5px] font-bold" style={{ color: INK }}>Note to employer <span className="font-medium" style={{ color: FAINT }}>(optional)</span></span>
+                <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={500}
+                  placeholder={`Briefly tell ${job.facilityName} why you're a good fit…`}
+                  className="pm-input mt-2 w-full text-[15px] rounded-xl px-4 py-3 outline-none resize-none bg-white"
+                  style={{ color: INK, border: `1.5px solid ${CARD_BORDER}` }} />
+              </label>
+
+              <label className="flex items-start gap-3 mt-4 cursor-pointer select-none">
+                <input type="checkbox" checked={confirm} onChange={(e) => setConfirm(e.target.checked)} className="w-5 h-5 mt-0.5 rounded accent-[#0B57B7] shrink-0" />
+                <span className="text-[14px] leading-snug" style={{ color: INK_2 }}>I confirm these documents are genuine and belong to me.</span>
+              </label>
+            </div>
+
+            <div className="px-5 sm:px-7 py-4 shrink-0 flex flex-col-reverse sm:flex-row sm:items-center gap-2.5" style={{ borderTop: `1px solid ${CARD_BORDER}`, backgroundColor: "#FCFCFD" }}>
+              <p className="flex-1 text-[12.5px] leading-snug" style={{ color: SUBTLE }}>
+                {ready && confirm ? "Everything's ready to send." : !ready ? `Upload ${required.length - doneCount} more required ${required.length - doneCount === 1 ? "document" : "documents"} to submit.` : "Tick the confirmation to submit."}
+              </p>
+              <div className="flex gap-2 shrink-0">
+                <button type="button" onClick={onClose} disabled={submitting}
+                  className="flex-1 sm:flex-none h-11 px-4 rounded-xl text-[14px] font-bold" style={{ color: INK_2, border: `1px solid ${CARD_BORDER}` }}>
+                  {hasProgress ? "Save & finish later" : "Cancel"}
+                </button>
+                <button type="button" onClick={submit} disabled={!ready || !confirm || submitting}
+                  className="flex-1 sm:flex-none h-11 px-6 rounded-xl text-[14.5px] font-bold text-white inline-flex items-center justify-center gap-2 transition-all enabled:hover:brightness-110 disabled:cursor-not-allowed"
+                  style={{ backgroundColor: BRAND, opacity: ready && confirm ? 1 : 0.45 }}>
+                  {submitting
+                    ? <><span className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: "#fff transparent #fff #fff" }} /> Submitting…</>
+                    : <>Submit application <ArrowRight className="w-4 h-4" /></>}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function JobDetailSheet({ job, onClose, onReport, reported, social, onToggleLike, onToggleFav, onAddComment, onContact, onApply, hasApplied }) {
   const gate = useContext(AuthGate);
   const [tab, setTab] = useState("details");   // details | comments
@@ -5634,6 +7180,10 @@ function JobDetailSheet({ job, onClose, onReport, reported, social, onToggleLike
   const [msgDraft, setMsgDraft] = useState("");
   const [sent, setSent] = useState(false);
   const [photoIdx, setPhotoIdx] = useState(0);
+  const [showPoster, setShowPoster] = useState(false);
+  const [applyOpen, setApplyOpen] = useState(false);
+  const [applyDraft, setApplyDraft] = useState(() => loadApplyDraft(job.id));
+  const goToApply = () => gate.require("apply for this job", () => setApplyOpen(true));
 
   const st = social || { liked: false, likes: 0, favourite: false, comments: [] };
   const tpl = CARD_TEMPLATES.find((t) => t.id === job.templateId) || CARD_TEMPLATES[0];
@@ -5666,111 +7216,196 @@ function JobDetailSheet({ job, onClose, onReport, reported, social, onToggleLike
     </button>
   );
 
+  const vis = jobRoleVisual(job.jobTitle);
+  const type = jobTypeOf(job);
+  const location = [job.area, job.city].filter(Boolean).join(", ");
+  const unit = (job.payUnitLabel || "Per Month").replace(/^Per /i, "").toLowerCase();
+  const shiftText = (job.shifts || []).join(", ");
+  const summary = job.notes || [
+    `${job.facilityName || "This facility"} is hiring a ${job.jobTitle}${shiftText ? ` for ${shiftText.toLowerCase()} shifts` : ""}${location ? ` in ${location}` : ""}.`,
+    `This is a ${type.toLowerCase()} role paying PKR ${job.payAmount} per ${unit}.`,
+    job.startDate ? (String(job.startDate).toLowerCase() === "immediately" ? "The position starts immediately." : `The position starts ${job.startDate}.`) : "",
+  ].filter(Boolean).join(" ");
+  const facts = [
+    { icon: Wallet, label: "Salary", value: `PKR ${job.payAmount}`, sub: `per ${unit}`, strong: true },
+    { icon: Briefcase, label: "Job type", value: type },
+    { icon: Clock, label: "Shift", value: shiftText || "Flexible" },
+    { icon: CalendarDays, label: "Start date", value: job.startDate || "Flexible" },
+    { icon: MapPin, label: "City", value: job.city || "—", sub: job.area },
+    { icon: Users, label: "Applicants", value: typeof job.applicants === "number" ? `${job.applicants} applied` : "Be the first" },
+  ];
+  const Block = ({ title, children }) => (
+    <section className="mt-7">
+      <h3 className="text-[16.5px] font-extrabold tracking-[-0.01em] mb-3" style={{ color: INK }}>{title}</h3>
+      {children}
+    </section>
+  );
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center">
-      <div className="absolute inset-0 bg-black/45" onClick={onClose} />
-      <div className="relative w-full max-w-[390px] bg-white rounded-t-3xl flex flex-col" style={{ height: "90%" }}>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-6" role="dialog" aria-modal="true" aria-label={job.jobTitle}>
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={onClose} />
+      <div className="relative w-full sm:max-w-[660px] bg-white rounded-t-3xl sm:rounded-3xl flex flex-col h-[92dvh] sm:h-[88dvh] overflow-hidden auth-step" style={{ fontFamily: FONT, boxShadow: "0 30px 80px -20px rgba(16,24,40,0.45)" }}>
 
-        <div className="flex justify-center pt-2.5 pb-1 shrink-0"><span className="w-10 h-1 rounded-full" style={{ backgroundColor: "#D3D9EC" }} /></div>
+        <div className="sm:hidden flex justify-center pt-2.5 shrink-0"><span className="w-10 h-1 rounded-full" style={{ backgroundColor: "#D3D9EC" }} /></div>
 
-        {/* tabs */}
-        <div className="flex items-center px-4 pb-2 gap-2 shrink-0">
-          {[["details", "Job details"], ["comments", `Comments${st.comments.length ? ` (${st.comments.length})` : ""}`]].map(([k, label]) => (
-            <button key={k} onClick={() => setTab(k)}
-              className="px-3.5 py-2 rounded-full text-[12.5px] font-semibold transition-colors"
-              style={{ backgroundColor: tab === k ? NAVY : "#EFF2FA", color: tab === k ? "white" : INK }}>
-              {label}
-            </button>
-          ))}
+        {/* header: tabs + close */}
+        <div className="flex items-center gap-3 px-4 sm:px-6 pt-3 sm:pt-4 pb-3 shrink-0" style={{ borderBottom: `1px solid ${CARD_BORDER}` }}>
+          <div className="inline-flex p-1 rounded-xl" style={{ backgroundColor: CREAM, border: `1px solid ${CARD_BORDER}` }}>
+            {[["details", "Job details"], ["comments", `Questions${st.comments.length ? ` (${st.comments.length})` : ""}`]].map(([k, label]) => (
+              <button key={k} type="button" onClick={() => setTab(k)}
+                className="h-9 px-4 rounded-lg text-[13.5px] font-bold transition-all"
+                style={{ backgroundColor: tab === k ? "#fff" : "transparent", color: tab === k ? BRAND : SUBTLE, boxShadow: tab === k ? "0 1px 3px rgba(16,24,40,0.12)" : "none" }}>
+                {label}
+              </button>
+            ))}
+          </div>
           <span className="flex-1" />
-          <button onClick={onClose} aria-label="Close"><X className="w-5 h-5" style={{ color: SUBTLE }} /></button>
+          <button type="button" onClick={onClose} aria-label="Close" className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EEF1F5]" style={{ backgroundColor: CREAM }}>
+            <X className="w-5 h-5" style={{ color: INK }} />
+          </button>
         </div>
 
         {/* ---------- DETAILS ---------- */}
         {tab === "details" && (
-          <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
-            {/* photo gallery or post card */}
+          <div className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-7 pt-5 pb-7">
+            {/* title */}
+            <div className="flex items-start gap-4">
+              <span className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0" style={{ backgroundColor: vis.tint }}>
+                <vis.Icon className="w-7 h-7" style={{ color: vis.color }} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-[22px] sm:text-[26px] font-extrabold leading-tight tracking-[-0.025em]" style={{ color: INK }}>
+                  {job.jobTitle}{job.specialty ? <span style={{ color: SUBTLE }}> · {job.specialty}</span> : null}
+                </h2>
+                <p className="text-[15.5px] font-semibold mt-1" style={{ color: INK_2 }}>{job.facilityName}</p>
+                {location && (
+                  <p className="text-[14px] mt-1 flex items-center gap-1.5" style={{ color: SUBTLE }}>
+                    <MapPin className="w-4 h-4 shrink-0" /> {location}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2 mt-4">
+              <span className="text-[12.5px] font-bold px-2.5 py-1 rounded-lg" style={{ color: BRAND, backgroundColor: BRAND_50 }}>{type}</span>
+              {job.urgent && (
+                <span className="inline-flex items-center gap-1 text-[12.5px] font-bold px-2.5 py-1 rounded-lg" style={{ color: RED, backgroundColor: RED_TINT }}>
+                  <Zap className="w-3.5 h-3.5" /> Urgent hiring
+                </span>
+              )}
+              {job.facilityTypeLabel && <span className="text-[12.5px] font-semibold px-2.5 py-1 rounded-lg" style={{ color: INK_2, backgroundColor: CREAM }}>{job.facilityTypeLabel}</span>}
+              {job.posted && (
+                <span className="inline-flex items-center gap-1 text-[12.5px] font-semibold px-2.5 py-1 rounded-lg" style={{ color: INK_2, backgroundColor: CREAM }}>
+                  <History className="w-3.5 h-3.5" /> Posted {job.posted}
+                </span>
+              )}
+              {hasApplied && (
+                <span className="inline-flex items-center gap-1 text-[12.5px] font-bold px-2.5 py-1 rounded-lg" style={{ color: GREEN, backgroundColor: GREEN_TINT }}>
+                  <Check className="w-3.5 h-3.5" strokeWidth={3} /> You applied
+                </span>
+              )}
+            </div>
+
+            {/* key facts */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mt-6">
+              {facts.map((f) => (
+                <div key={f.label} className="rounded-2xl p-3.5" style={{ backgroundColor: f.strong ? GREEN_TINT : CREAM }}>
+                  <p className="text-[11.5px] font-bold uppercase tracking-[0.06em] flex items-center gap-1.5" style={{ color: f.strong ? GREEN : SUBTLE }}>
+                    <f.icon className="w-3.5 h-3.5" /> {f.label}
+                  </p>
+                  <p className="text-[16px] font-bold mt-1.5 leading-snug" style={{ color: f.strong ? GREEN : INK }}>{f.value}</p>
+                  {f.sub && <p className="text-[12.5px] mt-0.5 truncate" style={{ color: SUBTLE }}>{f.sub}</p>}
+                </div>
+              ))}
+            </div>
+
+            <Block title="About this role">
+              <p className="text-[15px] leading-relaxed" style={{ color: INK_2 }}>{summary}</p>
+            </Block>
+
+            {jobRequirementsFor(job).length > 0 && (
+              <Block title="Requirements">
+                <ul className="space-y-2.5">
+                  {jobRequirementsFor(job).map((r) => (
+                    <li key={r} className="flex items-start gap-2.5 text-[15px]" style={{ color: INK_2 }}>
+                      <CheckCircle2 className="w-5 h-5 shrink-0 mt-px" style={{ color: GREEN }} /> {r}
+                    </li>
+                  ))}
+                </ul>
+              </Block>
+            )}
+
+            <Block title="Employer & contact">
+              <div className="rounded-2xl p-4 flex items-center gap-3.5" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                <span className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 text-[17px] font-extrabold" style={{ backgroundColor: BRAND_50, color: BRAND }}>
+                  {(job.facilityName || "?")[0]}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[15.5px] font-bold truncate" style={{ color: INK }}>{job.facilityName}</p>
+                  <p className="text-[13.5px] truncate" style={{ color: SUBTLE }}>{[job.facilityTypeLabel, job.city].filter(Boolean).join(" · ")}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-2.5">
+                <div className="rounded-2xl p-3.5" style={{ backgroundColor: CREAM }}>
+                  <p className="text-[11.5px] font-bold uppercase tracking-[0.06em]" style={{ color: SUBTLE }}>Contact person</p>
+                  <p className="text-[15px] font-semibold mt-1" style={{ color: INK }}>{job.contactName || "HR Department"}</p>
+                </div>
+                <div className="rounded-2xl p-3.5" style={{ backgroundColor: CREAM }}>
+                  <p className="text-[11.5px] font-bold uppercase tracking-[0.06em]" style={{ color: SUBTLE }}>Phone</p>
+                  {job.showNumber && job.contactNumber ? (
+                    <a href={`tel:${job.contactNumber.replace(/\s/g, "")}`} className="text-[15px] font-semibold mt-1 inline-flex items-center gap-1.5" style={{ color: BRAND }}>
+                      <Phone className="w-4 h-4" /> {job.contactNumber}
+                    </a>
+                  ) : (
+                    <p className="text-[15px] font-semibold mt-1" style={{ color: INK }}>Message via PakMed</p>
+                  )}
+                </div>
+              </div>
+            </Block>
+
             {photos.length > 0 ? (
-              <>
+              <Block title="Photos">
                 <div className="rounded-2xl overflow-hidden" style={{ aspectRatio: "4/3", border: `1px solid ${CARD_BORDER}` }}>
                   <img src={photos[photoIdx]} alt="" className="w-full h-full object-cover" />
                 </div>
                 {photos.length > 1 && (
-                  <div className="flex gap-1.5 mt-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+                  <div className="flex gap-2 mt-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
                     {photos.map((src, i) => (
-                      <button key={i} onClick={() => setPhotoIdx(i)} className="shrink-0 rounded-lg overflow-hidden"
-                        style={{ width: 54, height: 54, border: `2px solid ${i === photoIdx ? NAVY : "transparent"}` }}>
+                      <button key={i} type="button" onClick={() => setPhotoIdx(i)} className="shrink-0 rounded-lg overflow-hidden"
+                        style={{ width: 60, height: 60, border: `2px solid ${i === photoIdx ? BRAND : "transparent"}` }}>
                         <img src={src} alt="" className="w-full h-full object-cover" />
                       </button>
                     ))}
                   </div>
                 )}
-              </>
+              </Block>
             ) : (
-              <div className="rounded-2xl overflow-hidden" style={{ border: `1px solid ${CARD_BORDER}` }}>
-                <JobPostCard job={job} tpl={tpl} scale={0.92} />
+              <div className="mt-7">
+                <button type="button" onClick={() => setShowPoster((v) => !v)}
+                  className="w-full h-12 rounded-xl text-[14.5px] font-bold inline-flex items-center justify-center gap-2 transition-colors hover:bg-[#F5F7FA]"
+                  style={{ color: INK_2, border: `1px solid ${CARD_BORDER}` }}>
+                  <Eye className="w-4 h-4" /> {showPoster ? "Hide job poster" : "View job poster"}
+                </button>
+                {showPoster && (
+                  <div className="mt-3 rounded-2xl overflow-hidden max-w-[360px] mx-auto auth-step" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                    <JobPostCard job={job} tpl={tpl} scale={1} />
+                  </div>
+                )}
               </div>
             )}
 
-            <p className="text-[21px] font-bold leading-tight mt-3.5" style={{ color: INK }}>{job.jobTitle}</p>
-            <p className="text-[13.5px] mt-1" style={{ color: SUBTLE }}>
-              {job.facilityName}{job.facilityTypeLabel ? ` · ${job.facilityTypeLabel}` : ""}
-            </p>
-
-            <div className="rounded-xl p-3.5 mt-3" style={{ backgroundColor: NAVY_TINT }}>
-              <p className="text-[23px] font-bold leading-none" style={{ color: NAVY }}>PKR {job.payAmount}</p>
-              <p className="text-[12.5px] mt-1" style={{ color: "#3A4A66" }}>{job.payUnitLabel}</p>
-            </div>
-
-            {/* location */}
-            <div className="rounded-xl p-3.5 mt-2.5" style={{ border: `1px solid ${CARD_BORDER}` }}>
-              <p className="text-[13px] font-semibold mb-1.5" style={{ color: INK_2 }}>Location</p>
-              <div className="flex items-start gap-2">
-                <MapPin className="w-4 h-4 mt-0.5 shrink-0" style={{ color: NAVY }} />
-                <p className="text-[13.5px] leading-snug" style={{ color: "#4B4A45" }}>
-                  {[job.area, job.city].filter(Boolean).join(", ")}
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-3 flex flex-col gap-1.5">
-              {(job.shifts || []).length > 0 && <p className="text-[13.5px]" style={{ color: INK_2 }}><IconText icon={Clock} size={15}>{job.shifts.join(", ")}</IconText></p>}
-              {job.startDate && <p className="text-[13.5px]" style={{ color: INK_2 }}><IconText icon={CalendarDays} size={15}>Starts {job.startDate}</IconText></p>}
-              {job.posted && <p className="text-[13.5px]" style={{ color: INK_2 }}><IconText icon={History} size={15}>Posted {job.posted}</IconText></p>}
-              {typeof job.applicants === "number" && <p className="text-[13.5px]" style={{ color: INK_2 }}><IconText icon={Users} size={15}>{job.applicants} applied</IconText></p>}
-            </div>
-
-            {(job.requirements || []).length > 0 && (
-              <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
-                <p className="text-[13px] font-semibold mb-1.5" style={{ color: INK_2 }}>Requirements</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {job.requirements.map((r) => (
-                    <span key={r} className="text-[12px] font-medium px-2.5 py-1 rounded-full" style={{ color: NAVY, backgroundColor: NAVY_TINT }}>{r}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {job.notes && (
-              <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
-                <p className="text-[13px] font-semibold mb-1.5" style={{ color: INK_2 }}>Job description</p>
-                <p className="text-[13.5px] leading-relaxed" style={{ color: "#4B4A45" }}>{job.notes}</p>
-              </div>
-            )}
-
-            <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
-              <p className="text-[13px] font-semibold mb-1" style={{ color: INK_2 }}>Contact</p>
-              <p className="text-[13.5px]" style={{ color: "#4B4A45" }}>{job.contactName || "—"}</p>
-              <p className="text-[13px] mt-0.5" style={{ color: SUBTLE }}>
-                {job.showNumber && job.contactNumber ? job.contactNumber : "Message through PakMed to contact"}
-              </p>
-            </div>
-
-            <div className="rounded-xl p-3 mt-3" style={{ backgroundColor: AMBER_TINT }}>
-              <p className="text-[12px] leading-snug" style={{ color: "#6B4B22" }}>
+            <div className="rounded-2xl p-4 mt-6 flex items-start gap-3" style={{ backgroundColor: AMBER_TINT }}>
+              <ShieldCheck className="w-5 h-5 shrink-0 mt-px" style={{ color: AMBER }} />
+              <p className="text-[13.5px] leading-relaxed" style={{ color: "#6B4B22" }}>
                 <strong>Stay safe:</strong> PakMed jobs never require an upfront payment. Report any post that asks for money.
               </p>
             </div>
+            <ApplyDocsChecklist job={job} hasApplied={hasApplied} draft={applyDraft} onApply={goToApply} />
+            <button type="button"
+              onClick={() => onReport && onReport({ id: job.id, type: "job", title: job.jobTitle, subtitle: `${job.facilityName} · ${job.city}` })}
+              className="sm:hidden mt-4 inline-flex items-center gap-1.5 text-[13.5px] font-semibold" style={{ color: reported ? RED : SUBTLE }}>
+              <Flag className="w-4 h-4" /> {reported ? "Reported" : "Report this job"}
+            </button>
           </div>
         )}
 
@@ -5809,37 +7444,47 @@ function JobDetailSheet({ job, onClose, onReport, reported, social, onToggleLike
 
         {/* ---------- ACTION BAR ---------- */}
         {tab === "details" && (
-          <div className="border-t shrink-0" style={{ borderColor: CARD_BORDER }}>
-            <div className="flex items-center px-2 pt-2">
-              <Action icon={Heart} count={st.likes} active={st.liked} activeColor={RED} onClick={() => gate.require("like jobs", () => onToggleLike(job.id))} />
-              <Action icon={MessageCircle} count={st.comments.length} onClick={() => setTab("comments")} />
-              <Action icon={Bookmark} label="Save" active={st.favourite} onClick={() => onToggleFav(job.id)} />
-              <Action icon={Repeat2} label="Share" onClick={() => gate.require("share this job", () => setShareOpen(true))} />
-              <Action icon={Flag} label={reported ? "Reported" : "Report"} active={reported} activeColor={RED}
-                onClick={() => onReport && onReport({ id: job.id, type: "job", title: job.jobTitle, subtitle: `${job.facilityName} · ${job.city}` })} />
-            </div>
-            <div className="px-4 pt-1.5 pb-3 flex gap-2.5">
-              <button
-                onClick={() => gate.require("contact the employer", () => setMsgOpen(true))}
-                className="px-4 py-3.5 rounded-full font-semibold text-[13.5px] flex items-center justify-center gap-1.5 shrink-0"
-                style={{ backgroundColor: "#EFF2FA", color: INK }}
-              >
-                <MessageSquareText className="w-4 h-4" /> Contact
+          <div className="shrink-0 px-4 sm:px-6 py-3 flex items-center gap-2" style={{ borderTop: `1px solid ${CARD_BORDER}`, backgroundColor: "#fff" }}>
+            {[
+              { icon: Heart, label: st.liked ? "Unlike" : "Like", active: st.liked, color: RED, count: st.likes || null, run: () => gate.require("like jobs", () => onToggleLike(job.id)) },
+              { icon: Bookmark, label: st.favourite ? "Saved" : "Save", active: st.favourite, color: BRAND, run: () => onToggleFav(job.id) },
+              { icon: Repeat2, label: "Share", run: () => gate.require("share this job", () => setShareOpen(true)) },
+              { icon: Flag, label: reported ? "Reported" : "Report", active: reported, color: RED, run: () => onReport && onReport({ id: job.id, type: "job", title: job.jobTitle, subtitle: `${job.facilityName} · ${job.city}` }) },
+            ].map((a) => (
+              <button key={a.label} type="button" onClick={a.run} aria-label={a.label} title={a.label}
+                className={`${a.icon === Flag ? "hidden sm:inline-flex" : "inline-flex"} h-11 min-w-11 px-2.5 rounded-xl items-center justify-center gap-1.5 shrink-0 transition-colors hover:bg-[#F5F7FA]`}
+                style={{ border: `1px solid ${a.active ? a.color + "55" : CARD_BORDER}`, backgroundColor: a.active ? (a.color === RED ? RED_TINT : BRAND_50) : "#fff" }}>
+                <a.icon className="w-[18px] h-[18px]" fill={a.active ? a.color : "none"} stroke={a.active ? a.color : INK_2} />
+                {a.count ? <span className="text-[12.5px] font-semibold" style={{ color: a.active ? a.color : SUBTLE }}>{a.count}</span> : null}
               </button>
-              <button
-                onClick={() => { if (!hasApplied) onApply(job); }}
-                disabled={hasApplied}
-                className="flex-1 py-3.5 rounded-full font-semibold text-[14.5px] flex items-center justify-center gap-2"
-                style={{ backgroundColor: hasApplied ? GREEN_TINT : NAVY, color: hasApplied ? GREEN : "white" }}
-              >
-                {hasApplied ? <><Check className="w-4 h-4" strokeWidth={3} /> Applied</> : <><FileText className="w-4 h-4" /> Apply with my CV</>}
-              </button>
-            </div>
+            ))}
+            <span className="flex-1" />
+            <button
+              type="button"
+              onClick={() => { if (!hasApplied) goToApply(); }}
+              disabled={hasApplied}
+              className="h-11 px-4 sm:px-6 rounded-xl text-[14.5px] font-bold inline-flex items-center justify-center gap-2 shrink-0 transition-all enabled:hover:brightness-110"
+              style={{ backgroundColor: hasApplied ? GREEN_TINT : BRAND, color: hasApplied ? GREEN : "#fff", boxShadow: hasApplied ? "none" : "0 8px 20px -10px rgba(11,87,183,0.6)" }}
+            >
+              {hasApplied
+                ? <><Check className="w-4 h-4" strokeWidth={3} /> Applied</>
+                : applyDraft && applyDraft.files && Object.keys(applyDraft.files).length
+                  ? <><Upload className="w-4 h-4" /> Continue<span className="hidden sm:inline"> application</span></>
+                  : <><FileText className="w-4 h-4" /> Apply now</>}
+            </button>
           </div>
         )}
       </div>
 
       {shareOpen && <JobShareSheet job={job} onClose={() => setShareOpen(false)} />}
+      {applyOpen && (
+        <ApplyFormModal
+          job={job}
+          onClose={() => { setApplyOpen(false); setApplyDraft(loadApplyDraft(job.id)); }}
+          onDraftChange={setApplyDraft}
+          onSubmit={() => onApply(job)}
+        />
+      )}
 
       {/* contact composer */}
       {msgOpen && (
@@ -5973,152 +7618,775 @@ function DoctorMessageSheet({ doctor: d, authed, defaults = {}, onSend, onClose 
   );
 }
 
-function ConsultDoctorScreen({ initialQuery, userCity, onBack, onMenu, onReport, reportedIds, isSaved = () => false, onToggleSave = () => {}, onMessage = () => {}, guestDefaults = {} }) {
-  const gate = useContext(AuthGate);
-  const [city, setCity] = useState(initialQuery ? "" : (userCity || ""));
-  const [msgDoc, setMsgDoc] = useState(null);
-  const [area, setArea] = useState("");
-  const [name, setName] = useState("");
-  const [specialty, setSpecialty] = useState("");
-  const [text, setText] = useState(initialQuery || "");
-  const [sheet, setSheet] = useState(null);
-  const [openDoc, setOpenDoc] = useState(null);
+/* ---------- extra sample doctors (frontend-only demo data) ---------- */
+const dr = (id, name, specialty, qual, city, area, clinic, fee, rating, reviews, exp, online, slots, extra = {}) => ({
+  id, name, specialty, qual, city, area, clinic, fee, rating, reviews, exp, verified: true, online, phone: "", showPhone: false, slots, ...extra,
+});
+const MORE_DOCTORS = [
+  dr("d13", "Dr. Mehwish Anwar", "Gynecology", "MBBS, FCPS Gynae", "Lahore", "Gulberg III", "Gulberg Women's Clinic", "2,500", 4.8, 265, "11 yrs", true, "Today 5:00 PM"),
+  dr("d14", "Dr. Adnan Qureshi", "General Physician", "MBBS, MCPS Family Medicine", "Rawalpindi", "Saddar", "Saddar Family Clinic", "1,200", 4.5, 118, "8 yrs", true, "Today 6:30 PM"),
+  dr("d15", "Dr. Rabia Saleem", "Dermatology", "MBBS, FCPS Dermatology", "Islamabad", "F-7 Markaz", "Clear Skin Clinic", "3,000", 4.9, 312, "10 yrs", true, "Tomorrow 12:00 PM"),
+  dr("d16", "Dr. Junaid Akhtar", "Orthopedics", "MBBS, FCPS Ortho", "Karachi", "PECHS", "Spine & Joint Clinic", "3,500", 4.7, 201, "15 yrs", false, "Tomorrow 5:00 PM"),
+  dr("d17", "Dr. Sadia Batool", "Pediatrics", "MBBS, DCH, FCPS Peds", "Multan", "Cantt", "Little Stars Clinic", "1,800", 4.8, 174, "9 yrs", true, "Today 3:30 PM"),
+  dr("d18", "Dr. Waqas Butt", "Cardiology", "MBBS, FCPS Cardiology", "Faisalabad", "Peoples Colony", "Heart Care Centre", "3,000", 4.6, 132, "12 yrs", false, "Today 7:30 PM"),
+  dr("d19", "Dr. Nida Farooq", "Psychiatry", "MBBS, FCPS Psychiatry", "Lahore", "DHA Phase 5", "Calm Minds Clinic", "4,000", 4.9, 221, "13 yrs", true, "Tomorrow 4:00 PM"),
+  dr("d20", "Dr. Imtiaz Khattak", "ENT", "MBBS, FCPS ENT", "Peshawar", "Hayatabad Phase 3", "Khyber ENT Clinic", "1,500", 4.5, 89, "9 yrs", false, "Today 5:30 PM"),
+  dr("d21", "Dr. Farah Naz", "Ophthalmology", "MBBS, FCPS Eye", "Hyderabad", "Latifabad", "Vision Eye Clinic", "2,000", 4.7, 140, "10 yrs", false, "Tomorrow 11:00 AM"),
+  dr("d22", "Dr. Shahid Baloch", "General Physician", "MBBS", "Quetta", "Jinnah Road", "City Medical Centre", "1,000", 4.4, 66, "6 yrs", true, "Today 4:00 PM"),
+  dr("d23", "Dr. Asma Javed", "Endocrinology", "MBBS, FCPS Medicine, Endo Fellowship", "Karachi", "Clifton Block 5", "Diabetes & Thyroid Centre", "3,500", 4.8, 189, "12 yrs", true, "Tomorrow 2:00 PM"),
+  dr("d24", "Dr. Hamid Raza", "Urology", "MBBS, FCPS Urology", "Lahore", "Johar Town", "Kidney & Stone Clinic", "3,000", 4.6, 97, "14 yrs", false, "Today 8:00 PM"),
+  dr("d25", "Dr. Kiran Shahzad", "Gastroenterology", "MBBS, FCPS Gastro", "Islamabad", "G-9 Markaz", "Gut Health Clinic", "3,000", 4.7, 120, "9 yrs", true, "Tomorrow 6:00 PM"),
+  dr("d26", "Dr. Tariq Mehmood", "Pulmonology", "MBBS, FCPS Pulmonology", "Sialkot", "Paris Road", "Chest & Asthma Clinic", "2,000", 4.5, 73, "11 yrs", false, "Today 6:00 PM"),
+  dr("d27", "Dr. Uzma Riaz", "Nephrology", "MBBS, FCPS Nephrology", "Gujranwala", "Satellite Town", "Renal Care Clinic", "2,500", 4.6, 58, "10 yrs", false, "Tomorrow 10:30 AM"),
+  dr("d28", "Dr. Bilal Siddiqui", "Neurology", "MBBS, FCPS Neurology", "Rawalpindi", "Bahria Town Phase 7", "Brain & Nerve Clinic", "3,500", 4.8, 144, "13 yrs", true, "Tomorrow 5:30 PM"),
+  dr("d29", "Dr. Saima Ashraf", "Dentistry", "BDS, MCPS", "Lahore", "Model Town", "Smile Studio Dental", "1,500", 4.7, 210, "8 yrs", false, "Today 4:30 PM"),
+  dr("d30", "Dr. Fahad Iqbal", "Surgery", "MBBS, FCPS Surgery", "Bahawalpur", "Model Town A", "Cholistan Surgical", "2,000", 4.5, 61, "12 yrs", false, "Tomorrow 9:00 AM"),
+  dr("d31", "Dr. Ammara Khalid", "Oncology", "MBBS, FCPS Oncology", "Karachi", "Gulshan-e-Iqbal", "Hope Cancer Clinic", "4,000", 4.9, 133, "16 yrs", true, "Tomorrow 3:00 PM"),
+  dr("d32", "Dr. Naveed Anjum", "General Physician", "MBBS, FCPS Medicine", "Faisalabad", "D Ground", "Lyallpur Family Clinic", "1,500", 4.6, 156, "10 yrs", true, "Today 7:00 PM"),
+  dr("d33", "Dr. Hira Qamar", "Gynecology", "MBBS, MCPS Gynae", "Peshawar", "University Town", "Mother Care Clinic", "2,000", 4.7, 102, "7 yrs", true, "Today 2:30 PM"),
+  dr("d34", "Dr. Owais Rana", "Dermatology", "MBBS, Dip Derm", "Multan", "Bosan Road", "Skin First Clinic", "1,800", 4.4, 48, "5 yrs", true, "Tomorrow 1:00 PM"),
+];
+DOCTORS.push(...MORE_DOCTORS);
 
-  const cityOptions = [...new Set([...CITIES, ...DOCTORS.map((d) => d.city)])].sort();
-  const areaOptions = [...new Set(DOCTORS.filter((d) => !city || d.city === city).map((d) => d.area))].sort();
-  const nameOptions = [...new Set(DOCTORS.filter((d) => (!city || d.city === city) && (!area || d.area === area)).map((d) => d.name))].sort();
+const DOC_FEE_BANDS = [
+  { key: "lt1500", label: "Under PKR 1,500", test: (f) => f < 1500 },
+  { key: "1500-3000", label: "PKR 1,500 – 3,000", test: (f) => f >= 1500 && f <= 3000 },
+  { key: "gt3000", label: "Above PKR 3,000", test: (f) => f > 3000 },
+];
+const DOC_SORTS = [
+  { value: "recommended", label: "Recommended" },
+  { value: "rating", label: "Highest rated" },
+  { value: "fee", label: "Lowest fee" },
+  { value: "exp", label: "Most experienced" },
+];
+const DOC_PAGE_SIZE = 12;
+const EMPTY_DOC_FILTERS = { category: "", specialties: [], fees: [], today: false, online: false, verified: false, rating45: false, exp10: false };
+const DOC_CATEGORIES = [
+  { key: "general", label: "General & Family", icon: Stethoscope, specs: ["General Physician"] },
+  { key: "women", label: "Women & Children", icon: Baby, specs: ["Gynecology", "Pediatrics"] },
+  { key: "heart", label: "Heart & Lungs", icon: HeartPulse, specs: ["Cardiology", "Pulmonology"] },
+  { key: "brain", label: "Brain & Mind", icon: Brain, specs: ["Neurology", "Psychiatry"] },
+  { key: "senses", label: "Skin, Eye & ENT", icon: Eye, specs: ["Dermatology", "Ophthalmology", "ENT"] },
+  { key: "surgery", label: "Surgery & Bones", icon: Bone, specs: ["Surgery", "Orthopedics", "Urology"] },
+  { key: "internal", label: "Internal Medicine", icon: Microscope, specs: ["Gastroenterology", "Nephrology", "Endocrinology", "Oncology"] },
+  { key: "dental", label: "Dental", icon: Smile, specs: ["Dentistry"] },
+];
+const docCategoryOf = (spec) => (DOC_CATEGORIES.find((c) => c.specs.includes(spec)) || {}).key || "";
+const docFee = (d) => parseFloat(String(d.fee || "").replace(/,/g, "")) || 0;
+const docExp = (d) => parseFloat(d.exp) || 0;
+const DOC_COLORS = [BRAND, "#0E7C86", "#5B47C7", "#C0362C", "#12805C", "#B54708"];
 
-  const t = text.trim().toLowerCase();
-  const results = DOCTORS.filter((d) =>
-    (!city || d.city === city) &&
-    (!area || d.area.toLowerCase().includes(area.toLowerCase())) &&
-    (!name || d.name.toLowerCase().includes(name.toLowerCase())) &&
-    (!specialty || d.specialty === specialty) &&
-    (!t || [d.name, d.specialty, d.qual, d.city, d.area, d.clinic].some((v) => String(v).toLowerCase().includes(t)))
-  );
+/* ---------- doctor profile page ---------- */
+const SPEC_SERVICES = {
+  "General Physician": ["Fever, flu & infections", "Diabetes & blood pressure", "Routine health check-ups", "Vaccination advice"],
+  Cardiology: ["Chest pain & palpitations", "ECG & echo review", "Hypertension management", "Heart failure follow-up"],
+  Pediatrics: ["Newborn & child check-ups", "Vaccination schedule", "Growth & nutrition", "Fever & infections in children"],
+  Gynecology: ["Pregnancy care", "Menstrual problems", "PCOS management", "Family planning"],
+  Dermatology: ["Acne & scars", "Eczema & psoriasis", "Hair loss", "Skin allergies"],
+  Orthopedics: ["Joint & back pain", "Fractures & sports injuries", "Arthritis care", "Post-surgery rehab"],
+  ENT: ["Ear infections & hearing", "Sinusitis", "Tonsils & throat", "Allergic rhinitis"],
+  Psychiatry: ["Anxiety & depression", "Sleep problems", "Stress management", "Counselling & therapy"],
+  Neurology: ["Headache & migraine", "Epilepsy", "Stroke follow-up", "Nerve pain"],
+  Surgery: ["General surgery consults", "Hernia & gallbladder", "Wound care", "Pre-operative assessment"],
+  Dentistry: ["Check-ups & cleaning", "Fillings & root canal", "Braces consults", "Tooth extraction"],
+  Ophthalmology: ["Eye check-ups", "Cataract consults", "Glasses & lenses", "Eye infections"],
+  Urology: ["Kidney stones", "Urinary problems", "Prostate care", "Men's health"],
+  Gastroenterology: ["Acidity & ulcers", "IBS", "Liver problems", "Endoscopy consults"],
+  Pulmonology: ["Asthma & COPD", "Chronic cough", "Breathing problems", "Sleep apnea"],
+  Nephrology: ["Chronic kidney disease", "Dialysis care", "Kidney function review", "Hypertension"],
+  Endocrinology: ["Diabetes care", "Thyroid disorders", "Hormonal imbalance", "Weight management"],
+  Oncology: ["Cancer screening", "Chemotherapy planning", "Second opinions", "Follow-up care"],
+};
+const SAMPLE_REVIEWERS = ["Ayesha K.", "Usman R.", "Sana M.", "Bilal A.", "Hina S.", "Kamran T.", "Maria N.", "Faisal Z."];
+const SAMPLE_REVIEW_TEXT = [
+  "Listened patiently and explained everything clearly. Highly recommended.",
+  "On time, professional and very caring. The clinic was clean and well managed.",
+  "Got the right diagnosis after visiting two other doctors. Thank you!",
+  "Very friendly with my family and gave practical advice. Will visit again.",
+  "Online consultation was smooth and the prescription arrived on WhatsApp.",
+];
 
-  const anyFilter = city || area || name || specialty || t;
-  // default city with no doctors yet → show everyone rather than an empty list
-  const cityFellBack = city && city === userCity && results.length === 0 && !area && !name && !specialty && !t;
-  const shown = cityFellBack ? DOCTORS : results;
+function docReviews(d) {
+  const seed = parseInt(String(d.id).replace(/\D/g, ""), 10) || 1;
+  return [0, 1, 2].map((i) => ({
+    name: SAMPLE_REVIEWERS[(seed + i * 3) % SAMPLE_REVIEWERS.length],
+    text: SAMPLE_REVIEW_TEXT[(seed + i) % SAMPLE_REVIEW_TEXT.length],
+    rating: i === 2 && d.rating < 4.7 ? 4 : 5,
+    when: ["2 days ago", "1 week ago", "3 weeks ago"][i],
+  }));
+}
 
+function DoctorMiniCard({ d, onOpen }) {
+  const bg = DOC_COLORS[parseInt(String(d.id).replace(/\D/g, ""), 10) % DOC_COLORS.length];
   return (
-    <div className="flex flex-col h-full min-h-0">
-      <ScreenHeader title="Find a Doctor" subtitle="Verified doctors near you" onBack={onBack} onMenu={onMenu} />
-
-      <div className="px-3 pb-2 shrink-0">
-        <div className="relative mb-2">
-          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: SUBTLE }} />
-          <input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Type doctor name, speciality or area…"
-            className="w-full text-[14.5px] rounded-xl pl-10 pr-9 py-3 outline-none"
-            style={{ backgroundColor: "white", color: INK, border: `1px solid ${CARD_BORDER}` }}
-          />
-          {text && (
-            <button onClick={() => setText("")} className="absolute right-3.5 top-1/2 -translate-y-1/2" aria-label="Clear search">
-              <X className="w-4 h-4" style={{ color: SUBTLE }} />
-            </button>
-          )}
-        </div>
-        <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
-          <FilterPill label="City" value={city} onClick={() => setSheet("city")} onClear={() => { setCity(""); setArea(""); }} />
-          <FilterPill label="Town / Road" value={area} onClick={() => setSheet("area")} onClear={() => setArea("")} />
-          <FilterPill label="Doctor" value={name} onClick={() => setSheet("name")} onClear={() => setName("")} />
-          <FilterPill label="Speciality" value={specialty} onClick={() => setSheet("specialty")} onClear={() => setSpecialty("")} />
-          {anyFilter && (
-            <button onClick={() => { setCity(""); setArea(""); setName(""); setSpecialty(""); setText(""); }} className="shrink-0 px-3 py-2 rounded-full text-[12.5px] font-semibold" style={{ color: RED, backgroundColor: "#FBEBEC" }}>
-              Reset
-            </button>
-          )}
+    <button type="button" onClick={() => onOpen(d)}
+      className="group w-full h-full rounded-2xl bg-white p-4 text-left flex flex-col transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+      style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: SOFT_SHADOW }}>
+      <div className="flex items-center gap-3">
+        <span className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 text-white font-extrabold text-[16px]" style={{ backgroundColor: bg }}>{initialsOf(d.name)}</span>
+        <div className="min-w-0">
+          <p className="text-[15px] font-bold truncate group-hover:text-[#0B57B7] transition-colors" style={{ color: INK }}>{d.name}</p>
+          <p className="text-[13px] font-semibold truncate" style={{ color: BRAND }}>{d.specialty}</p>
         </div>
       </div>
+      <div className="flex items-center gap-3 mt-3 text-[12.5px]" style={{ color: INK_2 }}>
+        <span className="inline-flex items-center gap-1 font-bold" style={{ color: INK }}><Star className="w-3.5 h-3.5" fill={STAR} stroke="none" /> {d.rating}</span>
+        <span>{d.exp}</span>
+        <span className="truncate">{d.city}</span>
+      </div>
+      <div className="flex items-center justify-between mt-3 pt-3" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+        <span className="text-[14.5px] font-extrabold" style={{ color: GREEN }}>PKR {d.fee}</span>
+        <span className="text-[12.5px] font-bold inline-flex items-center gap-1" style={{ color: BRAND }}>View <ArrowRight className="w-3.5 h-3.5" /></span>
+      </div>
+    </button>
+  );
+}
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-4">
-        {!anyFilter && (
-          <div className="rounded-2xl p-4 mb-3" style={{ backgroundColor: "#FBEBEC" }}>
-            <p className="text-[13.5px] font-semibold mb-1" style={{ color: "#B3202C" }}>Narrow it down</p>
-            <p className="text-[12.5px] leading-snug" style={{ color: "#7A3339" }}>
-              Choose your city, then your town or road, to find the closest doctor. You can also search by name or speciality.
-            </p>
+function DoctorProfilePage({ doctor: d, onBack, onOpenDoctor, saved, onToggleSave, onMessage, onReport, reported }) {
+  const [shareOpen, setShareOpen] = useState(false);
+  const trackRef = useRef(null);
+  useEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: "instant" }); }, [d.id]);
+
+  const bg = DOC_COLORS[parseInt(String(d.id).replace(/\D/g, ""), 10) % DOC_COLORS.length];
+  const today = /^today/i.test(d.slots || "");
+  const services = SPEC_SERVICES[d.specialty] || ["Consultations", "Follow-up visits", "Second opinions", "Health advice"];
+  const quals = String(d.qual || "").split(",").map((q) => q.trim()).filter(Boolean);
+  const reviews = docReviews(d);
+  const others = DOCTORS
+    .filter((x) => x.id !== d.id)
+    .map((x) => ({ x, score: (x.specialty === d.specialty ? 3 : 0) + (x.city === d.city ? 2 : 0) + x.rating / 5 }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 10)
+    .map((r) => r.x);
+  const slide = (dir) => { const el = trackRef.current; if (el) el.scrollBy({ left: dir * el.clientWidth * 0.9, behavior: "smooth" }); };
+
+  const Card = ({ title, children, className = "" }) => (
+    <section className={`rounded-2xl bg-white p-5 sm:p-6 ${className}`} style={{ border: `1px solid ${CARD_BORDER}` }}>
+      {title && <h2 className="text-[17px] font-extrabold tracking-[-0.01em] mb-4" style={{ color: INK }}>{title}</h2>}
+      {children}
+    </section>
+  );
+
+  return (
+    <div className="w-full min-w-0 page-enter" style={{ fontFamily: FONT }}>
+      {/* banner */}
+      <section style={{ background: "linear-gradient(135deg, #0B3F86 0%, #0B57B7 55%, #0E7C86 100%)" }}>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-5 pb-20 sm:pb-24">
+          <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl text-[13.5px] font-semibold text-white bg-white/15 hover:bg-white/25 transition-colors">
+            <ChevronLeft className="w-4 h-4" /> All doctors
+          </button>
+        </div>
+      </section>
+
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 -mt-16 sm:-mt-20 pb-12">
+        {/* identity card */}
+        <div className="rounded-3xl bg-white p-5 sm:p-7" style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: "0 20px 50px -24px rgba(16,24,40,0.3)" }}>
+          <div className="flex flex-col md:flex-row md:items-center gap-5">
+            <span className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl flex items-center justify-center shrink-0 text-white font-extrabold text-[34px]" style={{ backgroundColor: bg, boxShadow: "0 12px 24px -12px rgba(16,24,40,0.4)" }}>
+              {initialsOf(d.name)}
+            </span>
+            <div className="min-w-0 flex-1">
+              <h1 className="text-[26px] sm:text-[32px] font-extrabold tracking-[-0.03em] leading-tight flex items-center gap-2 flex-wrap" style={{ color: INK }}>
+                {d.name}
+                {d.verified && (
+                  <span className="inline-flex items-center gap-1 text-[12.5px] font-bold px-2.5 py-1 rounded-full" style={{ color: GREEN, backgroundColor: GREEN_TINT }}>
+                    <BadgeCheck className="w-4 h-4" /> PMDC verified
+                  </span>
+                )}
+              </h1>
+              <p className="text-[16px] font-bold mt-1" style={{ color: BRAND }}>{d.specialty}</p>
+              <p className="text-[14px] mt-0.5" style={{ color: SUBTLE }}>{d.qual}</p>
+              <p className="text-[14px] mt-1.5 inline-flex items-center gap-1.5" style={{ color: INK_2 }}>
+                <MapPin className="w-4 h-4" style={{ color: FAINT }} /> {d.clinic} · {d.area}, {d.city}
+              </p>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button type="button" onClick={onToggleSave} aria-label={saved ? "Remove from saved" : "Save doctor"}
+                className="w-11 h-11 rounded-xl flex items-center justify-center transition-colors hover:bg-[#F5F7FA]"
+                style={{ border: `1px solid ${saved ? "#B9D3F2" : CARD_BORDER}`, backgroundColor: saved ? BRAND_50 : "#fff" }}>
+                <Bookmark className="w-[18px] h-[18px]" fill={saved ? BRAND : "none"} stroke={saved ? BRAND : INK_2} />
+              </button>
+              <button type="button" onClick={() => setShareOpen(true)} aria-label="Share"
+                className="w-11 h-11 rounded-xl flex items-center justify-center transition-colors hover:bg-[#F5F7FA]" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                <Repeat2 className="w-[18px] h-[18px]" style={{ color: INK_2 }} />
+              </button>
+              <button type="button" onClick={onReport} aria-label={reported ? "Reported" : "Report"}
+                className="w-11 h-11 rounded-xl flex items-center justify-center transition-colors hover:bg-[#F5F7FA]"
+                style={{ border: `1px solid ${reported ? "#F3B7B2" : CARD_BORDER}`, backgroundColor: reported ? RED_TINT : "#fff" }}>
+                <Flag className="w-[18px] h-[18px]" style={{ color: reported ? RED : INK_2 }} />
+              </button>
+            </div>
           </div>
-        )}
 
-        <p className="text-[12.5px] mb-2" style={{ color: SUBTLE }}>
-          {cityFellBack
-            ? <>No doctors listed in <b style={{ color: INK }}>{city}</b> yet — showing all</>
-            : <><b style={{ color: INK }}>{shown.length} doctor{shown.length !== 1 ? "s" : ""}</b>{area ? ` in ${area}` : city ? ` in ${city}` : ""}{specialty ? ` · ${specialty}` : ""}{t ? ` · "${text.trim()}"` : ""}</>}
-        </p>
-
-        {shown.length === 0 ? (
-          <div className="rounded-2xl bg-white p-6 text-center" style={{ border: `1px solid ${CARD_BORDER}` }}>
-            <Stethoscope className="w-8 h-8 mx-auto mb-2" style={{ color: FAINT }} />
-            <p className="text-[13.5px]" style={{ color: SUBTLE }}>No doctors match. Try clearing the area or speciality filter.</p>
-          </div>
-        ) : (
-          <div className="-mx-3 bg-white" style={{ borderTop: `1px solid ${CARD_BORDER}`, borderBottom: `1px solid ${CARD_BORDER}` }}>
-            {shown.map((d, idx) => (
-              <div key={d.id} className="px-4 py-3.5" style={{ borderTop: idx ? `1px solid ${CARD_BORDER}` : "none" }}>
-                <button onClick={() => setOpenDoc(d)} className="w-full flex gap-3 text-left">
-                  <div className="w-14 h-14 rounded-full flex items-center justify-center shrink-0 text-white font-bold text-[17px]" style={{ backgroundColor: BRAND }}>
-                    {initialsOf(d.name)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <p className="text-[15px] font-bold truncate" style={{ color: INK, letterSpacing: "-0.015em" }}>{d.name}</p>
-                      {d.verified && <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: GREEN }} />}
-                    </div>
-                    <p className="text-[12.5px] font-semibold mt-0.5" style={{ color: BRAND }}>{d.specialty}</p>
-                    <p className="text-[12px] mt-0.5 truncate" style={{ color: SUBTLE }}>{d.qual}</p>
-                    <div className="flex items-center gap-2.5 mt-1.5 flex-wrap">
-                      <span className="flex items-center gap-1 text-[12.5px] font-bold" style={{ color: INK }}>
-                        <Star className="w-3.5 h-3.5" fill={STAR} stroke="none" /> {d.rating} <span className="font-medium" style={{ color: SUBTLE }}>({d.reviews})</span>
-                      </span>
-                      <span className="text-[12px]" style={{ color: INK_2 }}>{d.exp} experience</span>
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-1.5 shrink-0">
-                    <SaveButton saved={isSaved("doctor", d.id)} onClick={() => onToggleSave("doctor", d)} />
-                  </div>
-                </button>
-
-                <div className="flex items-start gap-2 mt-2.5 rounded-lg px-2.5 py-2" style={{ backgroundColor: CREAM }}>
-                  <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0" style={{ color: SUBTLE }} />
-                  <div className="flex-1 min-w-0 text-[12.5px]" style={{ color: INK_2 }}>
-                    <b style={{ color: INK }}>{d.clinic}</b><br />{d.area}, {d.city}
-                  </div>
-                  <span className="text-[13.5px] font-extrabold shrink-0" style={{ color: INK }}>PKR {d.fee}</span>
-                </div>
-
-                <div className="flex gap-2 mt-2.5">
-                  <button onClick={() => setMsgDoc(d)} className="flex-1 h-10 rounded-xl text-[13px] font-bold text-white flex items-center justify-center gap-1.5" style={{ backgroundColor: BRAND }}>
-                    <MessageSquareText className="w-4 h-4" /> Message
-                  </button>
-                  {d.showPhone && d.phone && (
-                    <a href={doctorWaLink(d)} target="_blank" rel="noopener noreferrer"
-                      className="flex-1 h-10 rounded-xl text-[13px] font-bold flex items-center justify-center gap-1.5"
-                      style={{ color: "#128C3E", border: "1.5px solid #1DA851", backgroundColor: "#fff" }}>
-                      <WhatsAppGlyph /> WhatsApp
-                    </a>
-                  )}
-                </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-6">
+            {[
+              { icon: Star, label: "Rating", value: `${d.rating} ★`, sub: `${d.reviews} reviews` },
+              { icon: Briefcase, label: "Experience", value: d.exp, sub: "in practice" },
+              { icon: Wallet, label: "Fee", value: `PKR ${d.fee}`, sub: "per visit", green: true },
+              { icon: CalendarDays, label: "Next slot", value: d.slots, sub: d.online ? "Clinic & online" : "In clinic", green: today },
+            ].map((s) => (
+              <div key={s.label} className="rounded-2xl p-3.5" style={{ backgroundColor: s.green ? GREEN_TINT : CREAM }}>
+                <p className="text-[11.5px] font-bold uppercase tracking-[0.06em] flex items-center gap-1.5" style={{ color: s.green ? GREEN : SUBTLE }}>
+                  <s.icon className="w-3.5 h-3.5" /> {s.label}
+                </p>
+                <p className="text-[16px] font-bold mt-1.5 leading-snug" style={{ color: s.green ? GREEN : INK }}>{s.value}</p>
+                <p className="text-[12.5px]" style={{ color: SUBTLE }}>{s.sub}</p>
               </div>
             ))}
           </div>
+        </div>
+
+        <div className="grid lg:grid-cols-[1fr_340px] gap-5 mt-5 items-start">
+          <div className="space-y-5 min-w-0">
+            <Card title="About">
+              <p className="text-[15px] leading-relaxed" style={{ color: INK_2 }}>
+                {d.name} is a {d.verified ? "PMDC-verified " : ""}{d.specialty.toLowerCase()} specialist with {d.exp} of experience, practising at {d.clinic} in {d.area}, {d.city}.
+                {d.online ? " Available for both in-clinic visits and online video consultations." : " Available for in-clinic consultations."}
+              </p>
+            </Card>
+
+            <Card title="Areas of focus">
+              <div className="grid sm:grid-cols-2 gap-2.5">
+                {services.map((sv) => (
+                  <div key={sv} className="flex items-center gap-2.5 text-[14.5px] rounded-xl px-3.5 py-3" style={{ backgroundColor: CREAM, color: INK_2 }}>
+                    <CheckCircle2 className="w-[18px] h-[18px] shrink-0" style={{ color: GREEN }} /> {sv}
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            <Card title="Qualifications">
+              <ul className="space-y-3">
+                {quals.map((q) => (
+                  <li key={q} className="flex items-center gap-3">
+                    <span className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: BRAND_50 }}>
+                      <GraduationCap className="w-5 h-5" style={{ color: BRAND }} />
+                    </span>
+                    <span className="text-[15px] font-semibold" style={{ color: INK }}>{q}</span>
+                  </li>
+                ))}
+                {d.verified && (
+                  <li className="flex items-center gap-3">
+                    <span className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: GREEN_TINT }}>
+                      <ShieldCheck className="w-5 h-5" style={{ color: GREEN }} />
+                    </span>
+                    <span className="text-[15px] font-semibold" style={{ color: INK }}>PMDC registration verified by PakMed</span>
+                  </li>
+                )}
+              </ul>
+            </Card>
+
+            <Card title={`Patient reviews (${d.reviews})`}>
+              <div className="flex items-center gap-4 mb-5">
+                <p className="text-[40px] font-extrabold leading-none" style={{ color: INK }}>{d.rating}</p>
+                <div>
+                  <div className="flex gap-0.5">{[0, 1, 2, 3, 4].map((i) => <Star key={i} className="w-4 h-4" fill={i < Math.round(d.rating) ? STAR : "none"} stroke={STAR} />)}</div>
+                  <p className="text-[13px] mt-1" style={{ color: SUBTLE }}>Based on {d.reviews} verified patient reviews</p>
+                </div>
+              </div>
+              <ul className="space-y-3">
+                {reviews.map((r, i) => (
+                  <li key={i} className="rounded-xl p-4" style={{ backgroundColor: CREAM }}>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-[14px] font-bold" style={{ color: INK }}>{r.name}</p>
+                      <p className="text-[12px]" style={{ color: FAINT }}>{r.when}</p>
+                    </div>
+                    <div className="flex gap-0.5 mt-1">{[0, 1, 2, 3, 4].map((k) => <Star key={k} className="w-3.5 h-3.5" fill={k < r.rating ? STAR : "none"} stroke={STAR} />)}</div>
+                    <p className="text-[14px] mt-2 leading-relaxed" style={{ color: INK_2 }}>{r.text}</p>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          </div>
+
+          {/* booking card */}
+          <aside className="lg:sticky lg:top-[88px] space-y-4">
+            <Card>
+              <p className="text-[12px] font-bold uppercase tracking-[0.06em]" style={{ color: SUBTLE }}>Consultation fee</p>
+              <p className="text-[28px] font-extrabold leading-tight" style={{ color: GREEN }}>PKR {d.fee}</p>
+              <div className="mt-4 space-y-3 text-[14px]" style={{ color: INK_2 }}>
+                <p className="flex items-start gap-2.5"><Building2 className="w-[18px] h-[18px] shrink-0 mt-0.5" style={{ color: BRAND }} /><span><b style={{ color: INK }}>{d.clinic}</b><br />{d.area}, {d.city}</span></p>
+                <p className="flex items-center gap-2.5"><CalendarDays className="w-[18px] h-[18px] shrink-0" style={{ color: today ? GREEN : BRAND }} /><span style={{ color: today ? GREEN : INK_2, fontWeight: today ? 700 : 500 }}>Next available: {d.slots}</span></p>
+                {d.online && <p className="flex items-center gap-2.5"><Video className="w-[18px] h-[18px] shrink-0" style={{ color: BRAND }} /> Online consultation available</p>}
+              </div>
+              <button type="button" onClick={onMessage}
+                className="w-full h-12 mt-5 rounded-xl text-[15px] font-bold text-white inline-flex items-center justify-center gap-2 transition-all hover:brightness-110"
+                style={{ backgroundColor: BRAND, boxShadow: "0 8px 20px -10px rgba(11,87,183,0.6)" }}>
+                <MessageSquareText className="w-[18px] h-[18px]" /> Message doctor
+              </button>
+              {d.showPhone && d.phone && (
+                <a href={doctorWaLink(d)} target="_blank" rel="noopener noreferrer"
+                  className="w-full h-12 mt-2.5 rounded-xl text-[15px] font-bold inline-flex items-center justify-center gap-2"
+                  style={{ color: "#128C3E", border: "1.5px solid #1DA851" }}>
+                  <WhatsAppGlyph /> WhatsApp
+                </a>
+              )}
+              <p className="text-[12.5px] mt-3 text-center" style={{ color: FAINT }}>Your details are shared only with this doctor.</p>
+            </Card>
+            <div className="rounded-2xl p-4 flex items-start gap-3" style={{ backgroundColor: AMBER_TINT }}>
+              <ShieldCheck className="w-5 h-5 shrink-0 mt-px" style={{ color: AMBER }} />
+              <p className="text-[13px] leading-relaxed" style={{ color: "#6B4B22" }}>In an emergency, call <b>1122</b> or go to the nearest hospital.</p>
+            </div>
+          </aside>
+        </div>
+
+        {/* other doctors */}
+        {others.length > 0 && (
+          <section className="mt-10">
+            <div className="flex items-end justify-between gap-4 mb-4">
+              <div>
+                <h2 className="text-[22px] font-extrabold tracking-[-0.02em]" style={{ color: INK }}>Other doctors you may like</h2>
+                <p className="text-[14px] mt-1" style={{ color: SUBTLE }}>Similar speciality or in {d.city}</p>
+              </div>
+              <div className="hidden sm:flex gap-2 shrink-0">
+                {[[-1, ChevronLeft, "Previous"], [1, ChevronRight, "Next"]].map(([dir, Icon, label]) => (
+                  <button key={label} type="button" onClick={() => slide(dir)} aria-label={label}
+                    className="w-10 h-10 rounded-full flex items-center justify-center bg-white transition-shadow hover:shadow-md" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                    <Icon className="w-5 h-5" style={{ color: INK }} />
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div ref={trackRef} className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-3 -mx-4 px-4 scroll-px-4 sm:mx-0 sm:px-0 sm:scroll-px-0" style={{ scrollbarWidth: "none" }}>
+              {others.map((x) => (
+                <div key={x.id} className="snap-start shrink-0 w-[75%] sm:w-[calc((100%-16px)/2)] lg:w-[calc((100%-48px)/4)]">
+                  <DoctorMiniCard d={x} onOpen={onOpenDoctor} />
+                </div>
+              ))}
+            </div>
+          </section>
         )}
       </div>
 
-      {sheet === "city" && <FilterSheet title="Select city" options={cityOptions} selected={city} onSelect={(v) => { setCity(v); setArea(""); }} onClose={() => setSheet(null)} allowFree freeLabel="Search any city…" />}
-      {sheet === "area" && <FilterSheet title="Town or road" options={areaOptions} selected={area} onSelect={setArea} onClose={() => setSheet(null)} allowFree freeLabel="Type your town or road…" />}
-      {sheet === "name" && <FilterSheet title="Doctor name" options={nameOptions} selected={name} onSelect={setName} onClose={() => setSheet(null)} allowFree freeLabel="Type a doctor's name…" />}
-      {sheet === "specialty" && <FilterSheet title="Speciality" options={DOCTOR_SPECIALTIES} selected={specialty} onSelect={setSpecialty} onClose={() => setSheet(null)} allowFree freeLabel="Search speciality…" />}
+      {shareOpen && <ShareSheet card={{ id: d.id, title: `${d.name} — ${d.specialty}, ${d.city}` }} onClose={() => setShareOpen(false)} />}
+    </div>
+  );
+}
 
-      {openDoc && (
-        <DoctorDetailSheet doctor={openDoc} onClose={() => setOpenDoc(null)} onReport={onReport} reported={reportedIds.has(openDoc.id)}
-          saved={isSaved("doctor", openDoc.id)} onToggleSave={() => onToggleSave("doctor", openDoc)}
-          onMessage={() => setMsgDoc(openDoc)} />
+function ConsultDoctorScreen({ initialQuery, userCity, onBack, onMenu, onReport, reportedIds, isSaved = () => false, onToggleSave = () => {}, onMessage = () => {}, guestDefaults = {} }) {
+  const gate = useContext(AuthGate);
+  const [query, setQuery] = useState(initialQuery || "");
+  const [location, setLocation] = useState(initialQuery ? "" : (userCity || ""));
+  const [qDraft, setQDraft] = useState(initialQuery || "");
+  const [locDraft, setLocDraft] = useState(initialQuery ? "" : (userCity || ""));
+  const [f, setF] = useState(EMPTY_DOC_FILTERS);
+  const [sort, setSort] = useState("recommended");
+  const [limit, setLimit] = useState(DOC_PAGE_SIZE);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [openDoc, setOpenDoc] = useState(null);
+  const [msgDoc, setMsgDoc] = useState(null);
+  const resultsRef = useRef(null);
+
+  useEffect(() => { setLimit(DOC_PAGE_SIZE); }, [query, location, f, sort]);
+  useEffect(() => {
+    if (!filtersOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [filtersOpen]);
+
+  const cityOptions = [...new Set([...CITIES, ...DOCTORS.map((d) => d.city), ...DOCTORS.map((d) => d.area)])].filter(Boolean).sort();
+  const nameOptions = [...new Set([...DOCTOR_SPECIALTIES, ...DOCTORS.map((d) => d.name)])].sort();
+  const cityCounts = DOCTORS.reduce((acc, d) => ({ ...acc, [d.city]: (acc[d.city] || 0) + 1 }), {});
+
+  const q = query.trim().toLowerCase();
+  const loc = location.trim().toLowerCase();
+  const base = DOCTORS.filter((d) => {
+    if (q && ![d.name, d.specialty, d.qual, d.clinic].some((v) => String(v || "").toLowerCase().includes(q))) return false;
+    if (loc && ![d.city, d.area].some((v) => String(v || "").toLowerCase().includes(loc))) return false;
+    if (f.fees.length && !f.fees.some((k) => DOC_FEE_BANDS.find((b) => b.key === k).test(docFee(d)))) return false;
+    if (f.today && !/^today/i.test(d.slots || "")) return false;
+    if (f.online && !d.online) return false;
+    if (f.verified && !d.verified) return false;
+    if (f.rating45 && d.rating < 4.5) return false;
+    if (f.exp10 && docExp(d) < 10) return false;
+    return true;
+  });
+  const activeCat = DOC_CATEGORIES.find((c) => c.key === f.category);
+  const inScope = f.specialties.length
+    ? base.filter((d) => f.specialties.includes(d.specialty))
+    : activeCat ? base.filter((d) => activeCat.specs.includes(d.specialty)) : base;
+  const results = inScope.slice().sort((a, b) => {
+    if (sort === "rating") return b.rating - a.rating || b.reviews - a.reviews;
+    if (sort === "fee") return docFee(a) - docFee(b);
+    if (sort === "exp") return docExp(b) - docExp(a);
+    return (b.rating * Math.log10(b.reviews + 10)) - (a.rating * Math.log10(a.reviews + 10));
+  });
+  const shown = results.slice(0, limit);
+  const specCounts = base.reduce((acc, d) => ({ ...acc, [d.specialty]: (acc[d.specialty] || 0) + 1 }), {});
+  const topSpecs = Object.entries(specCounts).sort((a, b) => b[1] - a[1]).map(([k]) => k);
+
+  const toggle = (key) => (v) => setF((p) => ({ ...p, [key]: p[key].includes(v) ? p[key].filter((x) => x !== v) : [...p[key], v] }));
+  const panelCount = (f.category && !f.specialties.length ? 1 : 0) + f.specialties.length + f.fees.length + f.today + f.online + f.verified + f.rating45 + f.exp10;
+  const chips = [
+    query && { label: `“${query}”`, clear: () => { setQuery(""); setQDraft(""); } },
+    location && { label: location, icon: MapPin, clear: () => { setLocation(""); setLocDraft(""); } },
+    activeCat && !f.specialties.length && { label: activeCat.label, clear: () => setF((p) => ({ ...p, category: "" })) },
+    ...f.specialties.map((v) => ({ label: v, clear: () => toggle("specialties")(v) })),
+    ...f.fees.map((k) => ({ label: DOC_FEE_BANDS.find((b) => b.key === k).label, clear: () => toggle("fees")(k) })),
+    f.today && { label: "Available today", clear: () => setF((p) => ({ ...p, today: false })) },
+    f.online && { label: "Online consult", clear: () => setF((p) => ({ ...p, online: false })) },
+    f.verified && { label: "PMDC verified", clear: () => setF((p) => ({ ...p, verified: false })) },
+    f.rating45 && { label: "4.5★ & above", clear: () => setF((p) => ({ ...p, rating45: false })) },
+    f.exp10 && { label: "10+ yrs experience", clear: () => setF((p) => ({ ...p, exp10: false })) },
+  ].filter(Boolean);
+  const clearAll = () => { setQuery(""); setQDraft(""); setLocation(""); setLocDraft(""); setF(EMPTY_DOC_FILTERS); };
+  const runSearch = (e) => {
+    if (e) e.preventDefault();
+    setQuery(qDraft.trim());
+    setLocation(locDraft.trim());
+    if (resultsRef.current && window.innerWidth < 1024) resultsRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+  const pickCity = (c) => { const next = location === c ? "" : c; setLocation(next); setLocDraft(next); };
+  const pickSpec = (s) => setF((p) => {
+    const off = p.specialties.length === 1 && p.specialties[0] === s;
+    return { ...p, specialties: off ? [] : [s], category: off ? p.category : docCategoryOf(s) };
+  });
+  const pickCategory = (key) => setF((p) => ({ ...p, category: p.category === key ? "" : key, specialties: [] }));
+  const catCount = (c) => base.filter((d) => c.specs.includes(d.specialty)).length;
+
+  const quick = [
+    ["today", "Available today", CalendarDays],
+    ["online", "Online consult", Video],
+    ["verified", "PMDC verified", BadgeCheck],
+    ["rating45", "4.5★ & above", Star],
+    ["exp10", "10+ yrs exp.", Briefcase],
+  ];
+  const pill = (on) => ({
+    color: on ? "#fff" : INK_2,
+    backgroundColor: on ? BRAND : "#fff",
+    border: `1px solid ${on ? BRAND : CARD_BORDER}`,
+  });
+  const H = ({ children }) => <p className="text-[12.5px] font-bold uppercase tracking-[0.07em] mb-2.5" style={{ color: SUBTLE }}>{children}</p>;
+  const Panel = (
+    <div className="pb-4">
+      <div className="pt-1">
+        <H>Quick filters</H>
+        <div className="flex flex-wrap gap-2">
+          {quick.map(([k, label, Icon]) => (
+            <button key={k} type="button" aria-pressed={f[k]} onClick={() => setF((p) => ({ ...p, [k]: !p[k] }))}
+              className="h-9 px-3 rounded-full text-[13px] font-semibold inline-flex items-center gap-1.5 transition-colors"
+              style={pill(f[k])}>
+              <Icon className="w-3.5 h-3.5" /> {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+        <H>Category</H>
+        <div className="space-y-1">
+          {DOC_CATEGORIES.map((c) => {
+            const on = f.category === c.key;
+            const n = catCount(c);
+            return (
+              <button key={c.key} type="button" onClick={() => pickCategory(c.key)} disabled={!n && !on} aria-pressed={on}
+                className="w-full h-11 px-2 rounded-xl flex items-center gap-2.5 text-left transition-colors disabled:opacity-40 hover:bg-[#F5F7FA]"
+                style={{ backgroundColor: on ? BRAND_50 : "transparent", boxShadow: on ? "inset 0 0 0 1.5px #B9D3F2" : "none" }}>
+                <span className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: on ? "#fff" : CREAM }}>
+                  <c.icon className="w-4 h-4" style={{ color: on ? BRAND : INK_2 }} />
+                </span>
+                <span className="flex-1 min-w-0 truncate text-[13.5px] font-semibold" style={{ color: on ? BRAND : INK }}>{c.label}</span>
+                <span className="text-[11.5px] font-bold px-1.5 py-0.5 rounded-md shrink-0" style={{ color: on ? BRAND : SUBTLE, backgroundColor: on ? "#fff" : CREAM }}>{n}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {activeCat && (
+          <div className="mt-3 rounded-xl p-3 auth-step" style={{ backgroundColor: CREAM }}>
+            <p className="text-[12.5px] font-semibold mb-2" style={{ color: INK_2 }}>Speciality in {activeCat.label}</p>
+            <div className="flex flex-wrap gap-1.5">
+              <button type="button" onClick={() => setF((p) => ({ ...p, specialties: [] }))}
+                className="h-8 px-3 rounded-full text-[12.5px] font-semibold" style={pill(!f.specialties.length)}>
+                All
+              </button>
+              {activeCat.specs.map((sp) => (
+                <button key={sp} type="button" onClick={() => toggle("specialties")(sp)} disabled={!specCounts[sp] && !f.specialties.includes(sp)}
+                  className="h-8 px-3 rounded-full text-[12.5px] font-semibold disabled:opacity-40" style={pill(f.specialties.includes(sp))}>
+                  {sp} <span style={{ opacity: 0.7 }}>{specCounts[sp] || 0}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+        <H>Consultation fee</H>
+        <div className="flex flex-wrap gap-2">
+          {DOC_FEE_BANDS.map((b) => (
+            <button key={b.key} type="button" aria-pressed={f.fees.includes(b.key)} onClick={() => toggle("fees")(b.key)}
+              className="h-9 px-3 rounded-full text-[13px] font-semibold transition-colors" style={pill(f.fees.includes(b.key))}>
+              {b.label.replace("PKR ", "Rs ")}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  if (openDoc) {
+    return (
+      <>
+        <DoctorProfilePage
+          doctor={openDoc}
+          onBack={() => setOpenDoc(null)}
+          onOpenDoctor={setOpenDoc}
+          saved={isSaved("doctor", openDoc.id)}
+          onToggleSave={() => onToggleSave("doctor", openDoc)}
+          onMessage={() => setMsgDoc(openDoc)}
+          onReport={() => gate.require("report this", () => onReport({ id: openDoc.id, type: "doctor", title: openDoc.name, subtitle: `${openDoc.specialty} · ${openDoc.city}` }))}
+          reported={reportedIds.has(openDoc.id)}
+        />
+        {msgDoc && (
+          <DoctorMessageSheet doctor={msgDoc} authed={gate.authed} defaults={guestDefaults}
+            onSend={onMessage} onClose={() => setMsgDoc(null)} />
+        )}
+      </>
+    );
+  }
+
+  return (
+    <div className="w-full min-w-0" style={{ fontFamily: FONT }}>
+      {/* search hero */}
+      <section className="relative z-10" style={{ background: "linear-gradient(135deg, #0B3F86 0%, #0B57B7 55%, #0E7C86 100%)" }}>
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div className="absolute -right-24 -top-24 w-80 h-80 rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.07)" }} />
+          <img src="/images/landing/find-doctor.jpg" alt="" className="hidden lg:block absolute right-0 top-0 h-full w-[34%] object-cover opacity-25" style={{ maskImage: "linear-gradient(90deg, transparent, #000 60%)", WebkitMaskImage: "linear-gradient(90deg, transparent, #000 60%)" }} />
+        </div>
+        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-6 pb-8 sm:pt-8 sm:pb-10">
+          <div className="flex items-center gap-2 mb-5">
+            {onBack && (
+              <button type="button" onClick={onBack} aria-label="Back" className="w-9 h-9 rounded-xl flex items-center justify-center bg-white/15 hover:bg-white/25 transition-colors">
+                <ChevronLeft className="w-5 h-5 text-white" />
+              </button>
+            )}
+            <p className="text-[13px] font-semibold text-white/80">Home <span className="mx-1 text-white/50">/</span> <span className="text-white">Find a Doctor</span></p>
+          </div>
+          <h1 className="text-[28px] sm:text-[38px] font-extrabold tracking-[-0.03em] leading-tight text-white">Find and consult verified doctors</h1>
+          <p className="text-[14.5px] sm:text-[16px] mt-2 text-white/80">{DOCTORS.length} PMDC-registered doctors across {Object.keys(cityCounts).length} cities · in-clinic and online</p>
+
+          <form onSubmit={runSearch} className="mt-6 bg-white rounded-2xl p-2 grid grid-cols-1 md:grid-cols-[1.3fr_1fr_auto] gap-2 relative z-20" style={{ boxShadow: "0 20px 40px -20px rgba(0,0,0,0.4)" }}>
+            <SearchSuggestInput
+              icon={Stethoscope}
+              value={qDraft}
+              onChange={setQDraft}
+              onPick={(v) => { setQDraft(v); setQuery(v); }}
+              onClear={() => { setQDraft(""); setQuery(""); }}
+              placeholder="Doctor name or speciality"
+              suggestions={nameOptions}
+              srLabel="Doctor name or speciality"
+              className="md:border-r rounded-xl"
+              style={{ borderColor: CARD_BORDER }}
+            />
+            <SearchSuggestInput
+              icon={MapPin}
+              value={locDraft}
+              onChange={setLocDraft}
+              onPick={(v) => { setLocDraft(v); setLocation(v); }}
+              onClear={() => { setLocDraft(""); setLocation(""); }}
+              placeholder="City or area"
+              suggestions={cityOptions}
+              srLabel="City or area"
+              className="rounded-xl"
+            />
+            <button type="submit" className="h-12 px-7 rounded-xl text-[15px] font-bold text-white inline-flex items-center justify-center gap-2 transition-all hover:brightness-110" style={{ backgroundColor: BRAND }}>
+              <Search className="w-4 h-4" /> Find doctors
+            </button>
+          </form>
+
+          <div className="flex gap-2 mt-4 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap" style={{ scrollbarWidth: "none" }}>
+            {CITIES.filter((c) => cityCounts[c]).map((c) => {
+              const on = location.toLowerCase() === c.toLowerCase();
+              return (
+                <button key={c} type="button" onClick={() => pickCity(c)}
+                  className="shrink-0 h-9 px-3.5 rounded-full text-[13px] font-semibold inline-flex items-center gap-1.5 transition-colors"
+                  style={{ backgroundColor: on ? "#fff" : "rgba(255,255,255,0.14)", color: on ? BRAND : "#fff", border: `1px solid ${on ? "#fff" : "rgba(255,255,255,0.25)"}` }}>
+                  {c} <span className="text-[11.5px]" style={{ opacity: 0.7 }}>{cityCounts[c]}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <div ref={resultsRef} className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 scroll-mt-20">
+        {/* speciality quick picks */}
+        <div className="flex gap-2 overflow-x-auto pb-1 mb-5 -mx-4 px-4 sm:mx-0 sm:px-0" style={{ scrollbarWidth: "none" }}>
+          <button type="button" onClick={() => setF((p) => ({ ...p, specialties: [], category: "" }))}
+            className="shrink-0 h-10 px-4 rounded-xl text-[14px] font-bold inline-flex items-center gap-2"
+            style={{ backgroundColor: !f.specialties.length ? INK : "#fff", color: !f.specialties.length ? "#fff" : INK_2, border: `1px solid ${!f.specialties.length ? INK : CARD_BORDER}` }}>
+            All <span className="text-[11.5px] font-bold px-1.5 py-0.5 rounded-md" style={{ backgroundColor: !f.specialties.length ? "rgba(255,255,255,0.18)" : CREAM, color: !f.specialties.length ? "#fff" : SUBTLE }}>{base.length}</span>
+          </button>
+          {topSpecs.slice(0, 10).map((s) => {
+            const on = f.specialties.length === 1 && f.specialties[0] === s;
+            return (
+              <button key={s} type="button" onClick={() => pickSpec(s)}
+                className="shrink-0 h-10 px-4 rounded-xl text-[14px] font-bold inline-flex items-center gap-2 transition-all"
+                style={{ backgroundColor: on ? INK : "#fff", color: on ? "#fff" : INK_2, border: `1px solid ${on ? INK : CARD_BORDER}` }}>
+                {s} <span className="text-[11.5px] font-bold px-1.5 py-0.5 rounded-md" style={{ backgroundColor: on ? "rgba(255,255,255,0.18)" : CREAM, color: on ? "#fff" : SUBTLE }}>{specCounts[s]}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="grid lg:grid-cols-[264px_1fr] gap-6 items-start">
+          <aside className="hidden lg:block sticky top-[88px] rounded-2xl bg-white px-5 pt-4 pb-1 max-h-[calc(100dvh-110px)] overflow-y-auto auth-scroll" style={{ border: `1px solid ${CARD_BORDER}` }}>
+            <div className="flex items-center justify-between pb-3">
+              <p className="text-[16px] font-extrabold flex items-center gap-2" style={{ color: INK }}><SlidersHorizontal className="w-4 h-4" /> Filters</p>
+              {panelCount > 0 && <button type="button" onClick={() => setF(EMPTY_DOC_FILTERS)} className="text-[13px] font-bold" style={{ color: BRAND }}>Clear</button>}
+            </div>
+            {Panel}
+          </aside>
+
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <p className="text-[14.5px] mr-auto" style={{ color: SUBTLE }}>
+                <b className="text-[16px]" style={{ color: INK }}>{results.length}</b> {results.length === 1 ? "doctor" : "doctors"}
+                {location ? <> in <b style={{ color: INK }}>{location}</b></> : " across Pakistan"}
+              </p>
+              <button type="button" onClick={() => setFiltersOpen(true)}
+                className="lg:hidden h-10 px-3.5 rounded-xl text-[13.5px] font-bold inline-flex items-center gap-2 bg-white"
+                style={{ color: INK, border: `1px solid ${CARD_BORDER}` }}>
+                <SlidersHorizontal className="w-4 h-4" /> Filters
+                {panelCount > 0 && <span className="w-5 h-5 rounded-full text-[11px] text-white flex items-center justify-center" style={{ backgroundColor: BRAND }}>{panelCount}</span>}
+              </button>
+              <Dropdown label="Sort doctors" icon={ArrowUpDown} value={sort} onChange={setSort} options={DOC_SORTS} />
+            </div>
+
+            {chips.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 mb-4">
+                {chips.map((c) => (
+                  <span key={c.label} className="inline-flex items-center gap-1.5 h-8 pl-3 pr-1.5 rounded-full text-[12.5px] font-semibold" style={{ color: BRAND_DK, backgroundColor: BRAND_50, border: "1px solid #B9D3F2" }}>
+                    {c.icon && <c.icon className="w-3.5 h-3.5" />} {c.label}
+                    <button type="button" onClick={c.clear} aria-label={`Remove ${c.label}`} className="w-5 h-5 rounded-full flex items-center justify-center hover:bg-white"><X className="w-3 h-3" /></button>
+                  </span>
+                ))}
+                <button type="button" onClick={clearAll} className="text-[13px] font-bold px-2 h-8" style={{ color: RED }}>Clear all</button>
+              </div>
+            )}
+
+            {results.length === 0 ? (
+              <div className="rounded-2xl bg-white px-6 py-14 text-center" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                <span className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: BRAND_50 }}>
+                  <Stethoscope className="w-6 h-6" style={{ color: BRAND }} />
+                </span>
+                <p className="text-[17px] font-bold" style={{ color: INK }}>No doctors match your search</p>
+                <p className="text-[14px] mt-1 mb-5" style={{ color: SUBTLE }}>Try a nearby city, another speciality, or fewer filters.</p>
+                <button type="button" onClick={clearAll} className="h-11 px-5 rounded-xl text-[14px] font-bold text-white" style={{ backgroundColor: BRAND }}>Clear all filters</button>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  {shown.map((d) => {
+                    const saved = isSaved("doctor", d.id);
+                    const today = /^today/i.test(d.slots || "");
+                    const avatarBg = DOC_COLORS[parseInt(String(d.id).replace(/\D/g, ""), 10) % DOC_COLORS.length];
+                    return (
+                      <article key={d.id} role="button" tabIndex={0}
+                        onClick={() => setOpenDoc(d)}
+                        onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setOpenDoc(d); } }}
+                        className="group rounded-2xl bg-white p-4 sm:p-5 flex flex-col cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+                        style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: SOFT_SHADOW }}>
+                        <div className="flex items-start gap-3.5">
+                          <span className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 text-white font-extrabold text-[18px]" style={{ backgroundColor: avatarBg }}>
+                            {initialsOf(d.name)}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[16px] font-bold leading-snug flex items-center gap-1.5 group-hover:text-[#0B57B7] transition-colors" style={{ color: INK }}>
+                              <span className="truncate">{d.name}</span>
+                              {d.verified && <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: GREEN }} />}
+                            </p>
+                            <p className="text-[14px] font-semibold mt-0.5" style={{ color: BRAND }}>{d.specialty}</p>
+                            <p className="text-[12.5px] mt-0.5 truncate" style={{ color: SUBTLE }}>{d.qual}</p>
+                          </div>
+                          <button type="button" onClick={(e) => { e.stopPropagation(); onToggleSave("doctor", d); }}
+                            aria-label={saved ? "Remove from saved" : "Save doctor"}
+                            className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors hover:bg-[#F5F7FA]"
+                            style={{ border: `1px solid ${saved ? "#B9D3F2" : CARD_BORDER}`, backgroundColor: saved ? BRAND_50 : "#fff" }}>
+                            <Bookmark className="w-4 h-4" fill={saved ? BRAND : "none"} stroke={saved ? BRAND : SUBTLE} />
+                          </button>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3.5 text-[13px]" style={{ color: INK_2 }}>
+                          <span className="inline-flex items-center gap-1 font-bold" style={{ color: INK }}>
+                            <Star className="w-4 h-4" fill={STAR} stroke="none" /> {d.rating}
+                            <span className="font-medium" style={{ color: SUBTLE }}>({d.reviews})</span>
+                          </span>
+                          <span className="inline-flex items-center gap-1.5"><Briefcase className="w-4 h-4" style={{ color: FAINT }} />{d.exp}</span>
+                          <span className="inline-flex items-center gap-1.5 min-w-0"><MapPin className="w-4 h-4 shrink-0" style={{ color: FAINT }} /><span className="truncate">{d.area}, {d.city}</span></span>
+                        </div>
+
+                        <div className="flex flex-wrap gap-1.5 mt-3">
+                          <span className="text-[11.5px] font-bold px-2 py-1 rounded-md inline-flex items-center gap-1" style={{ color: today ? GREEN : INK_2, backgroundColor: today ? GREEN_TINT : CREAM }}>
+                            <CalendarDays className="w-3.5 h-3.5" /> {d.slots}
+                          </span>
+                          {d.online && <span className="text-[11.5px] font-bold px-2 py-1 rounded-md" style={{ color: BRAND, backgroundColor: BRAND_50 }}>Online consult</span>}
+                          <span className="text-[11.5px] font-semibold px-2 py-1 rounded-md truncate max-w-[200px]" style={{ color: INK_2, backgroundColor: CREAM }}>{d.clinic}</span>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-3 mt-4 pt-3.5" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+                          <div>
+                            <p className="text-[11.5px] font-semibold uppercase tracking-[0.06em]" style={{ color: SUBTLE }}>Fee</p>
+                            <p className="text-[17px] font-extrabold leading-tight" style={{ color: GREEN }}>PKR {d.fee}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {d.showPhone && d.phone && (
+                              <a href={doctorWaLink(d)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
+                                aria-label={`WhatsApp ${d.name}`}
+                                className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ border: "1.5px solid #1DA851" }}>
+                                <WhatsAppGlyph />
+                              </a>
+                            )}
+                            <button type="button" onClick={(e) => { e.stopPropagation(); setMsgDoc(d); }}
+                              className="h-10 px-4 rounded-xl text-[13.5px] font-bold text-white inline-flex items-center gap-1.5 transition-all hover:brightness-110"
+                              style={{ backgroundColor: BRAND }}>
+                              <MessageSquareText className="w-4 h-4" /> Consult
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+                {results.length > shown.length && (
+                  <div className="text-center mt-6">
+                    <button type="button" onClick={() => setLimit((l) => l + DOC_PAGE_SIZE)}
+                      className="h-11 px-6 rounded-xl text-[14px] font-bold bg-white transition-shadow hover:shadow-md" style={{ color: BRAND, border: `1.5px solid ${BRAND}` }}>
+                      Show more doctors ({results.length - shown.length} left)
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {filtersOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Filters">
+          <div className="absolute inset-0 bg-black/45" onClick={() => setFiltersOpen(false)} />
+          <div className="absolute inset-x-0 bottom-0 max-h-[88dvh] bg-white rounded-t-3xl flex flex-col auth-step">
+            <div className="flex items-center justify-between px-5 h-14 shrink-0" style={{ borderBottom: `1px solid ${CARD_BORDER}` }}>
+              <p className="text-[17px] font-extrabold" style={{ color: INK }}>Filters</p>
+              <div className="flex items-center gap-2">
+                {panelCount > 0 && <button type="button" onClick={() => setF(EMPTY_DOC_FILTERS)} className="text-[13.5px] font-bold px-2" style={{ color: BRAND }}>Clear</button>}
+                <button type="button" onClick={() => setFiltersOpen(false)} aria-label="Close filters" className="w-9 h-9 rounded-full flex items-center justify-center" style={{ backgroundColor: CREAM }}>
+                  <X className="w-5 h-5" style={{ color: INK }} />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 -mt-px">{Panel}</div>
+            <div className="p-4 shrink-0" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+              <button type="button" onClick={() => setFiltersOpen(false)} className="w-full h-12 rounded-xl text-[15px] font-bold text-white" style={{ backgroundColor: BRAND }}>
+                Show {results.length} {results.length === 1 ? "doctor" : "doctors"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
+
       {msgDoc && (
         <DoctorMessageSheet doctor={msgDoc} authed={gate.authed} defaults={guestDefaults}
           onSend={onMessage} onClose={() => setMsgDoc(null)} />
@@ -6328,92 +8596,104 @@ function ReportSheet({ target, onClose, onSubmit }) {
   const [done, setDone] = useState(false);
   const reasons = REPORT_REASONS[target.type] || REPORT_REASONS.post;
 
+  useEffect(() => {
+    const onKey = (e) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   const submit = () => {
     onSubmit({ reason, details: details.trim() });
     setDone(true);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center">
-      <div className="absolute inset-0 bg-black/45" onClick={onClose} />
-      <div className="relative w-full max-w-[390px] bg-white rounded-t-3xl flex flex-col" style={{ maxHeight: "82vh" }}>
-        <div className="flex justify-center pt-2.5 pb-1"><span className="w-10 h-1 rounded-full" style={{ backgroundColor: "#D3D9EC" }} /></div>
-        <div className="flex items-center justify-between px-5 pb-3 border-b shrink-0" style={{ borderColor: CARD_BORDER }}>
-          <span className="w-8" />
-          <p className="font-bold text-[15px]" style={{ color: INK }}>{done ? "Report sent" : "Report"}</p>
-          <button onClick={onClose} aria-label="Close"><X className="w-5 h-5" style={{ color: SUBTLE }} /></button>
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-6" role="dialog" aria-modal="true" aria-label="Report">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={onClose} />
+      <div className="relative w-full max-w-[760px] max-h-[92dvh] bg-white rounded-3xl flex flex-col overflow-hidden auth-step"
+        style={{ boxShadow: "0 30px 80px -20px rgba(16,24,40,0.45)", fontFamily: FONT }}>
+        {/* header */}
+        <div className="flex items-center gap-3 px-5 sm:px-7 pt-5 pb-4 shrink-0" style={{ borderBottom: `1px solid ${CARD_BORDER}` }}>
+          <span className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: done ? GREEN_TINT : RED_TINT }}>
+            {done ? <Check className="w-5 h-5" strokeWidth={3} style={{ color: GREEN }} /> : <Flag className="w-5 h-5" style={{ color: RED }} />}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-extrabold text-[18px] leading-tight" style={{ color: INK }}>{done ? "Report sent" : `Report this ${REPORT_TYPE_LABEL[target.type] || "post"}`}</p>
+            <p className="text-[13.5px] truncate" style={{ color: SUBTLE }}>
+              <span className="font-semibold" style={{ color: INK_2 }}>{target.title}</span>{target.subtitle ? ` · ${target.subtitle}` : ""}
+            </p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close" className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-colors hover:bg-[#EEF1F5]" style={{ backgroundColor: CREAM }}>
+            <X className="w-5 h-5" style={{ color: INK }} />
+          </button>
         </div>
 
         {done ? (
-          <div className="px-5 py-8 text-center">
-            <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3" style={{ backgroundColor: GREEN_TINT }}>
-              <Check className="w-7 h-7" strokeWidth={3} style={{ color: GREEN }} />
-            </div>
-            <p className="text-[15px] font-bold" style={{ color: INK }}>Thanks for telling us</p>
-            <p className="text-[13px] mt-1.5 leading-snug" style={{ color: SUBTLE }}>
-              Our team will review this {REPORT_TYPE_LABEL[target.type]}. We don't share who reported it.
-            </p>
-            <div className="rounded-xl p-3 mt-4 text-left" style={{ backgroundColor: AMBER_TINT }}>
-              <p className="text-[12.5px] font-bold mb-1" style={{ color: AMBER }}>Stay safe</p>
-              <p className="text-[12.5px] leading-relaxed" style={{ color: "#6B4B22" }}>
-                PakMed jobs never require an upfront payment. Never send money to secure a position or reserve an item.
+          <div className="px-5 sm:px-7 py-7 grid sm:grid-cols-[1fr_1fr] gap-4 items-start">
+            <div>
+              <p className="text-[17px] font-extrabold" style={{ color: INK }}>Thanks for telling us</p>
+              <p className="text-[14.5px] mt-1.5 leading-relaxed" style={{ color: SUBTLE }}>
+                Our team will review this {REPORT_TYPE_LABEL[target.type]}. We never share who reported it.
               </p>
             </div>
-            <button onClick={onClose} className="w-full mt-4 py-3 rounded-full font-semibold text-[14px]" style={{ backgroundColor: NAVY, color: "white" }}>
-              Done
-            </button>
+            <div className="rounded-2xl p-4 flex items-start gap-3" style={{ backgroundColor: AMBER_TINT }}>
+              <ShieldCheck className="w-5 h-5 shrink-0 mt-px" style={{ color: AMBER }} />
+              <p className="text-[13.5px] leading-relaxed" style={{ color: "#6B4B22" }}>
+                <strong>Stay safe:</strong> PakMed jobs never require an upfront payment. Never send money to secure a position or reserve an item.
+              </p>
+            </div>
+            <div className="sm:col-span-2 flex justify-end">
+              <button type="button" onClick={onClose} className="h-11 px-7 rounded-xl font-bold text-[14.5px] text-white" style={{ backgroundColor: BRAND }}>Done</button>
+            </div>
           </div>
         ) : (
           <>
-            <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3">
-              <div className="rounded-xl p-3 mb-3" style={{ backgroundColor: "#F4F6FC" }}>
-                <p className="text-[13px] font-semibold mb-0.5" style={{ color: INK_2 }}>Reporting</p>
-                <p className="text-[13.5px] font-semibold" style={{ color: INK }}>{target.title}</p>
-                {target.subtitle && <p className="text-[12px] mt-0.5" style={{ color: SUBTLE }}>{target.subtitle}</p>}
+            <div className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-7 py-5">
+              <p className="text-[14.5px] font-bold mb-3" style={{ color: INK }}>Why are you reporting this?</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {reasons.map((r) => {
+                  const on = reason === r;
+                  return (
+                    <button key={r} type="button" onClick={() => setReason(r)} aria-pressed={on}
+                      className="w-full flex items-center gap-3 px-4 min-h-[52px] py-2.5 rounded-xl text-left transition-colors"
+                      style={{ backgroundColor: on ? RED_TINT : "#fff", border: `1.5px solid ${on ? RED : CARD_BORDER}` }}>
+                      <span className="w-[18px] h-[18px] rounded-full shrink-0 flex items-center justify-center" style={{ border: `2px solid ${on ? RED : "#C7CDDD"}` }}>
+                        {on && <span className="w-2 h-2 rounded-full" style={{ backgroundColor: RED }} />}
+                      </span>
+                      <span className="text-[14.5px] leading-snug" style={{ color: INK, fontWeight: on ? 600 : 500 }}>{r}</span>
+                    </button>
+                  );
+                })}
               </div>
 
-              <p className="text-[13px] font-semibold mb-1.5" style={{ color: INK_2 }}>Why are you reporting this?</p>
-              <div className="flex flex-col gap-1.5 mb-3">
-                {reasons.map((r) => (
-                  <button
-                    key={r}
-                    onClick={() => setReason(r)}
-                    className="w-full flex items-center gap-2.5 px-3.5 py-3 rounded-xl text-left transition-colors"
-                    style={{ backgroundColor: reason === r ? RED_TINT : "white", border: `1.5px solid ${reason === r ? RED : CARD_BORDER}` }}
-                  >
-                    <span className="w-4 h-4 rounded-full shrink-0 flex items-center justify-center" style={{ border: `2px solid ${reason === r ? RED : "#C7CDDD"}` }}>
-                      {reason === r && <span className="w-2 h-2 rounded-full" style={{ backgroundColor: RED }} />}
-                    </span>
-                    <span className="text-[13.5px]" style={{ color: INK }}>{r}</span>
-                  </button>
-                ))}
-              </div>
-
-              <p className="text-[13px] font-semibold mb-1.5" style={{ color: INK_2 }}>Anything else? (optional)</p>
-              <textarea
-                value={details}
-                onChange={(e) => setDetails(e.target.value)}
-                rows={3}
-                placeholder="Add any detail that helps us check this"
-                className="w-full text-[14px] rounded-xl px-3.5 py-3 outline-none resize-none"
-                style={{ backgroundColor: "#F4F6FC", color: INK, border: `1px solid ${CARD_BORDER}` }}
-              />
-
-              <p className="text-[11.5px] mt-3 leading-snug" style={{ color: SUBTLE }}>
-                Reports are confidential. The person you're reporting won't know who flagged it.
-                False reports may affect your own account.
-              </p>
+              <label className="block mt-5">
+                <span className="text-[14.5px] font-bold" style={{ color: INK }}>Anything else? <span className="font-medium" style={{ color: FAINT }}>(optional)</span></span>
+                <textarea
+                  value={details}
+                  onChange={(e) => setDetails(e.target.value)}
+                  rows={2}
+                  placeholder="Add any detail that helps us check this"
+                  className="pm-input mt-2 w-full text-[15px] rounded-xl px-4 py-3 outline-none resize-none bg-white"
+                  style={{ color: INK, border: `1.5px solid ${CARD_BORDER}` }}
+                />
+              </label>
             </div>
 
-            <div className="px-4 py-3 border-t shrink-0" style={{ borderColor: CARD_BORDER }}>
-              <button
-                onClick={submit}
-                disabled={!reason}
-                className="w-full py-3.5 rounded-full font-semibold text-[14px] transition-opacity"
-                style={{ backgroundColor: RED, color: "white", opacity: reason ? 1 : 0.4 }}
-              >
-                Submit report
-              </button>
+            <div className="px-5 sm:px-7 py-4 shrink-0 flex flex-col-reverse sm:flex-row sm:items-center gap-3" style={{ borderTop: `1px solid ${CARD_BORDER}`, backgroundColor: "#FCFCFD" }}>
+              <p className="flex-1 text-[12.5px] leading-snug flex items-start gap-2" style={{ color: SUBTLE }}>
+                <ShieldCheck className="w-4 h-4 shrink-0 mt-px" />
+                Reports are confidential. False reports may affect your own account.
+              </p>
+              <div className="flex gap-2 shrink-0">
+                <button type="button" onClick={onClose} className="flex-1 sm:flex-none h-11 px-5 rounded-xl font-bold text-[14.5px]" style={{ color: INK_2, border: `1px solid ${CARD_BORDER}` }}>
+                  Cancel
+                </button>
+                <button type="button" onClick={submit} disabled={!reason}
+                  className="flex-1 sm:flex-none h-11 px-6 rounded-xl font-bold text-[14.5px] text-white transition-opacity disabled:cursor-not-allowed"
+                  style={{ backgroundColor: RED, opacity: reason ? 1 : 0.45 }}>
+                  Submit report
+                </button>
+              </div>
             </div>
           </>
         )}
@@ -7590,175 +9870,633 @@ function QuickDetailsSheet({ type, profile, onChange, onClose, onDone, actionLab
    FIND A HOSPITAL — public directory, auto-filled from Employer profiles at 70%
    ========================================================= */
 const SEED_FACILITIES = [
-  { id: "f1", name: "Allied Hospital", type: "Hospital", city: "Faisalabad", area: "Jail Road", address: "Jail Road, near Govt College", phone: "041 9210080", services: ["Emergency", "OPD", "Surgery", "Radiology", "ICU"], hours: "24 hours", verified: true, hiring: 4 },
-  { id: "f2", name: "Noor Diagnostic Centre", type: "Diagnostic Lab", city: "Faisalabad", area: "Susan Road", address: "Plaza 12, Susan Road", phone: "0321 6639900", services: ["Blood tests", "Ultrasound", "X-Ray"], hours: "8 am – 10 pm", verified: true, hiring: 1 },
-  { id: "f3", name: "City Heart Clinic", type: "Clinic", city: "Lahore", area: "Jail Road", address: "45-B Jail Road", phone: "042 3577 1100", services: ["Cardiology", "ECG", "Echo"], hours: "Mon – Sat, 9 am – 9 pm", verified: true, hiring: 2 },
-  { id: "f4", name: "Aga Care Hospital", type: "Hospital", city: "Karachi", area: "Gulshan-e-Iqbal", address: "Block 13-D, Gulshan-e-Iqbal", phone: "021 3480 2200", services: ["Emergency", "Maternity", "Paediatrics", "OPD"], hours: "24 hours", verified: true, hiring: 3 },
-  { id: "f5", name: "Al-Shifa Pharmacy", type: "Pharmacy", city: "Faisalabad", area: "D Ground", address: "Shop 3, D Ground", phone: "0300 1234567", services: ["Medicines", "Home delivery"], hours: "24 hours", verified: false, hiring: 0 },
-  { id: "f6", name: "Shifa Wellness", type: "Hospital", city: "Islamabad", area: "Blue Area", address: "Jinnah Avenue, Blue Area", phone: "051 2874400", services: ["OPD", "Surgery", "Physiotherapy"], hours: "8 am – 11 pm", verified: true, hiring: 1 },
-  { id: "f7", name: "Bright Smile Dental", type: "Clinic", city: "Multan", area: "Bosan Road", address: "Bosan Road, near Chungi 9", phone: "", services: ["Dentistry", "Orthodontics"], hours: "Mon – Sat, 4 – 10 pm", verified: false, hiring: 0 },
+  { id: "f1", name: "Allied Hospital", type: "Hospital", city: "Faisalabad", area: "Jail Road", address: "Jail Road, near Govt College", phone: "041 9210080", services: ["Emergency", "OPD", "Surgery", "Radiology", "ICU"], hours: "24 hours", verified: true, hiring: 4, rating: 4.4, reviews: 512 },
+  { id: "f2", name: "Noor Diagnostic Centre", type: "Diagnostic Lab", city: "Faisalabad", area: "Susan Road", address: "Plaza 12, Susan Road", phone: "0321 6639900", services: ["Blood tests", "Ultrasound", "X-Ray"], hours: "8 am – 10 pm", verified: true, hiring: 1, rating: 4.6, reviews: 188 },
+  { id: "f3", name: "City Heart Clinic", type: "Clinic", city: "Lahore", area: "Jail Road", address: "45-B Jail Road", phone: "042 3577 1100", services: ["Cardiology", "ECG", "Echo"], hours: "Mon – Sat, 9 am – 9 pm", verified: true, hiring: 2, rating: 4.8, reviews: 402 },
+  { id: "f4", name: "Aga Care Hospital", type: "Hospital", city: "Karachi", area: "Gulshan-e-Iqbal", address: "Block 13-D, Gulshan-e-Iqbal", phone: "021 3480 2200", services: ["Emergency", "Maternity", "Paediatrics", "OPD"], hours: "24 hours", verified: true, hiring: 3, rating: 4.5, reviews: 731 },
+  { id: "f5", name: "Al-Shifa Pharmacy", type: "Pharmacy", city: "Faisalabad", area: "D Ground", address: "Shop 3, D Ground", phone: "0300 1234567", services: ["Medicines", "Home delivery"], hours: "24 hours", verified: false, hiring: 0, rating: 4.2, reviews: 64 },
+  { id: "f6", name: "Shifa Wellness", type: "Hospital", city: "Islamabad", area: "Blue Area", address: "Jinnah Avenue, Blue Area", phone: "051 2874400", services: ["OPD", "Surgery", "Physiotherapy"], hours: "8 am – 11 pm", verified: true, hiring: 1, rating: 4.6, reviews: 297 },
+  { id: "f7", name: "Bright Smile Dental", type: "Clinic", city: "Multan", area: "Bosan Road", address: "Bosan Road, near Chungi 9", phone: "", services: ["Dentistry", "Orthodontics"], hours: "Mon – Sat, 4 – 10 pm", verified: false, hiring: 0, rating: 4.3, reviews: 52 },
+  { id: "f8", name: "Margalla Medical Centre", type: "Hospital", city: "Islamabad", area: "F-8 Markaz", address: "F-8 Markaz, Islamabad", phone: "", services: ["Emergency", "OPD", "Surgery", "Radiology", "ICU", "Maternity"], hours: "24 hours", verified: true, rating: 4.7, reviews: 618 },
+  { id: "f9", name: "Seaview Medical Centre", type: "Hospital", city: "Karachi", area: "Clifton Block 5", address: "Block 5, Clifton", phone: "", services: ["Emergency", "OPD", "Cardiology", "ICU"], hours: "24 hours", verified: true, rating: 4.6, reviews: 455 },
+  { id: "f10", name: "Johar Town Medical Complex", type: "Hospital", city: "Lahore", area: "Johar Town", address: "Main Boulevard, Johar Town", phone: "", services: ["Emergency", "OPD", "Surgery", "Paediatrics"], hours: "24 hours", verified: true, rating: 4.5, reviews: 389 },
+  { id: "f11", name: "Capital Diagnostics", type: "Diagnostic Lab", city: "Islamabad", area: "G-9 Markaz", address: "G-9 Markaz, Islamabad", phone: "", services: ["Blood tests", "X-Ray", "CT Scan", "MRI"], hours: "7 am – 11 pm", verified: true, rating: 4.7, reviews: 266 },
+  { id: "f12", name: "Saddar Family Pharmacy", type: "Pharmacy", city: "Karachi", area: "Saddar", address: "Abdullah Haroon Road, Saddar", phone: "", services: ["Medicines", "Home delivery", "BP check"], hours: "24 hours", verified: true, rating: 4.4, reviews: 141 },
+  { id: "f13", name: "Khyber Valley Hospital", type: "Hospital", city: "Peshawar", area: "Hayatabad Phase 3", address: "Phase 3, Hayatabad", phone: "", services: ["Emergency", "OPD", "Surgery", "Orthopaedics"], hours: "24 hours", verified: true, rating: 4.5, reviews: 322 },
+  { id: "f14", name: "Bolan Care Hospital", type: "Hospital", city: "Quetta", area: "Jinnah Road", address: "Jinnah Road, Quetta", phone: "", services: ["Emergency", "OPD", "Maternity"], hours: "24 hours", verified: true, rating: 4.3, reviews: 174 },
+  { id: "f15", name: "Latifabad Medical Centre", type: "Hospital", city: "Hyderabad", area: "Latifabad Unit 7", address: "Unit 7, Latifabad", phone: "", services: ["Emergency", "OPD", "Paediatrics"], hours: "24 hours", verified: false, rating: 4.1, reviews: 98 },
+  { id: "f16", name: "Multan Kidney Centre", type: "Hospital", city: "Multan", area: "Bosan Road", address: "Bosan Road, Multan", phone: "", services: ["Nephrology", "Dialysis", "OPD"], hours: "8 am – 10 pm", verified: true, rating: 4.7, reviews: 213 },
+  { id: "f17", name: "Hayatabad Medical Lab", type: "Diagnostic Lab", city: "Peshawar", area: "Hayatabad Phase 5", address: "Phase 5, Hayatabad", phone: "", services: ["Blood tests", "Ultrasound"], hours: "24 hours", verified: true, rating: 4.4, reviews: 120 },
+  { id: "f18", name: "Gulberg Heart & Vascular", type: "Hospital", city: "Lahore", area: "Gulberg III", address: "Main Boulevard, Gulberg III", phone: "", services: ["Cardiology", "ECG", "Echo", "ICU"], hours: "24 hours", verified: true, rating: 4.8, reviews: 344 },
+  { id: "f19", name: "Model Town Dental Studio", type: "Clinic", city: "Lahore", area: "Model Town", address: "Block J, Model Town", phone: "", services: ["Dentistry", "Orthodontics", "Implants"], hours: "Mon – Sat, 2 – 10 pm", verified: true, rating: 4.7, reviews: 158 },
+  { id: "f20", name: "Sialkot Eye Clinic", type: "Clinic", city: "Sialkot", area: "Paris Road", address: "Paris Road, Sialkot", phone: "", services: ["Ophthalmology", "Cataract surgery"], hours: "Mon – Sat, 10 am – 8 pm", verified: true, rating: 4.6, reviews: 87 },
+  { id: "f21", name: "Satellite Town Pharmacy", type: "Pharmacy", city: "Rawalpindi", area: "Satellite Town", address: "Commercial Market, Satellite Town", phone: "", services: ["Medicines", "Home delivery"], hours: "8 am – 2 am", verified: false, rating: 4.2, reviews: 73 },
+  { id: "f22", name: "Lyallpur General Hospital", type: "Hospital", city: "Faisalabad", area: "Peoples Colony", address: "Peoples Colony No. 1", phone: "", services: ["Emergency", "OPD", "Surgery", "Radiology"], hours: "24 hours", verified: true, rating: 4.4, reviews: 266 },
+  { id: "f23", name: "Cholistan Health Centre", type: "Hospital", city: "Bahawalpur", area: "Model Town A", address: "Model Town A, Bahawalpur", phone: "", services: ["OPD", "Maternity", "Blood tests"], hours: "8 am – 8 pm", verified: true, rating: 4.3, reviews: 91 },
+  { id: "f24", name: "Korangi Community Hospital", type: "Hospital", city: "Karachi", area: "Korangi Industrial Area", address: "Sector 23, Korangi", phone: "", services: ["Emergency", "OPD", "Maternity"], hours: "24 hours", verified: true, rating: 4.2, reviews: 204 },
 ];
 
 const FACILITY_KINDS = ["All", "Hospital", "Clinic", "Diagnostic Lab", "Pharmacy"];
+const FAC_TYPES = [
+  { key: "Hospital", label: "Hospitals", icon: Building2 },
+  { key: "Clinic", label: "Clinics", icon: Stethoscope },
+  { key: "Diagnostic Lab", label: "Diagnostic labs", icon: FlaskConical },
+  { key: "Pharmacy", label: "Pharmacies", icon: Pill },
+];
+const FAC_IMGS = {
+  Hospital: ["/images/facility/hospital.jpg", "/images/facility/ward.jpg", "/images/facility/operating-room.jpg"],
+  Clinic: ["/images/facility/clinic.jpg"],
+  "Diagnostic Lab": ["/images/facility/lab.jpg"],
+  Pharmacy: ["/images/facility/pharmacy.jpg", "/images/facility/pharmacy-shelves.jpg"],
+};
+const facImage = (f) => {
+  if (f.photos && f.photos.length) return f.photos[0];
+  const list = FAC_IMGS[f.type] || FAC_IMGS.Hospital;
+  return list[(parseInt(String(f.id).replace(/\D/g, ""), 10) || 0) % list.length];
+};
+const facIs24 = (f) => /24/.test(f.hours || "");
+const serviceIcon = (sv = "") => {
+  const s = sv.toLowerCase();
+  if (s.includes("emergency")) return Siren;
+  if (s.includes("icu") || s.includes("cardio") || s.includes("ecg") || s.includes("echo")) return HeartPulse;
+  if (s.includes("surgery") || s.includes("ortho")) return Scissors;
+  if (s.includes("ray") || s.includes("ct") || s.includes("mri") || s.includes("ultra") || s.includes("radio")) return ScanLine;
+  if (s.includes("matern") || s.includes("paedi") || s.includes("pedia")) return Baby;
+  if (s.includes("medicine") || s.includes("pharm")) return Pill;
+  if (s.includes("blood") || s.includes("lab") || s.includes("dialysis") || s.includes("nephro")) return TestTube;
+  if (s.includes("dent") || s.includes("ortho") || s.includes("implant")) return Smile;
+  if (s.includes("eye") || s.includes("ophthal") || s.includes("cataract")) return Eye;
+  if (s.includes("physio")) return Activity;
+  if (s.includes("delivery")) return Truck;
+  return Stethoscope;
+};
+const FAC_SORTS = [
+  { value: "recommended", label: "Recommended" },
+  { value: "rating", label: "Highest rated" },
+  { value: "name", label: "Name A–Z" },
+];
+const EMPTY_FAC_FILTERS = { type: "", services: [], open24: false, verified: false, hiring: false };
+
+function FacilityCard({ f, saved, jobs, onOpen, onToggleSave }) {
+  return (
+    <article role="button" tabIndex={0} onClick={() => onOpen(f)}
+      onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onOpen(f); } }}
+      className="group h-full rounded-2xl bg-white overflow-hidden flex flex-col cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+      style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: SOFT_SHADOW }}>
+      <div className="relative h-36 overflow-hidden" style={{ backgroundColor: CREAM }}>
+        <img src={facImage(f)} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+        <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(16,24,40,0) 40%, rgba(16,24,40,0.55) 100%)" }} />
+        <span className="absolute left-3 top-3 text-[11px] font-bold px-2 py-1 rounded-md" style={{ color: TEAL, backgroundColor: "#fff" }}>{f.type}</span>
+        {f.mine
+          ? <span className="absolute right-3 top-3 text-[11px] font-bold px-2 py-1 rounded-md text-white" style={{ backgroundColor: BRAND }}>Yours</span>
+          : (
+            <button type="button" onClick={(e) => { e.stopPropagation(); onToggleSave(f); }} aria-label={saved ? "Remove from saved" : "Save"}
+              className="absolute right-3 top-3 w-9 h-9 rounded-full flex items-center justify-center bg-white/95 transition-transform hover:scale-105">
+              <Bookmark className="w-4 h-4" fill={saved ? BRAND : "none"} stroke={saved ? BRAND : INK_2} />
+            </button>
+          )}
+        {facIs24(f) && (
+          <span className="absolute left-3 bottom-3 inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-md" style={{ color: "#fff", backgroundColor: "rgba(18,128,92,0.92)" }}>
+            <Clock className="w-3 h-3" /> Open 24 hours
+          </span>
+        )}
+      </div>
+      <div className="p-4 flex-1 flex flex-col">
+        <p className="text-[16px] font-bold leading-snug flex items-center gap-1.5 group-hover:text-[#0E7C86] transition-colors" style={{ color: INK }}>
+          <span className="truncate">{f.name}</span>
+          {f.verified && <BadgeCheck className="w-4 h-4 shrink-0" style={{ color: GREEN }} />}
+        </p>
+        <p className="text-[13px] mt-1 flex items-center gap-1.5 truncate" style={{ color: SUBTLE }}>
+          <MapPin className="w-3.5 h-3.5 shrink-0" /> {[f.area, f.city].filter(Boolean).join(", ")}
+        </p>
+        {f.rating && (
+          <p className="text-[13px] mt-1.5 inline-flex items-center gap-1" style={{ color: INK_2 }}>
+            <Star className="w-3.5 h-3.5" fill={STAR} stroke="none" /> <b style={{ color: INK }}>{f.rating}</b> <span style={{ color: SUBTLE }}>({f.reviews} reviews)</span>
+          </p>
+        )}
+        <div className="flex flex-wrap gap-1.5 mt-3">
+          {(f.services || []).slice(0, 3).map((sv) => (
+            <span key={sv} className="text-[11.5px] font-semibold px-2 py-1 rounded-md" style={{ color: TEAL, backgroundColor: TEAL_TINT }}>{sv}</span>
+          ))}
+          {(f.services || []).length > 3 && <span className="text-[11.5px] font-semibold px-2 py-1 rounded-md" style={{ color: SUBTLE, backgroundColor: CREAM }}>+{f.services.length - 3}</span>}
+        </div>
+        <span className="flex-1" />
+        <div className="flex items-center justify-between gap-2 mt-4 pt-3 text-[12.5px]" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+          {jobs > 0
+            ? <span className="inline-flex items-center gap-1 font-bold" style={{ color: GREEN }}><Briefcase className="w-3.5 h-3.5" /> Hiring · {jobs} {jobs === 1 ? "job" : "jobs"}</span>
+            : <span style={{ color: FAINT }}>{f.hours || "Hours on request"}</span>}
+          <span className="font-bold inline-flex items-center gap-1" style={{ color: TEAL }}>View <ArrowRight className="w-3.5 h-3.5" /></span>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function FacilityPage({ f, all, jobs, onBack, onOpen, saved, onToggleSave, onMessage, onOpenJobs, jobsCount }) {
+  const [shareOpen, setShareOpen] = useState(false);
+  const trackRef = useRef(null);
+  useEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: "instant" }); }, [f.id]);
+  const doctorsHere = DOCTORS.filter((d) => d.clinic === f.name || (d.city === f.city && (f.services || []).some((s) => d.specialty.toLowerCase().startsWith(s.toLowerCase().slice(0, 5))))).slice(0, 4);
+  const nearby = all.filter((x) => x.id !== f.id).sort((a, b) => (b.city === f.city) - (a.city === f.city) || (b.rating || 0) - (a.rating || 0)).slice(0, 10);
+  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${f.name}, ${f.address || f.area || ""}, ${f.city}`)}`;
+  const slide = (dir) => { const el = trackRef.current; if (el) el.scrollBy({ left: dir * el.clientWidth * 0.9, behavior: "smooth" }); };
+  const Card = ({ title, children }) => (
+    <section className="rounded-2xl bg-white p-5 sm:p-6" style={{ border: `1px solid ${CARD_BORDER}` }}>
+      {title && <h2 className="text-[17px] font-extrabold tracking-[-0.01em] mb-4" style={{ color: INK }}>{title}</h2>}
+      {children}
+    </section>
+  );
+
+  return (
+    <div className="w-full min-w-0 page-enter" style={{ fontFamily: FONT }}>
+      <section className="relative h-[220px] sm:h-[280px] overflow-hidden" style={{ backgroundColor: "#0A5A61" }}>
+        <img src={facImage(f)} alt="" className="absolute inset-0 w-full h-full object-cover" />
+        <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(10,90,97,0.35) 0%, rgba(6,38,79,0.85) 100%)" }} />
+        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-5">
+          <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl text-[13.5px] font-semibold text-white bg-white/15 hover:bg-white/25 backdrop-blur transition-colors">
+            <ChevronLeft className="w-4 h-4" /> All facilities
+          </button>
+        </div>
+      </section>
+
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 -mt-20 sm:-mt-24 pb-12 relative">
+        <div className="rounded-3xl bg-white p-5 sm:p-7" style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: "0 20px 50px -24px rgba(16,24,40,0.3)" }}>
+          <div className="flex flex-col md:flex-row md:items-center gap-5">
+            <span className="w-20 h-20 rounded-3xl flex items-center justify-center shrink-0" style={{ backgroundColor: TEAL_TINT }}>
+              {(() => { const T = (FAC_TYPES.find((t) => t.key === f.type) || FAC_TYPES[0]).icon; return <T className="w-10 h-10" style={{ color: TEAL }} />; })()}
+            </span>
+            <div className="min-w-0 flex-1">
+              <h1 className="text-[24px] sm:text-[30px] font-extrabold tracking-[-0.03em] leading-tight flex items-center gap-2 flex-wrap" style={{ color: INK }}>
+                {f.name}
+                {f.verified
+                  ? <span className="inline-flex items-center gap-1 text-[12.5px] font-bold px-2.5 py-1 rounded-full" style={{ color: GREEN, backgroundColor: GREEN_TINT }}><BadgeCheck className="w-4 h-4" /> Verified</span>
+                  : <span className="text-[12px] font-bold px-2.5 py-1 rounded-full" style={{ color: AMBER, backgroundColor: AMBER_TINT }}>Not yet verified</span>}
+              </h1>
+              <p className="text-[15.5px] font-bold mt-1" style={{ color: TEAL }}>{f.type}</p>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 text-[14px]" style={{ color: INK_2 }}>
+                <span className="inline-flex items-center gap-1.5"><MapPin className="w-4 h-4" style={{ color: FAINT }} />{f.address || [f.area, f.city].filter(Boolean).join(", ")}{f.address ? `, ${f.city}` : ""}</span>
+                {f.rating && <span className="inline-flex items-center gap-1"><Star className="w-4 h-4" fill={STAR} stroke="none" /><b style={{ color: INK }}>{f.rating}</b> <span style={{ color: SUBTLE }}>({f.reviews})</span></span>}
+              </div>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              {!f.mine && (
+                <button type="button" onClick={onToggleSave} aria-label={saved ? "Remove from saved" : "Save"}
+                  className="w-11 h-11 rounded-xl flex items-center justify-center transition-colors hover:bg-[#F5F7FA]"
+                  style={{ border: `1px solid ${saved ? "#B9D3F2" : CARD_BORDER}`, backgroundColor: saved ? BRAND_50 : "#fff" }}>
+                  <Bookmark className="w-[18px] h-[18px]" fill={saved ? BRAND : "none"} stroke={saved ? BRAND : INK_2} />
+                </button>
+              )}
+              <button type="button" onClick={() => setShareOpen(true)} aria-label="Share" className="w-11 h-11 rounded-xl flex items-center justify-center transition-colors hover:bg-[#F5F7FA]" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                <Repeat2 className="w-[18px] h-[18px]" style={{ color: INK_2 }} />
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-6">
+            {[
+              { icon: Clock, label: "Hours", value: f.hours || "On request", green: facIs24(f) },
+              { icon: Stethoscope, label: "Services", value: `${(f.services || []).length} listed` },
+              { icon: Briefcase, label: "Open jobs", value: jobsCount ? `${jobsCount} hiring` : "None right now", green: jobsCount > 0 },
+              { icon: Star, label: "Rating", value: f.rating ? `${f.rating} / 5` : "New" },
+            ].map((s) => (
+              <div key={s.label} className="rounded-2xl p-3.5" style={{ backgroundColor: s.green ? GREEN_TINT : CREAM }}>
+                <p className="text-[11.5px] font-bold uppercase tracking-[0.06em] flex items-center gap-1.5" style={{ color: s.green ? GREEN : SUBTLE }}><s.icon className="w-3.5 h-3.5" /> {s.label}</p>
+                <p className="text-[15px] font-bold mt-1.5 leading-snug" style={{ color: s.green ? GREEN : INK }}>{s.value}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid lg:grid-cols-[1fr_340px] gap-5 mt-5 items-start">
+          <div className="space-y-5 min-w-0">
+            <Card title="About">
+              <p className="text-[15px] leading-relaxed" style={{ color: INK_2 }}>
+                {f.name} is a {f.verified ? "PakMed-verified " : ""}{f.type.toLowerCase()} in {f.area ? `${f.area}, ` : ""}{f.city}
+                {(f.services || []).length ? `, offering ${f.services.slice(0, 3).join(", ").toLowerCase()}${f.services.length > 3 ? " and more" : ""}` : ""}.
+                {facIs24(f) ? " Open 24 hours, 7 days a week." : f.hours ? ` Opening hours: ${f.hours}.` : ""}
+              </p>
+            </Card>
+
+            {(f.services || []).length > 0 && (
+              <Card title="Services & departments">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {f.services.map((sv) => {
+                    const I = serviceIcon(sv);
+                    return (
+                      <div key={sv} className="flex items-center gap-3 rounded-xl px-3.5 py-3" style={{ backgroundColor: CREAM }}>
+                        <span className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-white"><I className="w-[18px] h-[18px]" style={{ color: TEAL }} /></span>
+                        <span className="text-[14.5px] font-semibold" style={{ color: INK }}>{sv}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+            )}
+
+            <Card title={`Open jobs here${jobsCount ? ` (${jobsCount})` : ""}`}>
+              {jobs.length === 0 ? (
+                <p className="text-[14.5px]" style={{ color: SUBTLE }}>No open positions right now. Save this facility to hear when they're hiring.</p>
+              ) : (
+                <ul className="space-y-2.5">
+                  {jobs.slice(0, 4).map((j) => {
+                    const vis = jobRoleVisual(j.jobTitle);
+                    return (
+                      <li key={j.id}>
+                        <button type="button" onClick={onOpenJobs} className="w-full flex items-center gap-3 rounded-xl p-3 text-left transition-colors hover:bg-[#F5F7FA]" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                          <span className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: vis.tint }}><vis.Icon className="w-5 h-5" style={{ color: vis.color }} /></span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-[14.5px] font-bold truncate" style={{ color: INK }}>{j.jobTitle}</span>
+                            <span className="block text-[12.5px] truncate" style={{ color: SUBTLE }}>{jobTypeOf(j)} · {(j.shifts || []).join(", ")} · {j.posted}</span>
+                          </span>
+                          <span className="text-[14px] font-extrabold shrink-0" style={{ color: GREEN }}>PKR {j.payAmount}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              {jobs.length > 0 && (
+                <button type="button" onClick={onOpenJobs} className="mt-4 h-10 px-4 rounded-xl text-[13.5px] font-bold inline-flex items-center gap-1.5" style={{ color: BRAND, backgroundColor: BRAND_50 }}>
+                  See all jobs at {f.name} <ArrowRight className="w-4 h-4" />
+                </button>
+              )}
+            </Card>
+
+            {doctorsHere.length > 0 && (
+              <Card title="Doctors nearby">
+                <div className="grid sm:grid-cols-2 gap-3">
+                  {doctorsHere.map((d) => (
+                    <div key={d.id} className="flex items-center gap-3 rounded-xl p-3" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                      <span className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 text-white font-extrabold text-[14px]" style={{ backgroundColor: BRAND }}>{initialsOf(d.name)}</span>
+                      <span className="min-w-0">
+                        <span className="block text-[14px] font-bold truncate" style={{ color: INK }}>{d.name}</span>
+                        <span className="block text-[12.5px] truncate" style={{ color: SUBTLE }}>{d.specialty} · PKR {d.fee}</span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+          </div>
+
+          <aside className="lg:sticky lg:top-[88px] space-y-4">
+            <section className="rounded-2xl bg-white p-5" style={{ border: `1px solid ${CARD_BORDER}` }}>
+              <p className="text-[16px] font-extrabold" style={{ color: INK }}>Contact & location</p>
+              <div className="mt-4 space-y-3 text-[14px]" style={{ color: INK_2 }}>
+                <p className="flex items-start gap-2.5"><MapPin className="w-[18px] h-[18px] shrink-0 mt-0.5" style={{ color: TEAL }} />{f.address || f.area}, {f.city}</p>
+                <p className="flex items-center gap-2.5"><Clock className="w-[18px] h-[18px] shrink-0" style={{ color: TEAL }} />{f.hours || "Hours on request"}</p>
+                {f.phone && <p className="flex items-center gap-2.5"><Phone className="w-[18px] h-[18px] shrink-0" style={{ color: TEAL }} />{f.phone}</p>}
+              </div>
+              <button type="button" onClick={onMessage}
+                className="w-full h-12 mt-5 rounded-xl text-[15px] font-bold text-white inline-flex items-center justify-center gap-2 transition-all hover:brightness-110"
+                style={{ backgroundColor: TEAL, boxShadow: "0 8px 20px -10px rgba(14,124,134,0.6)" }}>
+                <MessageSquareText className="w-[18px] h-[18px]" /> Send an enquiry
+              </button>
+              <div className="flex gap-2 mt-2.5">
+                {f.phone && (
+                  <a href={`tel:${f.phone.replace(/\s/g, "")}`} className="flex-1 h-11 rounded-xl text-[14px] font-bold inline-flex items-center justify-center gap-1.5" style={{ color: INK, border: `1px solid ${CARD_BORDER}` }}>
+                    <Phone className="w-4 h-4" /> Call
+                  </a>
+                )}
+                <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="flex-1 h-11 rounded-xl text-[14px] font-bold inline-flex items-center justify-center gap-1.5" style={{ color: INK, border: `1px solid ${CARD_BORDER}` }}>
+                  <Navigation className="w-4 h-4" /> Directions
+                </a>
+              </div>
+            </section>
+            <div className="rounded-2xl p-4 flex items-start gap-3" style={{ backgroundColor: RED_TINT }}>
+              <Siren className="w-5 h-5 shrink-0 mt-px" style={{ color: RED }} />
+              <p className="text-[13px] leading-relaxed" style={{ color: "#7A2A24" }}>In a medical emergency, call <b>1122</b> or go straight to the nearest emergency department.</p>
+            </div>
+          </aside>
+        </div>
+
+        {nearby.length > 0 && (
+          <section className="mt-10">
+            <div className="flex items-end justify-between gap-4 mb-4">
+              <div>
+                <h2 className="text-[22px] font-extrabold tracking-[-0.02em]" style={{ color: INK }}>Other facilities nearby</h2>
+                <p className="text-[14px] mt-1" style={{ color: SUBTLE }}>In and around {f.city}</p>
+              </div>
+              <div className="hidden sm:flex gap-2 shrink-0">
+                {[[-1, ChevronLeft, "Previous"], [1, ChevronRight, "Next"]].map(([dir, Icon, label]) => (
+                  <button key={label} type="button" onClick={() => slide(dir)} aria-label={label}
+                    className="w-10 h-10 rounded-full flex items-center justify-center bg-white transition-shadow hover:shadow-md" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                    <Icon className="w-5 h-5" style={{ color: INK }} />
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div ref={trackRef} className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-3 -mx-4 px-4 scroll-px-4 sm:mx-0 sm:px-0 sm:scroll-px-0" style={{ scrollbarWidth: "none" }}>
+              {nearby.map((x) => (
+                <div key={x.id} className="snap-start shrink-0 w-[78%] sm:w-[calc((100%-16px)/2)] lg:w-[calc((100%-32px)/3)]">
+                  <FacilityCard f={x} saved={false} jobs={0} onOpen={onOpen} onToggleSave={() => {}} />
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
+
+      {shareOpen && <ShareSheet card={{ id: f.id, title: `${f.name} — ${f.type}, ${f.city}` }} onClose={() => setShareOpen(false)} />}
+    </div>
+  );
+}
 
 function FindHospitalScreen({ initialQuery, onBack, onMenu, userCity, employer, employerUnlocked, postedJobs, onOpenHiring, onMessage, isSaved = () => false, onToggleSave = () => {} }) {
-  const [text, setText] = useState(initialQuery || "");
-  const [city, setCity] = useState(userCity || "");
-  const [kind, setKind] = useState("All");
-  const [sheet, setSheet] = useState(null);
+  const [query, setQuery] = useState(initialQuery || "");
+  const [qDraft, setQDraft] = useState(initialQuery || "");
+  const [location, setLocation] = useState(initialQuery ? "" : (userCity || ""));
+  const [locDraft, setLocDraft] = useState(initialQuery ? "" : (userCity || ""));
+  const [f, setF] = useState(EMPTY_FAC_FILTERS);
+  const [sort, setSort] = useState("recommended");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [open, setOpen] = useState(null);
+  const resultsRef = useRef(null);
+
+  useEffect(() => {
+    if (!filtersOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [filtersOpen]);
 
   // the user's own facility joins the directory automatically once the Employer profile is complete
   const own = employerUnlocked && employer.facilityName ? [{
-    id: "own", name: employer.facilityName, type: employer.facilityType || "Facility",
+    id: "own", name: employer.facilityName, type: employer.facilityType || "Hospital",
     city: employer.city, area: employer.area, address: employer.address, phone: employer.phone,
     services: (employer.services || "").split(",").map((x) => x.trim()).filter(Boolean),
-    hours: "", verified: false, mine: true,
-    hiring: (postedJobs || []).filter((j) => j.status === "posted").length,
-    photos: employer.photos || [],
+    hours: "", verified: false, mine: true, photos: employer.photos || [],
   }] : [];
-
   const all = [...own, ...SEED_FACILITIES];
-  const t = text.trim().toLowerCase();
-  let list = all.filter((f) =>
-    (kind === "All" || f.type === kind) &&
-    (!t || [f.name, f.type, f.area, f.city, ...(f.services || [])].filter(Boolean).some((v) => v.toLowerCase().includes(t)))
-  );
-  const inCity = city ? list.filter((f) => (f.city || "").toLowerCase() === city.toLowerCase()) : list;
-  // fall back to everything rather than show an empty screen
-  const fellBack = city && inCity.length === 0;
-  list = fellBack ? list : inCity;
+  const allJobs = [...(postedJobs || []).filter((j) => j.status === "posted"), ...SEED_JOBS];
+  const jobsAt = (fac) => allJobs.filter((j) => (j.facilityName || "").toLowerCase() === (fac.name || "").toLowerCase());
+  const hiringCount = (fac) => jobsAt(fac).length || fac.hiring || 0;
 
-  const cityOptions = [...new Set([...CITIES, ...all.map((f) => f.city).filter(Boolean)])].sort();
+  const q = query.trim().toLowerCase();
+  const loc = location.trim().toLowerCase();
+  const base = all.filter((x) => {
+    if (q && ![x.name, x.type, x.area, ...(x.services || [])].filter(Boolean).some((v) => v.toLowerCase().includes(q))) return false;
+    if (f.services.length && !f.services.every((s) => (x.services || []).includes(s))) return false;
+    if (f.open24 && !facIs24(x)) return false;
+    if (f.verified && !x.verified) return false;
+    if (f.hiring && !hiringCount(x)) return false;
+    return true;
+  });
+  const inLoc = loc ? base.filter((x) => [x.city, x.area].filter(Boolean).some((v) => v.toLowerCase().includes(loc))) : base;
+  const fellBack = loc && inLoc.length === 0 && location === userCity && !q;
+  const scoped = fellBack ? base : inLoc;
+  const typeCounts = scoped.reduce((acc, x) => ({ ...acc, [x.type]: (acc[x.type] || 0) + 1 }), {});
+  const list = (f.type ? scoped.filter((x) => x.type === f.type) : scoped).slice().sort((a, b) => {
+    if (sort === "rating") return (b.rating || 0) - (a.rating || 0);
+    if (sort === "name") return a.name.localeCompare(b.name);
+    return (b.mine ? 1 : 0) - (a.mine ? 1 : 0) || (b.verified ? 1 : 0) - (a.verified ? 1 : 0) || (b.rating || 0) * Math.log10((b.reviews || 0) + 10) - (a.rating || 0) * Math.log10((a.reviews || 0) + 10);
+  });
+
+  const serviceCounts = {};
+  all.forEach((x) => (x.services || []).forEach((s) => { serviceCounts[s] = (serviceCounts[s] || 0) + 1; }));
+  const topServices = Object.entries(serviceCounts).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([s]) => s);
+  const cityCounts = all.reduce((acc, x) => ({ ...acc, [x.city]: (acc[x.city] || 0) + 1 }), {});
+  const cityOptions = [...new Set([...CITIES, ...all.map((x) => x.city).filter(Boolean)])].sort();
+  const nameOptions = [...new Set([...all.map((x) => x.name), ...topServices, ...FAC_TYPES.map((t) => t.key)])];
+
+  const panelCount = f.services.length + f.open24 + f.verified + f.hiring;
+  const toggleSvc = (s) => setF((p) => ({ ...p, services: p.services.includes(s) ? p.services.filter((x) => x !== s) : [...p.services, s] }));
+  const chips = [
+    query && { label: `“${query}”`, clear: () => { setQuery(""); setQDraft(""); } },
+    location && { label: location, icon: MapPin, clear: () => { setLocation(""); setLocDraft(""); } },
+    f.type && { label: f.type, clear: () => setF((p) => ({ ...p, type: "" })) },
+    ...f.services.map((s) => ({ label: s, clear: () => toggleSvc(s) })),
+    f.open24 && { label: "Open 24 hours", clear: () => setF((p) => ({ ...p, open24: false })) },
+    f.verified && { label: "Verified", clear: () => setF((p) => ({ ...p, verified: false })) },
+    f.hiring && { label: "Hiring now", clear: () => setF((p) => ({ ...p, hiring: false })) },
+  ].filter(Boolean);
+  const clearAll = () => { setQuery(""); setQDraft(""); setLocation(""); setLocDraft(""); setF(EMPTY_FAC_FILTERS); };
+  const runSearch = (e) => {
+    if (e) e.preventDefault();
+    setQuery(qDraft.trim());
+    setLocation(locDraft.trim());
+    if (resultsRef.current && window.innerWidth < 1024) resultsRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+  const pickCity = (c) => { const next = location === c ? "" : c; setLocation(next); setLocDraft(next); };
+  const pill = (on) => ({ color: on ? "#fff" : INK_2, backgroundColor: on ? TEAL : "#fff", border: `1px solid ${on ? TEAL : CARD_BORDER}` });
+  const H = ({ children }) => <p className="text-[12.5px] font-bold uppercase tracking-[0.07em] mb-2.5" style={{ color: SUBTLE }}>{children}</p>;
+
+  const Panel = (
+    <div className="pb-4">
+      <div className="pt-1">
+        <H>Quick filters</H>
+        <div className="flex flex-wrap gap-2">
+          {[["open24", "Open 24 hours", Clock], ["verified", "Verified", BadgeCheck], ["hiring", "Hiring now", Briefcase]].map(([k, label, Icon]) => (
+            <button key={k} type="button" aria-pressed={f[k]} onClick={() => setF((p) => ({ ...p, [k]: !p[k] }))}
+              className="h-9 px-3 rounded-full text-[13px] font-semibold inline-flex items-center gap-1.5 transition-colors" style={pill(f[k])}>
+              <Icon className="w-3.5 h-3.5" /> {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+        <H>Facility type</H>
+        <div className="space-y-1">
+          {FAC_TYPES.map((t) => {
+            const on = f.type === t.key;
+            const n = typeCounts[t.key] || 0;
+            return (
+              <button key={t.key} type="button" onClick={() => setF((p) => ({ ...p, type: on ? "" : t.key }))} aria-pressed={on}
+                className="w-full h-11 px-2 rounded-xl flex items-center gap-2.5 text-left transition-colors hover:bg-[#F5F7FA]"
+                style={{ backgroundColor: on ? TEAL_TINT : "transparent", boxShadow: on ? "inset 0 0 0 1.5px #9FD8DC" : "none" }}>
+                <span className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: on ? "#fff" : CREAM }}><t.icon className="w-4 h-4" style={{ color: on ? TEAL : INK_2 }} /></span>
+                <span className="flex-1 min-w-0 truncate text-[13.5px] font-semibold" style={{ color: on ? TEAL : INK }}>{t.label}</span>
+                <span className="text-[11.5px] font-bold px-1.5 py-0.5 rounded-md shrink-0" style={{ color: on ? TEAL : SUBTLE, backgroundColor: on ? "#fff" : CREAM }}>{n}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+        <H>Services</H>
+        <div className="flex flex-wrap gap-2">
+          {topServices.map((s) => (
+            <button key={s} type="button" aria-pressed={f.services.includes(s)} onClick={() => toggleSvc(s)}
+              className="h-8 px-3 rounded-full text-[12.5px] font-semibold transition-colors" style={pill(f.services.includes(s))}>{s}</button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  if (open) {
+    const jobs = jobsAt(open);
+    return (
+      <FacilityPage
+        f={open}
+        all={all}
+        jobs={jobs}
+        jobsCount={jobs.length || open.hiring || 0}
+        onBack={() => setOpen(null)}
+        onOpen={setOpen}
+        saved={isSaved("hospital", open.id)}
+        onToggleSave={() => onToggleSave("hospital", open)}
+        onMessage={() => onMessage(open)}
+        onOpenJobs={() => onOpenHiring(jobs.length ? open : null)}
+      />
+    );
+  }
 
   return (
-    <div className="flex flex-col h-full min-h-0" style={{ fontFamily: FONT }}>
-      <ScreenHeader title="Find a Hospital" subtitle="Hospitals, clinics, labs and pharmacies" onBack={onBack} onMenu={onMenu} />
-
-      <div className="px-4 pb-2 shrink-0">
-        <div className="flex items-center gap-2 rounded-xl pl-3 pr-2 bg-white" style={{ height: 46, border: `1px solid ${CARD_BORDER}` }}>
-          <Search className="w-[18px] h-[18px] shrink-0" style={{ color: FAINT }} />
-          <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Name, service or area"
-            className="flex-1 min-w-0 bg-transparent outline-none text-[14px]" style={{ color: INK }} />
-          {text && <button onClick={() => setText("")}><X className="w-4 h-4" style={{ color: FAINT }} /></button>}
+    <div className="w-full min-w-0" style={{ fontFamily: FONT }}>
+      <section className="relative z-10" style={{ background: "linear-gradient(135deg, #064E55 0%, #0E7C86 55%, #0B57B7 100%)" }}>
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div className="absolute -right-24 -top-24 w-80 h-80 rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.07)" }} />
+          <img src="/images/facility/hospital.jpg" alt="" className="hidden lg:block absolute right-0 top-0 h-full w-[38%] object-cover opacity-30" style={{ maskImage: "linear-gradient(90deg, transparent, #000 60%)", WebkitMaskImage: "linear-gradient(90deg, transparent, #000 60%)" }} />
         </div>
-        <div className="flex gap-1.5 overflow-x-auto pt-2.5" style={{ scrollbarWidth: "none" }}>
-          <FilterPill label="City" value={city} onClick={() => setSheet("city")} onClear={() => setCity("")} />
-          {FACILITY_KINDS.map((k) => (
-            <button key={k} onClick={() => setKind(k)}
-              className="shrink-0 px-3 py-1.5 rounded-full text-[12.5px] font-semibold"
-              style={{ backgroundColor: kind === k ? BRAND_50 : "#fff", color: kind === k ? BRAND : INK_2, border: `1px solid ${kind === k ? "#B9D3F2" : CARD_BORDER}` }}>
-              {k}
+        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-6 pb-8 sm:pt-8 sm:pb-10">
+          <div className="flex items-center gap-2 mb-5">
+            {onBack && (
+              <button type="button" onClick={onBack} aria-label="Back" className="w-9 h-9 rounded-xl flex items-center justify-center bg-white/15 hover:bg-white/25 transition-colors">
+                <ChevronLeft className="w-5 h-5 text-white" />
+              </button>
+            )}
+            <p className="text-[13px] font-semibold text-white/80">Home <span className="mx-1 text-white/50">/</span> <span className="text-white">Find a Hospital</span></p>
+          </div>
+          <h1 className="text-[28px] sm:text-[38px] font-extrabold tracking-[-0.03em] leading-tight text-white">Find hospitals, clinics, labs & pharmacies</h1>
+          <p className="text-[14.5px] sm:text-[16px] mt-2 text-white/80">{all.length} healthcare facilities across {Object.keys(cityCounts).length} cities · opening hours, services and contact</p>
+
+          <form onSubmit={runSearch} className="mt-6 bg-white rounded-2xl p-2 grid grid-cols-1 md:grid-cols-[1.3fr_1fr_auto] gap-2 relative z-20" style={{ boxShadow: "0 20px 40px -20px rgba(0,0,0,0.4)" }}>
+            <SearchSuggestInput
+              icon={Building2}
+              value={qDraft}
+              onChange={setQDraft}
+              onPick={(v) => { setQDraft(v); setQuery(v); }}
+              onClear={() => { setQDraft(""); setQuery(""); }}
+              placeholder="Name or service (e.g. Emergency, MRI)"
+              suggestions={nameOptions}
+              srLabel="Facility name or service"
+              className="md:border-r rounded-xl"
+              style={{ borderColor: CARD_BORDER }}
+            />
+            <SearchSuggestInput
+              icon={MapPin}
+              value={locDraft}
+              onChange={setLocDraft}
+              onPick={(v) => { setLocDraft(v); setLocation(v); }}
+              onClear={() => { setLocDraft(""); setLocation(""); }}
+              placeholder="City or area"
+              suggestions={cityOptions}
+              srLabel="City or area"
+              className="rounded-xl"
+            />
+            <button type="submit" className="h-12 px-7 rounded-xl text-[15px] font-bold text-white inline-flex items-center justify-center gap-2 transition-all hover:brightness-110" style={{ backgroundColor: TEAL }}>
+              <Search className="w-4 h-4" /> Search
             </button>
-          ))}
-        </div>
-      </div>
+          </form>
 
-      <div className="flex-1 min-h-0 overflow-y-auto pb-4">
-        <p className="px-4 pt-1 pb-2 text-[12.5px]" style={{ color: SUBTLE }}>
-          {fellBack
-            ? <>No results in <b style={{ color: INK }}>{city}</b> yet — showing all locations</>
-            : <><b style={{ color: INK }}>{list.length} {list.length === 1 ? "place" : "places"}</b>{city ? ` in ${city}` : " across Pakistan"}</>}
-        </p>
-
-        <div className="bg-white" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
-          {list.map((f) => (
-            <button key={f.id} onClick={() => setOpen(f)} className="w-full text-left px-4 py-3.5 flex gap-3" style={{ borderBottom: `1px solid ${CARD_BORDER}` }}>
-              <div className="w-[46px] h-[46px] rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: TEAL_TINT }}>
-                <Building2 className="w-5 h-5" style={{ color: TEAL }} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <p className="text-[15px] font-bold" style={{ color: INK, letterSpacing: "-0.01em" }}>{f.name}</p>
-                  {f.verified
-                    ? <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: GREEN }} />
-                    : <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ color: AMBER, backgroundColor: AMBER_TINT }}>Unverified</span>}
-                  {f.mine && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ color: BRAND, backgroundColor: BRAND_50 }}>Yours</span>}
-                </div>
-                <p className="text-[12.5px] mt-0.5" style={{ color: TEAL }}>{f.type}</p>
-                <p className="text-[12px] mt-0.5 flex items-center gap-1 truncate" style={{ color: SUBTLE }}>
-                  <MapPin className="w-3 h-3 shrink-0" /> {[f.area, f.city].filter(Boolean).join(", ")}
-                </p>
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {f.hiring > 0 && (
-                    <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-md" style={{ color: GREEN, backgroundColor: GREEN_TINT, border: "1px solid #C7E8D9" }}>
-                      Hiring · {f.hiring} {f.hiring === 1 ? "job" : "jobs"}
-                    </span>
-                  )}
-                  {(f.services || []).slice(0, 3).map((sv) => (
-                    <span key={sv} className="text-[11px] font-semibold px-1.5 py-0.5 rounded-md" style={{ color: INK_2, backgroundColor: CREAM, border: `1px solid ${CARD_BORDER}` }}>{sv}</span>
-                  ))}
-                </div>
-              </div>
-              {!f.mine && <SaveButton saved={isSaved("hospital", f.id)} onClick={() => onToggleSave("hospital", f)} />}
-            </button>
-          ))}
-        </div>
-
-        <p className="px-4 pt-4 text-[11.5px] leading-snug" style={{ color: SUBTLE }}>
-          Facilities appear here automatically when they complete an Employer profile.
-          "Unverified" means PakMed has not yet checked their documents.
-        </p>
-      </div>
-
-      {sheet === "city" && (
-        <FilterSheet title="Choose city" options={cityOptions} selected={city} onSelect={setCity} onClose={() => setSheet(null)} allowFree freeLabel="Search any city…" />
-      )}
-
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center">
-          <div className="absolute inset-0 bg-black/45" onClick={() => setOpen(null)} />
-          <div className="relative w-full max-w-[390px] bg-white rounded-t-3xl flex flex-col" style={{ maxHeight: "86vh", fontFamily: FONT }}>
-            <div className="h-20 rounded-t-3xl shrink-0" style={{ background: `linear-gradient(135deg, ${TEAL}, #0A5A61)` }} />
-            <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
-              <div className="w-16 h-16 rounded-2xl flex items-center justify-center -mt-8 bg-white" style={{ border: `3px solid #fff`, boxShadow: "0 2px 8px rgba(16,24,40,.12)" }}>
-                <Building2 className="w-7 h-7" style={{ color: TEAL }} />
-              </div>
-              <div className="flex items-center gap-1.5 mt-2.5">
-                <p className="text-[19px] font-extrabold" style={{ color: INK, letterSpacing: "-0.025em" }}>{open.name}</p>
-                {open.verified && <CheckCircle2 className="w-[18px] h-[18px]" style={{ color: GREEN }} />}
-              </div>
-              <p className="text-[13.5px] font-semibold" style={{ color: TEAL }}>{open.type}</p>
-
-              <div className="mt-3.5 rounded-xl p-3" style={{ border: `1px solid ${CARD_BORDER}` }}>
-                <p className="text-[13px] flex items-start gap-2" style={{ color: INK_2 }}><MapPin className="w-4 h-4 mt-0.5 shrink-0" style={{ color: SUBTLE }} />{open.address || [open.area, open.city].filter(Boolean).join(", ")}</p>
-                {open.hours && <p className="text-[13px] flex items-center gap-2 mt-2" style={{ color: INK_2 }}><Clock className="w-4 h-4 shrink-0" style={{ color: SUBTLE }} />{open.hours}</p>}
-                {open.phone && <p className="text-[13px] flex items-center gap-2 mt-2" style={{ color: INK_2 }}><Phone className="w-4 h-4 shrink-0" style={{ color: SUBTLE }} />{open.phone}</p>}
-              </div>
-
-              {(open.services || []).length > 0 && (
-                <>
-                  <p className="text-[14px] font-bold mt-4 mb-2" style={{ color: INK }}>Services</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {open.services.map((sv) => (
-                      <span key={sv} className="text-[12.5px] font-semibold px-2.5 py-1 rounded-lg" style={{ color: TEAL, backgroundColor: TEAL_TINT }}>{sv}</span>
-                    ))}
-                  </div>
-                </>
-              )}
-
-              {open.hiring > 0 && (
-                <button onClick={() => { setOpen(null); onOpenHiring(open); }}
-                  className="w-full mt-4 rounded-xl p-3 flex items-center gap-3 text-left" style={{ backgroundColor: GREEN_TINT, border: "1px solid #C7E8D9" }}>
-                  <Briefcase className="w-5 h-5 shrink-0" style={{ color: GREEN }} />
-                  <div className="flex-1">
-                    <p className="text-[14px] font-bold" style={{ color: GREEN }}>Currently hiring</p>
-                    <p className="text-[12px]" style={{ color: "#2F6B52" }}>{open.hiring} open {open.hiring === 1 ? "position" : "positions"} — see jobs</p>
-                  </div>
-                  <ChevronRight className="w-4 h-4" style={{ color: GREEN }} />
+          <div className="flex gap-2 mt-4 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap" style={{ scrollbarWidth: "none" }}>
+            {CITIES.filter((c) => cityCounts[c]).map((c) => {
+              const on = location.toLowerCase() === c.toLowerCase();
+              return (
+                <button key={c} type="button" onClick={() => pickCity(c)}
+                  className="shrink-0 h-9 px-3.5 rounded-full text-[13px] font-semibold inline-flex items-center gap-1.5 transition-colors"
+                  style={{ backgroundColor: on ? "#fff" : "rgba(255,255,255,0.14)", color: on ? TEAL : "#fff", border: `1px solid ${on ? "#fff" : "rgba(255,255,255,0.25)"}` }}>
+                  {c} <span className="text-[11.5px]" style={{ opacity: 0.7 }}>{cityCounts[c]}</span>
                 </button>
-              )}
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <div ref={resultsRef} className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 scroll-mt-20">
+        {/* type tabs */}
+        <div className="flex gap-2 overflow-x-auto pb-1 mb-5 -mx-4 px-4 sm:mx-0 sm:px-0" style={{ scrollbarWidth: "none" }} role="tablist">
+          {[{ key: "", label: "All", icon: LayoutGrid }, ...FAC_TYPES].map((t) => {
+            const on = f.type === t.key;
+            const n = t.key ? typeCounts[t.key] || 0 : scoped.length;
+            return (
+              <button key={t.label} type="button" role="tab" aria-selected={on} onClick={() => setF((p) => ({ ...p, type: t.key }))}
+                className="shrink-0 h-10 px-4 rounded-xl text-[14px] font-bold inline-flex items-center gap-2 transition-all"
+                style={{ backgroundColor: on ? INK : "#fff", color: on ? "#fff" : INK_2, border: `1px solid ${on ? INK : CARD_BORDER}` }}>
+                <t.icon className="w-4 h-4" /> {t.label}
+                <span className="text-[11.5px] font-bold px-1.5 py-0.5 rounded-md" style={{ backgroundColor: on ? "rgba(255,255,255,0.18)" : CREAM, color: on ? "#fff" : SUBTLE }}>{n}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="grid lg:grid-cols-[250px_1fr] gap-6 items-start">
+          <aside className="hidden lg:block sticky top-[88px] rounded-2xl bg-white px-5 pt-4 pb-1 max-h-[calc(100dvh-110px)] overflow-y-auto auth-scroll" style={{ border: `1px solid ${CARD_BORDER}` }}>
+            <div className="flex items-center justify-between pb-3">
+              <p className="text-[16px] font-extrabold flex items-center gap-2" style={{ color: INK }}><SlidersHorizontal className="w-4 h-4" /> Filters</p>
+              {panelCount > 0 && <button type="button" onClick={() => setF((p) => ({ ...EMPTY_FAC_FILTERS, type: p.type }))} className="text-[13px] font-bold" style={{ color: TEAL }}>Clear</button>}
             </div>
-            <div className="px-4 py-3 shrink-0 flex gap-2 items-center" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
-              {!open.mine && <SaveButton saved={isSaved("hospital", open.id)} onClick={() => onToggleSave("hospital", open)} size={48} />}
-              {open.phone && (
-                <a href={`tel:${open.phone.replace(/\s/g, "")}`} className="px-4 h-12 rounded-xl flex items-center justify-center gap-1.5 text-[14px] font-bold"
-                  style={{ color: INK, border: `1.5px solid ${CARD_BORDER}` }}>
-                  <Phone className="w-4 h-4" /> Call
-                </a>
-              )}
-              <button onClick={() => { onMessage(open); setOpen(null); }} className="flex-1 h-12 rounded-xl flex items-center justify-center gap-1.5 text-[14px] font-bold text-white" style={{ backgroundColor: BRAND }}>
-                <MessageSquareText className="w-4 h-4" /> Message
+            {Panel}
+          </aside>
+
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <p className="text-[14.5px] mr-auto" style={{ color: SUBTLE }}>
+                {fellBack
+                  ? <>Nothing in <b style={{ color: INK }}>{location}</b> yet — showing all of Pakistan</>
+                  : <><b className="text-[16px]" style={{ color: INK }}>{list.length}</b> {list.length === 1 ? "facility" : "facilities"}{location ? <> in <b style={{ color: INK }}>{location}</b></> : " across Pakistan"}</>}
+              </p>
+              <button type="button" onClick={() => setFiltersOpen(true)}
+                className="lg:hidden h-10 px-3.5 rounded-xl text-[13.5px] font-bold inline-flex items-center gap-2 bg-white" style={{ color: INK, border: `1px solid ${CARD_BORDER}` }}>
+                <SlidersHorizontal className="w-4 h-4" /> Filters
+                {panelCount > 0 && <span className="w-5 h-5 rounded-full text-[11px] text-white flex items-center justify-center" style={{ backgroundColor: TEAL }}>{panelCount}</span>}
+              </button>
+              <Dropdown label="Sort facilities" icon={ArrowUpDown} value={sort} onChange={setSort} options={FAC_SORTS} />
+            </div>
+
+            {chips.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 mb-4">
+                {chips.map((c) => (
+                  <span key={c.label} className="inline-flex items-center gap-1.5 h-8 pl-3 pr-1.5 rounded-full text-[12.5px] font-semibold" style={{ color: TEAL, backgroundColor: TEAL_TINT, border: "1px solid #B5E0E3" }}>
+                    {c.icon && <c.icon className="w-3.5 h-3.5" />} {c.label}
+                    <button type="button" onClick={c.clear} aria-label={`Remove ${c.label}`} className="w-5 h-5 rounded-full flex items-center justify-center hover:bg-white"><X className="w-3 h-3" /></button>
+                  </span>
+                ))}
+                <button type="button" onClick={clearAll} className="text-[13px] font-bold px-2 h-8" style={{ color: RED }}>Clear all</button>
+              </div>
+            )}
+
+            {list.length === 0 ? (
+              <div className="rounded-2xl bg-white px-6 py-14 text-center" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                <span className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: TEAL_TINT }}>
+                  <Building2 className="w-6 h-6" style={{ color: TEAL }} />
+                </span>
+                <p className="text-[17px] font-bold" style={{ color: INK }}>No facilities match</p>
+                <p className="text-[14px] mt-1 mb-5" style={{ color: SUBTLE }}>Try another city, facility type or fewer filters.</p>
+                <button type="button" onClick={clearAll} className="h-11 px-5 rounded-xl text-[14px] font-bold text-white" style={{ backgroundColor: TEAL }}>Clear all filters</button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                {list.map((x) => (
+                  <FacilityCard key={x.id} f={x} saved={isSaved("hospital", x.id)} jobs={hiringCount(x)} onOpen={setOpen} onToggleSave={(it) => onToggleSave("hospital", it)} />
+                ))}
+              </div>
+            )}
+
+            <p className="text-[12.5px] mt-6 leading-relaxed flex items-start gap-2" style={{ color: SUBTLE }}>
+              <Info className="w-4 h-4 shrink-0 mt-0.5" />
+              Facilities appear here automatically when they complete an Employer profile. "Not yet verified" means PakMed hasn't checked their documents.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {filtersOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Filters">
+          <div className="absolute inset-0 bg-black/45" onClick={() => setFiltersOpen(false)} />
+          <div className="absolute inset-x-0 bottom-0 max-h-[88dvh] bg-white rounded-t-3xl flex flex-col auth-step">
+            <div className="flex items-center justify-between px-5 h-14 shrink-0" style={{ borderBottom: `1px solid ${CARD_BORDER}` }}>
+              <p className="text-[17px] font-extrabold" style={{ color: INK }}>Filters</p>
+              <button type="button" onClick={() => setFiltersOpen(false)} aria-label="Close filters" className="w-9 h-9 rounded-full flex items-center justify-center" style={{ backgroundColor: CREAM }}>
+                <X className="w-5 h-5" style={{ color: INK }} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 pt-4">{Panel}</div>
+            <div className="p-4 shrink-0" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+              <button type="button" onClick={() => setFiltersOpen(false)} className="w-full h-12 rounded-xl text-[15px] font-bold text-white" style={{ backgroundColor: TEAL }}>
+                Show {list.length} {list.length === 1 ? "facility" : "facilities"}
               </button>
             </div>
           </div>
@@ -8008,6 +10746,273 @@ function SavedScreen({ onBack, onMenu, savedJobs, savedItems, onToggleJob, onTog
                 onOpenIt={() => onOpen("market", it.name)} onRemove={() => onToggleSave("market", it)} />
             ))}
           </Section>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Profile tab: account overview ---------- */
+function AccountScreen({
+  onBack, onMenu, authed, onSignIn, username, general = {}, doctor = {}, pctGeneral = 0, pctDoctor = 0,
+  cvReady, verifiedPhone, profilesLive = 0, savedJobs = [], savedItems = {}, applications = [], allJobs = [],
+  messagesCount = 0, onNavigate, onOpenSaved, onToggleJob, onToggleSave, onSignOut,
+}) {
+  const [savedTab, setSavedTab] = useState("jobs");
+
+  if (!authed) {
+    return (
+      <div className="flex flex-col h-full min-h-0" style={{ fontFamily: FONT }}>
+        <ScreenHeader title="My profile" onBack={onBack} onMenu={onMenu} />
+        <div className="flex-1 flex flex-col items-center justify-center text-center px-6 py-16">
+          <span className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style={{ backgroundColor: BRAND_50 }}>
+            <UserRound className="w-8 h-8" style={{ color: BRAND }} />
+          </span>
+          <p className="text-[19px] font-extrabold" style={{ color: INK }}>Sign in to see your profile</p>
+          <p className="text-[14.5px] mt-1.5 max-w-sm" style={{ color: SUBTLE }}>Your saved jobs, applications, CV and verification all live here.</p>
+          <button type="button" onClick={onSignIn} className="mt-6 h-12 px-6 rounded-xl text-[15px] font-bold text-white" style={{ backgroundColor: BRAND }}>Sign in</button>
+        </div>
+      </div>
+    );
+  }
+
+  const name = general.fullName || doctor.fullName || username || "Your name";
+  const initials = name.replace(/^Dr\.?\s*/i, "").split(/[\s_]+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "U";
+  const title = general.jobTitle || doctor.specialty || "Add your job title";
+  const city = [general.area, general.city || doctor.city].filter(Boolean).join(", ");
+  const photo = general.photo || doctor.photo;
+
+  const checklist = [
+    { label: "Basic profile", done: pctGeneral >= GATE_THRESHOLD, go: "profiles" },
+    { label: "Professional details", done: pctDoctor >= GATE_THRESHOLD, go: "profiles" },
+    { label: "CV uploaded", done: !!cvReady, go: "cv" },
+    { label: "WhatsApp verified", done: !!verifiedPhone, go: "profileDetail" },
+  ];
+  const completion = Math.round((checklist.filter((c) => c.done).length / checklist.length) * 100);
+
+  const doctors = Object.values(savedItems.doctor || {});
+  const hospitals = Object.values(savedItems.hospital || {});
+  const market = Object.values(savedItems.market || {});
+  const savedTotal = savedJobs.length + doctors.length + hospitals.length + market.length;
+  const savedTabs = [
+    ["jobs", "Jobs", savedJobs.length],
+    ["doctors", "Doctors", doctors.length],
+    ["hospitals", "Hospitals", hospitals.length],
+    ["market", "Market", market.length],
+  ];
+  const savedRows = {
+    jobs: savedJobs.map((j) => ({ id: j.id, icon: Briefcase, tint: BRAND_50, color: BRAND, title: j.jobTitle, sub: `${j.facilityName} · ${j.city}`, right: `PKR ${j.payAmount}`, open: () => onOpenSaved("findjob", j.jobTitle), remove: () => onToggleJob(j.id) })),
+    doctors: doctors.map((d) => ({ id: d.id, icon: Stethoscope, tint: RED_TINT, color: RED, title: d.name, sub: `${d.specialty} · ${d.city}`, right: d.fee ? `PKR ${d.fee}` : "", open: () => onOpenSaved("consult", d.name), remove: () => onToggleSave("doctor", d) })),
+    hospitals: hospitals.map((f) => ({ id: f.id, icon: Building2, tint: TEAL_TINT, color: TEAL, title: f.name, sub: `${f.type} · ${[f.area, f.city].filter(Boolean).join(", ")}`, right: "", open: () => onOpenSaved("hospital", f.name), remove: () => onToggleSave("hospital", f) })),
+    market: market.map((it) => ({ id: it.id, icon: Store, tint: VIOLET_TINT, color: VIOLET, title: it.name, sub: it.seller || it.condition || "", right: it.price ? `PKR ${it.price}` : "", open: () => onOpenSaved("market", it.name), remove: () => onToggleSave("market", it) })),
+  };
+  const rows = savedRows[savedTab] || [];
+
+  const apps = applications.map((a) => ({ ...a, job: allJobs.find((j) => j.id === a.jobId) })).filter((a) => a.job);
+
+  const Card = ({ children, className = "" }) => (
+    <div className={`rounded-2xl bg-white ${className}`} style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: SOFT_SHADOW }}>{children}</div>
+  );
+  const CardHead = ({ title, action, onAction }) => (
+    <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-3">
+      <p className="text-[16px] font-extrabold tracking-[-0.01em]" style={{ color: INK }}>{title}</p>
+      {action && <button type="button" onClick={onAction} className="text-[13.5px] font-bold inline-flex items-center gap-1" style={{ color: BRAND }}>{action} <ChevronRight className="w-4 h-4" /></button>}
+    </div>
+  );
+
+  return (
+    <div className="flex flex-col h-full min-h-0" style={{ fontFamily: FONT }}>
+      <ScreenHeader title="My profile" subtitle="Your account, saved items and applications" onBack={onBack} onMenu={onMenu} />
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-5 space-y-4" style={{ backgroundColor: CREAM }}>
+
+        {/* identity */}
+        <Card className="overflow-hidden">
+          <div className="h-24 sm:h-28" style={{ background: `linear-gradient(120deg, ${BRAND_DK}, ${BRAND} 60%, #2F7BDA)` }} />
+          <div className="px-5 pb-5 -mt-10">
+            <div className="flex items-end justify-between gap-3 flex-wrap">
+              <div className="w-20 h-20 rounded-2xl flex items-center justify-center text-[26px] font-extrabold text-white overflow-hidden shrink-0" style={{ backgroundColor: BRAND, border: "4px solid #fff", boxShadow: "0 8px 20px -10px rgba(16,24,40,0.4)" }}>
+                {photo ? <img src={photo} alt="" className="w-full h-full object-cover" /> : initials}
+              </div>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => onNavigate("profiles")} className="h-10 px-4 rounded-xl text-[13.5px] font-bold inline-flex items-center gap-1.5 bg-white" style={{ color: INK, border: `1px solid ${CARD_BORDER}` }}>
+                  <Pencil className="w-4 h-4" /> Edit profile
+                </button>
+                <button type="button" onClick={() => onNavigate("cv")} className="h-10 px-4 rounded-xl text-[13.5px] font-bold inline-flex items-center gap-1.5 text-white" style={{ backgroundColor: BRAND }}>
+                  <FileText className="w-4 h-4" /> My CV
+                </button>
+              </div>
+            </div>
+            <p className="text-[22px] font-extrabold tracking-[-0.02em] mt-3" style={{ color: INK }}>{name}</p>
+            <p className="text-[14.5px] mt-0.5" style={{ color: INK_2 }}>{title}</p>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2 text-[13.5px]" style={{ color: SUBTLE }}>
+              <span>@{username}</span>
+              {city && <span className="inline-flex items-center gap-1"><MapPin className="w-4 h-4" /> {city}</span>}
+              <span className="inline-flex items-center gap-1 font-semibold" style={{ color: verifiedPhone ? GREEN : AMBER }}>
+                {verifiedPhone ? <CheckCircle2 className="w-4 h-4" /> : <Clock className="w-4 h-4" />} {verifiedPhone ? "Verified" : "Not verified yet"}
+              </span>
+            </div>
+          </div>
+        </Card>
+
+        {/* stats */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { icon: Bookmark, label: "Saved", value: savedTotal, go: () => onNavigate("saved") },
+            { icon: Briefcase, label: "Applications", value: apps.length, go: () => onNavigate("findjob") },
+            { icon: MessageSquareText, label: "Messages", value: messagesCount, go: () => onNavigate("messages") },
+            { icon: UserRound, label: "Profiles live", value: profilesLive, go: () => onNavigate("profiles") },
+          ].map((s) => (
+            <button key={s.label} type="button" onClick={s.go} className="rounded-2xl bg-white p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md" style={{ border: `1px solid ${CARD_BORDER}` }}>
+              <s.icon className="w-5 h-5" style={{ color: BRAND }} />
+              <p className="text-[24px] font-extrabold mt-2 leading-none" style={{ color: INK }}>{s.value}</p>
+              <p className="text-[13px] font-semibold mt-1" style={{ color: SUBTLE }}>{s.label}</p>
+            </button>
+          ))}
+        </div>
+
+        {/* completion */}
+        <Card className="p-5">
+          <div className="flex items-center gap-4">
+            <CompletionRing value={completion} size={60} stroke={5} color={completion === 100 ? GREEN : BRAND} />
+            <div className="min-w-0">
+              <p className="text-[16px] font-extrabold" style={{ color: INK }}>Profile strength: {completion}%</p>
+              <p className="text-[13.5px] mt-0.5" style={{ color: SUBTLE }}>
+                {completion === 100 ? "Great — employers can see your full profile." : "Complete these to get noticed by hospitals."}
+              </p>
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-2 mt-4">
+            {checklist.map((c) => (
+              <button key={c.label} type="button" onClick={() => onNavigate(c.go)}
+                className="flex items-center gap-2.5 h-12 px-3.5 rounded-xl text-left transition-colors hover:bg-[#F5F7FA]"
+                style={{ border: `1px solid ${CARD_BORDER}` }}>
+                <CheckCircle2 className="w-5 h-5 shrink-0" style={{ color: c.done ? GREEN : FAINT }} />
+                <span className="flex-1 text-[14px] font-semibold" style={{ color: c.done ? INK : INK_2 }}>{c.label}</span>
+                {!c.done && <span className="text-[12.5px] font-bold" style={{ color: BRAND }}>Add</span>}
+              </button>
+            ))}
+          </div>
+        </Card>
+
+        {/* saved */}
+        <Card>
+          <CardHead title={`Saved (${savedTotal})`} action="View all" onAction={() => onNavigate("saved")} />
+          <div className="flex gap-1.5 px-5 pb-3 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+            {savedTabs.map(([k, l, n]) => {
+              const on = savedTab === k;
+              return (
+                <button key={k} type="button" onClick={() => setSavedTab(k)}
+                  className="shrink-0 h-9 px-3.5 rounded-full text-[13px] font-bold transition-colors"
+                  style={{ backgroundColor: on ? BRAND : CREAM, color: on ? "#fff" : INK_2, border: `1px solid ${on ? BRAND : CARD_BORDER}` }}>
+                  {l} {n > 0 && <span style={{ opacity: 0.75 }}>· {n}</span>}
+                </button>
+              );
+            })}
+          </div>
+          {rows.length === 0 ? (
+            <div className="px-5 pb-6 pt-2 text-center">
+              <Bookmark className="w-8 h-8 mx-auto" style={{ color: FAINT }} />
+              <p className="text-[14.5px] font-bold mt-2" style={{ color: INK }}>Nothing saved here yet</p>
+              <p className="text-[13.5px] mt-0.5" style={{ color: SUBTLE }}>Tap the bookmark on any {savedTab === "jobs" ? "job" : savedTab === "doctors" ? "doctor" : savedTab === "hospitals" ? "hospital" : "listing"} to keep it here.</p>
+            </div>
+          ) : (
+            <ul>
+              {rows.slice(0, 5).map((r) => (
+                <li key={r.id} className="flex items-center gap-3 px-5 py-3" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+                  <button type="button" onClick={r.open} className="flex items-center gap-3 flex-1 min-w-0 text-left">
+                    <span className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: r.tint }}>
+                      <r.icon className="w-5 h-5" style={{ color: r.color }} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[14.5px] font-bold truncate" style={{ color: INK }}>{r.title}</span>
+                      <span className="block text-[13px] truncate" style={{ color: SUBTLE }}>{r.sub}</span>
+                    </span>
+                    {r.right && <span className="hidden sm:block text-[13.5px] font-bold shrink-0" style={{ color: GREEN }}>{r.right}</span>}
+                  </button>
+                  <button type="button" onClick={r.remove} aria-label="Remove from saved" className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 hover:bg-[#F5F7FA]">
+                    <Bookmark className="w-[18px] h-[18px]" fill={BRAND} stroke={BRAND} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        {/* applications */}
+        <Card>
+          <CardHead title={`My applications (${apps.length})`} action={apps.length ? "Find more jobs" : null} onAction={() => onNavigate("findjob")} />
+          {apps.length === 0 ? (
+            <div className="px-5 pb-6 pt-1 text-center">
+              <Briefcase className="w-8 h-8 mx-auto" style={{ color: FAINT }} />
+              <p className="text-[14.5px] font-bold mt-2" style={{ color: INK }}>No applications yet</p>
+              <p className="text-[13.5px] mt-0.5 mb-4" style={{ color: SUBTLE }}>Apply to jobs with your CV in one tap.</p>
+              <button type="button" onClick={() => onNavigate("findjob")} className="h-10 px-5 rounded-xl text-[13.5px] font-bold text-white" style={{ backgroundColor: BRAND }}>Browse jobs</button>
+            </div>
+          ) : (
+            <ul>
+              {apps.slice(0, 5).map((a) => {
+                const stt = APP_STATUS[a.status] || APP_STATUS.new;
+                return (
+                  <li key={a.id} className="flex items-center gap-3 px-5 py-3" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+                    <span className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: BRAND_50 }}>
+                      <Briefcase className="w-5 h-5" style={{ color: BRAND }} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[14.5px] font-bold truncate" style={{ color: INK }}>{a.job.jobTitle}</p>
+                      <p className="text-[13px] truncate" style={{ color: SUBTLE }}>{a.job.facilityName} · {a.job.city} · {a.at}</p>
+                    </div>
+                    <span className="text-[12px] font-bold px-2.5 py-1 rounded-full shrink-0" style={{ color: stt.color, backgroundColor: stt.tint }}>{stt.label}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </Card>
+
+        {/* account details */}
+        <Card>
+          <CardHead title="Account details" action="Edit" onAction={() => onNavigate("profiles")} />
+          <dl>
+            {[
+              ["Full name", general.fullName || doctor.fullName],
+              ["Username", `@${username}`],
+              ["WhatsApp", verifiedPhone ? `+92 ${verifiedPhone}` : general.phone],
+              ["Email", general.email],
+              ["City", general.city || doctor.city],
+              ["PMDC number", doctor.pmdc],
+            ].map(([k, v]) => (
+              <div key={k} className="flex items-center gap-4 px-5 py-3" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+                <dt className="w-32 shrink-0 text-[13.5px] font-semibold" style={{ color: SUBTLE }}>{k}</dt>
+                <dd className="flex-1 min-w-0 text-[14.5px] font-semibold truncate" style={{ color: v ? INK : FAINT }}>{v || "Not added"}</dd>
+              </div>
+            ))}
+          </dl>
+        </Card>
+
+        {/* quick links */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {[
+            { icon: UserRound, label: "Profiles", go: "profiles" },
+            { icon: FileText, label: "CV / Resume", go: "cv" },
+            { icon: ShieldCheck, label: "Verification", go: "profileDetail" },
+            { icon: Settings, label: "Settings", go: "settings" },
+            { icon: HelpCircle, label: "Help & support", go: "help" },
+            { icon: Info, label: "About PakMed", go: "about" },
+          ].map((l) => (
+            <button key={l.label} type="button" onClick={() => onNavigate(l.go)}
+              className="rounded-2xl bg-white p-4 flex items-center gap-3 text-left transition-colors hover:bg-[#FAFBFC]" style={{ border: `1px solid ${CARD_BORDER}` }}>
+              <span className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: BRAND_50 }}>
+                <l.icon className="w-5 h-5" style={{ color: BRAND }} />
+              </span>
+              <span className="text-[14px] font-bold" style={{ color: INK }}>{l.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {onSignOut && (
+          <button type="button" onClick={onSignOut} className="w-full h-12 rounded-xl text-[14.5px] font-bold inline-flex items-center justify-center gap-2 bg-white transition-colors hover:bg-[#FFF5F5]" style={{ color: RED, border: `1px solid ${CARD_BORDER}` }}>
+            <LogOut className="w-[18px] h-[18px]" /> Sign out
+          </button>
         )}
       </div>
     </div>
@@ -8292,10 +11297,17 @@ function SiteHeader({
   onSignIn,
   onSignUp,
   onOpenProfile,
+  onOpenAccount,
+  onSignOut,
   userInitials,
+  username,
+  userEmail,
+  userPhone,
 }) {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileRef = useRef(null);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -8304,7 +11316,21 @@ function SiteHeader({
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  useEffect(() => { setMobileOpen(false); }, [activeTab]);
+  useEffect(() => { setMobileOpen(false); setProfileOpen(false); }, [activeTab]);
+
+  useEffect(() => {
+    if (!profileOpen) return undefined;
+    const onDoc = (e) => {
+      if (profileRef.current && !profileRef.current.contains(e.target)) setProfileOpen(false);
+    };
+    const onKey = (e) => { if (e.key === "Escape") setProfileOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [profileOpen]);
 
   const links = [
     { id: "home", label: "Home", run: onHome },
@@ -8366,9 +11392,71 @@ function SiteHeader({
 
           <div className="flex items-center gap-2 ml-auto shrink-0">
             {authed ? (
-              <button type="button" onClick={onOpenProfile} className="w-10 h-10 rounded-full flex items-center justify-center text-[13px] font-bold text-white transition-transform hover:scale-105" style={{ backgroundColor: BRAND }} aria-label="Profile">
-                {userInitials || "U"}
-              </button>
+              <div className="relative" ref={profileRef}>
+                <button
+                  type="button"
+                  onClick={() => setProfileOpen((v) => !v)}
+                  className="flex items-center gap-2 h-10 pl-1.5 pr-2.5 rounded-full transition-colors hover:bg-[#EAF2FC]"
+                  style={{ border: `1px solid ${profileOpen ? "#B9D3F2" : CARD_BORDER}` }}
+                  aria-label="Profile menu"
+                  aria-expanded={profileOpen}
+                >
+                  <span className="w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-bold text-white" style={{ backgroundColor: BRAND }}>
+                    {userInitials || "U"}
+                  </span>
+                  <span className="hidden sm:block text-[13.5px] font-bold max-w-[110px] truncate" style={{ color: INK }}>
+                    {username ? `@${username}` : "Profile"}
+                  </span>
+                  <ChevronDown className="w-4 h-4 transition-transform" style={{ color: SUBTLE, transform: profileOpen ? "rotate(180deg)" : "none" }} />
+                </button>
+                {profileOpen && (
+                  <div
+                    className="absolute right-0 top-[calc(100%+8px)] w-[280px] rounded-2xl bg-white overflow-hidden z-50"
+                    style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: "0 16px 40px -12px rgba(16,24,40,0.28)" }}
+                  >
+                    <div className="px-4 py-3.5" style={{ backgroundColor: BRAND_50 }}>
+                      <div className="flex items-center gap-3">
+                        <span className="w-11 h-11 rounded-full flex items-center justify-center text-[14px] font-bold text-white shrink-0" style={{ backgroundColor: BRAND }}>
+                          {userInitials || "U"}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-[14.5px] font-bold truncate" style={{ color: INK }}>{username ? `@${username}` : "Your profile"}</p>
+                          {userEmail && <p className="text-[12.5px] truncate" style={{ color: SUBTLE }}>{userEmail}</p>}
+                          {userPhone && <p className="text-[12px] truncate" style={{ color: FAINT }}>+92 {userPhone}</p>}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="py-1.5">
+                      <button
+                        type="button"
+                        onClick={() => { setProfileOpen(false); onOpenProfile && onOpenProfile(); }}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-[#F5F7FA]"
+                      >
+                        <UserRound className="w-[18px] h-[18px]" style={{ color: BRAND }} />
+                        <span className="text-[14px] font-semibold" style={{ color: INK }}>Profile hub</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setProfileOpen(false); onOpenAccount && onOpenAccount(); }}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-[#F5F7FA]"
+                      >
+                        <Settings className="w-[18px] h-[18px]" style={{ color: BRAND }} />
+                        <span className="text-[14px] font-semibold" style={{ color: INK }}>Profile details</span>
+                      </button>
+                    </div>
+                    <div className="py-1.5" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+                      <button
+                        type="button"
+                        onClick={() => { setProfileOpen(false); onSignOut && onSignOut(); }}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-[#FDECEC]"
+                      >
+                        <LogOut className="w-[18px] h-[18px]" style={{ color: RED }} />
+                        <span className="text-[14px] font-semibold" style={{ color: RED }}>Log out</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             ) : (
               <>
                 <button type="button" onClick={onSignIn}
@@ -8441,8 +11529,8 @@ function SiteHeader({
 const LANDING_IMG = "/images/landing";
 
 const HERO_SLIDES = [
-  { src: `${LANDING_IMG}/hero-2.jpg`, alt: "Doctors discussing care at a clinic" },
-  { src: `${LANDING_IMG}/care.jpg`, alt: "Healthcare professionals at work" },
+  { src: `${LANDING_IMG}/hero-4.jpg`, alt: "Smiling doctor in scrubs with a stethoscope" },
+  { src: `${LANDING_IMG}/hero-3.jpg`, alt: "Female doctor in a white coat with a stethoscope" },
 ];
 
 function HeroSlideshow({ interval = 3500 }) {
@@ -8537,6 +11625,9 @@ const TESTIMONIALS = [
   { name: "Dr. Ayesha Siddiqui", role: "Medical Officer, Karachi", img: "avatar-1", text: "I found a locum emergency shift within a day. Payment was on time and the whole process was transparent." },
   { name: "Dr. Bilal Ahmed", role: "Medical Director, Rehman Medical Centre, Multan", img: "avatar-2", text: "Our first free listing brought in fourteen applicants — most of them already verified. Hiring has never been this quick." },
   { name: "Hina R.", role: "Patient, Lahore", img: "avatar-3", text: "Booked a verified paediatrician for my son the same afternoon. Clear fees, clear timings, no guesswork." },
+  { name: "Dr. Sara Malik", role: "Consultant Cardiologist, Islamabad", img: "avatar-1", text: "PakMed cut our hiring cycle from weeks to days. The applicant quality is consistently high." },
+  { name: "Nurse Fatima Noor", role: "ICU Nurse, Faisalabad", img: "avatar-3", text: "I applied to three night shifts on my phone and got two responses the same evening. Simple and fair." },
+  { name: "Kamran Hussain", role: "Pharmacy Owner, Peshawar", img: "avatar-2", text: "We filled a pharmacist role in under a week. Clear salaries and shifts meant fewer mismatched applications." },
 ];
 
 const HOME_FAQS = [
@@ -8716,6 +11807,153 @@ function PostTile({ card, onOpen }) {
   );
 }
 
+function TestimonialsCarousel() {
+  const trackRef = useRef(null);
+  const dragRef = useRef({ active: false, startX: 0, startScroll: 0, moved: false, lastX: 0, lastT: 0, v: 0 });
+  const settleRef = useRef(null);
+  const [edge, setEdge] = useState({ prev: false, next: true });
+  const [dragging, setDragging] = useState(false);
+  const [settling, setSettling] = useState(false);
+  useEffect(() => () => clearTimeout(settleRef.current), []);
+
+  useEffect(() => {
+    const el = trackRef.current;
+    if (!el) return undefined;
+    const update = () => setEdge({
+      prev: el.scrollLeft > 4,
+      next: el.scrollLeft + el.clientWidth < el.scrollWidth - 4,
+    });
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    return () => {
+      el.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, []);
+
+  const cardStep = () => {
+    const el = trackRef.current;
+    if (!el) return 320;
+    const card = el.querySelector("[data-carousel-card]");
+    if (!card) return Math.max(el.clientWidth * 0.34, 280);
+    const style = window.getComputedStyle(el);
+    const gap = parseFloat(style.columnGap || style.gap || "16") || 16;
+    return card.getBoundingClientRect().width + gap;
+  };
+
+  const slide = (dir) => {
+    const el = trackRef.current;
+    if (el) el.scrollBy({ left: dir * cardStep(), behavior: "smooth" });
+  };
+
+  // mouse drag only — touch uses native swipe scrolling
+  const onPointerDown = (e) => {
+    if (e.pointerType !== "mouse" || e.button !== 0) return;
+    const el = trackRef.current;
+    if (!el) return;
+    clearTimeout(settleRef.current);
+    const now = performance.now();
+    dragRef.current = { active: true, startX: e.clientX, startScroll: el.scrollLeft, moved: false, lastX: e.clientX, lastT: now, v: 0 };
+    setDragging(true);
+    setSettling(true);
+    try { el.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+  };
+
+  const onPointerMove = (e) => {
+    const d = dragRef.current;
+    const el = trackRef.current;
+    if (!d.active || !el) return;
+    const dx = e.clientX - d.startX;
+    if (Math.abs(dx) > 4) d.moved = true;
+    const now = performance.now();
+    const dt = Math.max(1, now - d.lastT);
+    d.v = 0.8 * ((e.clientX - d.lastX) / dt) + 0.2 * d.v; // smoothed px/ms
+    d.lastX = e.clientX;
+    d.lastT = now;
+    el.scrollLeft = d.startScroll - dx;
+  };
+
+  const endDrag = (e) => {
+    const d = dragRef.current;
+    const el = trackRef.current;
+    if (!d.active) return;
+    d.active = false;
+    setDragging(false);
+    if (!el) return;
+    try { el.releasePointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+    // glide with a bit of momentum, then settle on the nearest card
+    const step = cardStep();
+    const max = el.scrollWidth - el.clientWidth;
+    const projected = el.scrollLeft - d.v * 220;
+    const target = Math.max(0, Math.min(max, Math.round(projected / step) * step));
+    el.scrollTo({ left: target, behavior: "smooth" });
+    settleRef.current = setTimeout(() => setSettling(false), 550);
+  };
+
+  const arrowBtn = (dir, enabled, Icon, label) => (
+    <button
+      type="button"
+      onClick={() => slide(dir)}
+      disabled={!enabled}
+      aria-label={label}
+      className="w-10 h-10 rounded-full flex items-center justify-center bg-white transition-all duration-200 enabled:hover:shadow-md disabled:opacity-40"
+      style={{ border: `1px solid ${CARD_BORDER}` }}
+    >
+      <Icon className="w-5 h-5" style={{ color: INK }} />
+    </button>
+  );
+
+  return (
+    <div>
+      <SectionHeading
+        center
+        eyebrow="Testimonials"
+        title="Loved by doctors, hospitals and patients"
+        sub="Drag or use the arrows to read more reviews."
+        action={
+          <div className="flex items-center gap-2 shrink-0">
+            {arrowBtn(-1, edge.prev, ChevronLeft, "Previous reviews")}
+            {arrowBtn(1, edge.next, ChevronRight, "Next reviews")}
+          </div>
+        }
+      />
+      <div
+        ref={trackRef}
+        data-reveal
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        onDragStart={(e) => e.preventDefault()}
+        className={`flex gap-4 overflow-x-auto pb-3 -mx-4 px-4 scroll-px-4 sm:mx-0 sm:px-0 sm:scroll-px-0 select-none ${settling ? "" : "snap-x snap-mandatory"} ${dragging ? "cursor-grabbing" : "cursor-grab"}`}
+        style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch", touchAction: "pan-x pan-y", overscrollBehaviorX: "contain" }}
+      >
+        {TESTIMONIALS.map((t) => (
+          <figure
+            key={`${t.name}-${t.role}`}
+            data-carousel-card
+            className="snap-start shrink-0 w-[85%] sm:w-[calc((100%-16px)/2)] lg:w-[calc((100%-32px)/3)] rounded-2xl p-6 bg-white flex flex-col"
+            style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: SOFT_SHADOW }}
+          >
+            <div className="flex gap-0.5 mb-3">
+              {[0, 1, 2, 3, 4].map((i) => <Star key={i} className="w-4 h-4" style={{ color: STAR }} fill={STAR} />)}
+            </div>
+            <blockquote className="text-[15px] leading-relaxed flex-1" style={{ color: INK_2 }}>“{t.text}”</blockquote>
+            <figcaption className="flex items-center gap-3 mt-5 pt-5" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+              <img src={`${LANDING_IMG}/${t.img}.jpg`} alt={t.name} loading="lazy" decoding="async" className="w-11 h-11 rounded-full object-cover shrink-0 pointer-events-none" style={{ border: `2px solid ${BRAND_50}` }} />
+              <div className="min-w-0">
+                <p className="text-[14px] font-bold truncate" style={{ color: INK }}>{t.name}</p>
+                <p className="text-[12.5px] truncate" style={{ color: SUBTLE }}>{t.role}</p>
+              </div>
+            </figcaption>
+          </figure>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function LatestPostsCarousel({ onOpenCard, onSeeMore }) {
   const trackRef = useRef(null);
   const dragRef = useRef({ active: false, startX: 0, startScroll: 0, moved: false });
@@ -8826,7 +12064,7 @@ function LatestPostsCarousel({ onOpenCard, onSeeMore }) {
           <div
             key={c.id}
             data-carousel-card
-            className="snap-start shrink-0 w-[78%] sm:w-[calc((100%-32px)/3)] md:w-[calc((100%-48px)/4)] lg:w-[calc((100%-64px)/5)] xl:w-[calc((100%-64px)/5)]"
+            className="snap-start shrink-0 w-[78%] sm:w-[calc((100%-16px)/2)] md:w-[calc((100%-32px)/3)] lg:w-[calc((100%-48px)/4)] xl:w-[calc((100%-48px)/4)]"
           >
             <PostTile
               card={c}
@@ -8845,14 +12083,15 @@ function LatestPostsCarousel({ onOpenCard, onSeeMore }) {
   );
 }
 
-function UpdatePost({ card, isNew, onOpen }) {
+function UpdatePost({ card, isNew, onOpen, focused }) {
   const gate = useContext(AuthGate);
   const [liked, setLiked] = useState(false);
   const [saved, setSaved] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
 
   return (
-    <article className="rounded-2xl overflow-hidden bg-white" style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: SOFT_SHADOW }}>
+    <article id={`post-${card.id}`} className={`rounded-2xl overflow-hidden bg-white scroll-mt-24 transition-shadow duration-700 ${focused ? "post-focus" : ""}`}
+      style={{ border: `1px solid ${focused ? BRAND : CARD_BORDER}`, boxShadow: focused ? "0 0 0 4px rgba(11,87,183,0.18), 0 12px 30px -12px rgba(11,87,183,0.35)" : SOFT_SHADOW }}>
       <div className="flex items-center gap-3 px-4 pt-4 pb-3">
         <span className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: BRAND }}>
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" strokeWidth="2.8" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
@@ -8906,7 +12145,17 @@ function UpdatePost({ card, isNew, onOpen }) {
 
 const UPDATE_CATEGORIES = ["All", "Jobs", "For Hospitals", "Doctors"];
 
-function UpdatesScreen({ onBack, onMenu, onOpenCard }) {
+function UpdatesScreen({ onBack, onMenu, onOpenCard, focusId }) {
+  const [focused, setFocused] = useState(focusId || null);
+  useEffect(() => {
+    if (!focusId) return;
+    const t1 = setTimeout(() => {
+      const el = document.getElementById(`post-${focusId}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 180);
+    const t2 = setTimeout(() => setFocused(null), 3200);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, [focusId]);
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("All");
   const [sort, setSort] = useState("latest");
@@ -8950,11 +12199,14 @@ function UpdatesScreen({ onBack, onMenu, onOpenCard }) {
               );
             })}
           </div>
-          <select value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort updates"
-            className="h-9 px-2.5 rounded-lg text-[13px] font-semibold bg-white shrink-0 outline-none" style={{ color: INK_2, border: `1px solid ${CARD_BORDER}` }}>
-            <option value="latest">Latest</option>
-            <option value="popular">Most liked</option>
-          </select>
+          <Dropdown
+            label="Sort updates"
+            size="sm"
+            className="shrink-0"
+            value={sort}
+            onChange={setSort}
+            options={[{ value: "latest", label: "Latest" }, { value: "popular", label: "Most liked" }]}
+          />
         </div>
       </div>
 
@@ -8969,12 +12221,13 @@ function UpdatesScreen({ onBack, onMenu, onOpenCard }) {
             <p className="text-[13.5px] mt-1" style={{ color: SUBTLE }}>Try a different keyword or category.</p>
           </div>
         ) : (
-          <div key={`${cat}-${sort}`} className="space-y-4 fade-list">
+          <div key={`${cat}-${sort}`} className="grid grid-cols-1 md:grid-cols-2 gap-4 fade-list">
             {list.map((c, i) => (
               <UpdatePost
                 key={c.id}
                 card={c}
                 isNew={sort === "latest" && i === 0 && postAgeHours(c.time) < 24}
+                focused={focused === c.id}
                 onOpen={() => onOpenCard(FEED_CARDS.indexOf(c))}
               />
             ))}
@@ -8985,7 +12238,240 @@ function UpdatesScreen({ onBack, onMenu, onOpenCard }) {
   );
 }
 
-function HomeScreen({ onTabNav, onOpenCard, authed, city, counts = {}, nearJobs = [], onOpenJob, onSearch, onNavigate, onHome, onSeeAllPosts }) {
+/* ---------- site-wide search with typo-tolerant suggestions ---------- */
+function normText(s) {
+  return String(s || "").toLowerCase().normalize("NFKD").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+// Damerau–Levenshtein with an early exit once the distance passes `max`
+function editDistance(a, b, max) {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  const rows = [];
+  for (let i = 0; i <= a.length; i++) {
+    rows[i] = [i];
+    let rowMin = i;
+    for (let j = 1; j <= b.length; j++) {
+      if (i === 0) { rows[i][j] = j; continue; }
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      let v = Math.min(rows[i - 1][j] + 1, rows[i][j - 1] + 1, rows[i - 1][j - 1] + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) v = Math.min(v, rows[i - 2][j - 2] + 1);
+      rows[i][j] = v;
+      if (v < rowMin) rowMin = v;
+    }
+    if (i > 0 && rowMin > max) return max + 1;
+  }
+  return rows[a.length][b.length];
+}
+
+function fuzzyScore(query, text) {
+  const q = normText(query);
+  const t = normText(text);
+  if (!q || !t) return 0;
+  if (t === q) return 100;
+  if (t.startsWith(q)) return 92;
+  if (t.includes(q)) return 84;
+  const qWords = q.split(" ");
+  const tWords = t.split(" ");
+  let total = 0;
+  for (const qw of qWords) {
+    let best = 0;
+    for (const tw of tWords) {
+      if (tw.startsWith(qw)) { best = 1; break; }
+      const allow = qw.length <= 2 ? 0 : qw.length <= 4 ? 1 : qw.length <= 7 ? 2 : 3;
+      if (!allow) continue;
+      const d = Math.min(editDistance(qw, tw, allow), editDistance(qw, tw.slice(0, qw.length), allow));
+      if (d <= allow) best = Math.max(best, 1 - (d / (allow + 1)) * 0.6);
+    }
+    if (!best) return 0;
+    total += best;
+  }
+  return Math.round(40 + 35 * (total / qWords.length));
+}
+
+const SEARCH_PAGES = [
+  { label: "Find a Job", sub: "Browse healthcare jobs", keywords: "jobs job vacancy vacancies career hiring work employment naukri locum", icon: Search, color: BRAND, tint: BRAND_50, go: { section: "findjob" } },
+  { label: "Find a Doctor", sub: "Verified doctors near you", keywords: "doctor doctors consult appointment physician specialist daktar", icon: Stethoscope, color: "#C0362C", tint: "#FDECEC", go: { section: "consult" } },
+  { label: "Offer a Job", sub: "Post a vacancy for free", keywords: "post job hire hiring recruit employer vacancy staff", icon: Briefcase, color: "#12805C", tint: "#E7F5EF", go: { section: "postjob" } },
+  { label: "Buy / Sell", sub: "Medical equipment market", keywords: "market buy sell equipment machine instruments surgical shop", icon: Store, color: "#5B47C7", tint: "#F1EDFC", go: { section: "market" } },
+  { label: "Find a Hospital", sub: "Hospitals, clinics, labs and pharmacies", keywords: "hospital hospitals clinic lab laboratory pharmacy facility", icon: Building2, color: "#0E7C86", tint: "#E6F6F7", go: { section: "hospital" } },
+  { label: "Our Feeds", sub: "News and updates from PakMed", keywords: "feed feeds news updates posts latest", icon: Newspaper, color: "#B54708", tint: "#FFF6E8", go: { section: "updates" } },
+];
+
+function buildSearchIndex() {
+  const out = SEARCH_PAGES.map((p) => ({ ...p, type: "Page" }));
+  const jobCounts = {};
+  SEED_JOBS.forEach((j) => { jobCounts[j.jobTitle] = (jobCounts[j.jobTitle] || 0) + 1; });
+  Object.entries(jobCounts).forEach(([t, n]) => out.push({
+    type: "Job", label: `${t} jobs`, sub: `${n} open ${n === 1 ? "position" : "positions"}`, keywords: t,
+    icon: Briefcase, color: BRAND, tint: BRAND_50, go: { section: "findjob", q: t },
+  }));
+  const specCounts = {};
+  DOCTORS.forEach((d) => { specCounts[d.specialty] = (specCounts[d.specialty] || 0) + 1; });
+  Object.entries(specCounts).forEach(([s, n]) => out.push({
+    type: "Speciality", label: s, sub: `${n} ${n === 1 ? "doctor" : "doctors"}`, keywords: `${s} specialist`,
+    icon: Stethoscope, color: "#C0362C", tint: "#FDECEC", go: { section: "consult", q: s },
+  }));
+  DOCTORS.forEach((d) => out.push({
+    type: "Doctor", label: d.name, sub: `${d.specialty} · ${d.city}`, keywords: `${d.name} ${d.clinic}`,
+    icon: UserRound, color: "#C0362C", tint: "#FDECEC", go: { section: "consult", q: d.name },
+  }));
+  SEED_FACILITIES.forEach((f) => out.push({
+    type: "Hospital", label: f.name, sub: `${f.type} · ${f.city}`, keywords: `${f.name} ${f.type}`,
+    icon: Building2, color: "#0E7C86", tint: "#E6F6F7", go: { section: "hospital", q: f.name },
+  }));
+  SEED_MARKET_ITEMS.forEach((m) => out.push({
+    type: "Equipment", label: m.name, sub: `${m.condition || ""}${m.price ? ` · PKR ${m.price}` : ""}`, keywords: `${m.name} ${m.category || ""}`,
+    icon: Store, color: "#5B47C7", tint: "#F1EDFC", go: { section: "market", q: m.name },
+  }));
+  return out;
+}
+
+function searchSite(index, query, limit = 8) {
+  const q = normText(query);
+  if (!q) return [];
+  const scored = index
+    .map((it) => ({ it, score: Math.max(fuzzyScore(q, it.label), Math.round(fuzzyScore(q, it.keywords) * 0.9)) + (it.type === "Page" ? 3 : 0) }))
+    .filter((r) => r.score > 0)
+    .sort((a, b) => b.score - a.score);
+  const seen = new Set();
+  const out = [];
+  for (const r of scored) {
+    const key = `${r.it.type}|${r.it.label}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(r.it);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+function SiteSearch({ city, onGo, onSearchAll }) {
+  const index = useRef(null);
+  if (!index.current) index.current = buildSearchIndex();
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const [hi, setHi] = useState(0);
+  const rootRef = useRef(null);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => { if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    document.addEventListener("touchstart", handler, { passive: true });
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("touchstart", handler);
+    };
+  }, [open]);
+
+  const results = q.trim() ? searchSite(index.current, q) : index.current.filter((it) => it.type === "Page");
+  useEffect(() => { setHi(0); }, [q]);
+
+  const go = (it) => { setOpen(false); setQ(""); onGo(it.go); };
+  const submit = (e) => {
+    if (e) e.preventDefault();
+    if (results[hi] && q.trim()) return go(results[hi]);
+    if (q.trim()) { setOpen(false); onSearchAll(q.trim()); return; }
+    setOpen(true);
+    inputRef.current && inputRef.current.focus();
+  };
+  const onKeyDown = (e) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); setOpen(true); setHi((i) => Math.min(results.length - 1, i + 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setHi((i) => Math.max(0, i - 1)); }
+    else if (e.key === "Escape") setOpen(false);
+  };
+
+  const highlight = (text) => {
+    const nq = q.trim().toLowerCase();
+    const i = nq ? text.toLowerCase().indexOf(nq) : -1;
+    if (i < 0) return text;
+    return <>{text.slice(0, i)}<b style={{ color: BRAND }}>{text.slice(i, i + nq.length)}</b>{text.slice(i + nq.length)}</>;
+  };
+
+  return (
+    <div ref={rootRef} className="relative z-30 max-w-xl mb-6">
+      <form onSubmit={submit} className="flex flex-col sm:flex-row gap-2 p-2 rounded-2xl bg-white" style={{ border: `1px solid ${open ? "#B9D3F2" : CARD_BORDER}`, boxShadow: "0 12px 32px -12px rgba(16,24,40,0.18)" }}>
+        <label className="flex-1 min-w-0 flex items-center gap-3 h-12 px-3 rounded-xl">
+          <Search className="w-5 h-5 shrink-0" style={{ color: open ? BRAND : FAINT }} />
+          <span className="sr-only">Search PakMed</span>
+          <input
+            ref={inputRef}
+            value={q}
+            onChange={(e) => { setQ(e.target.value); setOpen(true); }}
+            onFocus={() => setOpen(true)}
+            onKeyDown={onKeyDown}
+            placeholder="Search jobs, doctors, hospitals…"
+            role="combobox"
+            aria-expanded={open}
+            aria-autocomplete="list"
+            className="flex-1 min-w-0 bg-transparent outline-none text-[15px]"
+            style={{ color: INK }}
+          />
+          {q && (
+            <button type="button" onClick={() => { setQ(""); inputRef.current && inputRef.current.focus(); }} aria-label="Clear search">
+              <X className="w-4 h-4" style={{ color: FAINT }} />
+            </button>
+          )}
+        </label>
+        <div className="flex gap-2">
+          <span className="flex items-center gap-1.5 h-12 px-3 rounded-xl text-[14px] font-semibold flex-1 sm:flex-none" style={{ color: INK_2, backgroundColor: CREAM }}>
+            <MapPin className="w-4 h-4 shrink-0" style={{ color: BRAND }} />
+            <span className="truncate">{city || "Pakistan"}</span>
+          </span>
+          <button type="submit" className="h-12 px-5 rounded-xl text-[15px] font-bold text-white shrink-0" style={{ backgroundColor: BRAND }}>
+            Search
+          </button>
+        </div>
+      </form>
+
+      {open && (
+        <div className="dropdown-pop absolute left-0 right-0 top-full mt-2 rounded-2xl bg-white overflow-hidden" style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: "0 24px 50px -16px rgba(16,24,40,0.3)" }}>
+          <p className="px-4 pt-3 pb-1.5 text-[11.5px] font-bold uppercase tracking-[0.08em]" style={{ color: FAINT }}>
+            {q.trim() ? (results.length ? "Suggestions" : "No matches") : "Explore PakMed"}
+          </p>
+          {results.length === 0 ? (
+            <div className="px-4 pb-4">
+              <p className="text-[14px]" style={{ color: SUBTLE }}>Nothing found for “{q.trim()}”. Try another spelling or a broader word.</p>
+              <button type="button" onClick={() => { setOpen(false); onSearchAll(q.trim()); }} className="mt-3 h-10 px-4 rounded-xl text-[13.5px] font-bold" style={{ color: BRAND, backgroundColor: BRAND_50 }}>
+                Search everything for “{q.trim()}”
+              </button>
+            </div>
+          ) : (
+            <ul role="listbox" className="max-h-[360px] overflow-y-auto px-1.5 pb-1.5">
+              {results.map((it, i) => (
+                <li key={`${it.type}-${it.label}`} role="option" aria-selected={i === hi}
+                  onMouseEnter={() => setHi(i)}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => go(it)}
+                  className="flex items-center gap-3 px-2.5 py-2 rounded-xl cursor-pointer transition-colors"
+                  style={{ backgroundColor: i === hi ? CREAM : "transparent" }}>
+                  <span className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: it.tint }}>
+                    <it.icon className="w-5 h-5" style={{ color: it.color }} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[14.5px] font-semibold truncate" style={{ color: INK }}>{highlight(it.label)}</span>
+                    <span className="block text-[12.5px] truncate" style={{ color: SUBTLE }}>{it.sub}</span>
+                  </span>
+                  <span className="hidden sm:inline text-[11px] font-bold px-2 py-0.5 rounded-md shrink-0" style={{ color: it.color, backgroundColor: it.tint }}>{it.type}</span>
+                  <ChevronRight className="w-4 h-4 shrink-0" style={{ color: i === hi ? BRAND : FAINT }} />
+                </li>
+              ))}
+            </ul>
+          )}
+          {q.trim() && results.length > 0 && (
+            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => { setOpen(false); onSearchAll(q.trim()); }}
+              className="w-full flex items-center justify-between px-4 h-11 text-[13.5px] font-bold" style={{ color: BRAND, borderTop: `1px solid ${CARD_BORDER}` }}>
+              See all results for “{q.trim()}” <ArrowRight className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HomeScreen({ onTabNav, onOpenCard, authed, city, counts = {}, nearJobs = [], onOpenJob, onSearch, onNavigate, onHome, onSeeAllPosts, onGo }) {
   const countFor = (k) => (counts[k] !== undefined ? counts[k] : "");
   const [audience, setAudience] = useState("professionals");
   const [openFaq, setOpenFaq] = useState(0);
@@ -9042,17 +12528,17 @@ function HomeScreen({ onTabNav, onOpenCard, authed, city, counts = {}, nearJobs 
   }, [nearJobs.length]);
 
   const stats = [
-    { value: `${countFor("find") || 0}+`, label: "Open jobs" },
-    { value: `${countFor("consult") || 0}+`, label: "Verified doctors" },
-    { value: `${CITIES.length}`, label: "Cities covered" },
-    { value: `${countFor("market") || 0}+`, label: "Equipment listings" },
+    { value: `${countFor("find") || 0}+`, label: "Open jobs", sub: "Updated daily", go: "find", icon: Briefcase, color: BRAND, tint: BRAND_50 },
+    { value: `${countFor("consult") || 0}+`, label: "Verified doctors", sub: "PMDC registered", go: "consult", icon: Stethoscope, color: "#C0362C", tint: "#FDECEC" },
+    { value: `${CITIES.length}`, label: "Cities covered", sub: "Across Pakistan", go: "hospital", icon: MapPin, color: "#0E7C86", tint: "#E6F6F7" },
+    { value: `${countFor("market") || 0}+`, label: "Equipment listings", sub: "From trusted sellers", go: "market", icon: Store, color: "#5B47C7", tint: "#F1EDFC" },
   ];
 
   return (
     <div ref={rootRef} className="w-full min-w-0" style={{ fontFamily: FONT }}>
       {/* Hero */}
       <section
-        className="relative overflow-hidden"
+        className="relative z-20 overflow-x-clip"
         style={{ background: `linear-gradient(135deg, ${BRAND_50} 0%, #fff 48%, ${CREAM} 100%)`, borderBottom: `1px solid ${CARD_BORDER}` }}
       >
         <div
@@ -9072,21 +12558,7 @@ function HomeScreen({ onTabNav, onOpenCard, authed, city, counts = {}, nearJobs 
               Find jobs, verified doctors, hospitals and medical equipment across Pakistan. Browse freely — sign in only when you want to apply, message, save or post.
             </p>
 
-            <div className="flex flex-col sm:flex-row gap-2 max-w-xl mb-6 p-2 rounded-2xl bg-white" style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: "0 12px 32px -12px rgba(16,24,40,0.18)" }}>
-              <button type="button" onClick={() => onSearch && onSearch("")} className="flex-1 min-w-0 flex items-center gap-3 h-12 px-3 text-left rounded-xl">
-                <Search className="w-5 h-5 shrink-0" style={{ color: FAINT }} />
-                <span className="text-[15px] truncate" style={{ color: FAINT }}>Search jobs, doctors, hospitals…</span>
-              </button>
-              <div className="flex gap-2">
-                <span className="flex items-center gap-1.5 h-12 px-3 rounded-xl text-[14px] font-semibold flex-1 sm:flex-none" style={{ color: INK_2, backgroundColor: CREAM }}>
-                  <MapPin className="w-4 h-4 shrink-0" style={{ color: BRAND }} />
-                  <span className="truncate">{city || "Pakistan"}</span>
-                </span>
-                <button type="button" onClick={() => onSearch && onSearch("")} className="h-12 px-5 rounded-xl text-[15px] font-bold text-white shrink-0" style={{ backgroundColor: BRAND }}>
-                  Search
-                </button>
-              </div>
-            </div>
+            <SiteSearch city={city} onGo={(g) => (onGo ? onGo(g) : onSearch && onSearch(g.q || ""))} onSearchAll={(q) => onSearch && onSearch(q)} />
 
             <div className="flex flex-wrap gap-3 mb-8">
               <button type="button" onClick={() => onTabNav("find")} className="h-12 px-6 rounded-xl text-[15px] font-bold text-white flex items-center gap-2 transition-colors hover:opacity-95" style={{ backgroundColor: INK }}>
@@ -9136,12 +12608,22 @@ function HomeScreen({ onTabNav, onOpenCard, authed, city, counts = {}, nearJobs 
 
       {/* Stats */}
       <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-8">
-        <div data-reveal className="grid grid-cols-2 md:grid-cols-4 gap-px rounded-2xl overflow-hidden" style={{ backgroundColor: CARD_BORDER, border: `1px solid ${CARD_BORDER}`, boxShadow: SOFT_SHADOW }}>
+        <div data-reveal className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {stats.map((s) => (
-            <div key={s.label} className="px-4 py-5 sm:py-6 text-center bg-white">
-              <p className="text-[26px] sm:text-[32px] font-extrabold tracking-[-0.03em]" style={{ color: BRAND }}>{s.value}</p>
-              <p className="text-[13px] sm:text-[14px] font-semibold mt-0.5" style={{ color: SUBTLE }}>{s.label}</p>
-            </div>
+            <button type="button" key={s.label} onClick={() => onTabNav(s.go)} aria-label={`${s.label} — open`}
+              className="group relative overflow-hidden rounded-2xl bg-white p-4 sm:p-5 flex items-center gap-3 sm:gap-4 text-left cursor-pointer transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B57B7]"
+              style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: "0 4px 16px -10px rgba(16,24,40,0.18)" }}>
+              <span className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: s.color }} />
+              <span className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-105" style={{ backgroundColor: s.tint }}>
+                <s.icon className="w-5 h-5 sm:w-7 sm:h-7" style={{ color: s.color }} strokeWidth={2} />
+              </span>
+              <div className="min-w-0">
+                <p className="text-[22px] sm:text-[30px] font-extrabold leading-none tracking-[-0.03em]" style={{ color: INK }}>{s.value}</p>
+                <p className="text-[13px] sm:text-[14.5px] font-bold mt-1.5 truncate" style={{ color: INK_2 }}>{s.label}</p>
+                <p className="hidden sm:block text-[12.5px] mt-0.5 truncate" style={{ color: SUBTLE }}>{s.sub}</p>
+              </div>
+              <ArrowRight className="hidden sm:block w-4 h-4 ml-auto shrink-0 opacity-0 -translate-x-1 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0" style={{ color: s.color }} />
+            </button>
           ))}
         </div>
       </section>
@@ -9202,7 +12684,10 @@ function HomeScreen({ onTabNav, onOpenCard, authed, city, counts = {}, nearJobs 
               }
             />
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {nearJobs.slice(0, 6).map((j, i) => (
+              {nearJobs.slice(0, 6).map((j, i) => {
+                const role = jobRoleVisual(j.jobTitle);
+                const RoleIcon = role.Icon;
+                return (
                 <div key={j.id} data-reveal style={{ transitionDelay: `${(i % 3) * 80}ms` }}>
                 <button
                   type="button"
@@ -9210,8 +12695,8 @@ function HomeScreen({ onTabNav, onOpenCard, authed, city, counts = {}, nearJobs 
                   className="w-full h-full flex gap-3 p-4 sm:p-5 text-left rounded-2xl bg-white transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg"
                   style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: SOFT_SHADOW }}
                 >
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 text-[16px] font-extrabold" style={{ backgroundColor: BRAND_50, color: BRAND }}>
-                    {authed ? (j.facilityName || "?")[0] : <Briefcase className="w-5 h-5" />}
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: role.tint, color: role.color }}>
+                    <RoleIcon className="w-5 h-5" strokeWidth={2.1} />
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-[15.5px] font-bold truncate" style={{ color: INK, letterSpacing: "-0.01em" }}>{j.jobTitle}</p>
@@ -9230,7 +12715,8 @@ function HomeScreen({ onTabNav, onOpenCard, authed, city, counts = {}, nearJobs 
                   </div>
                 </button>
                 </div>
-              ))}
+              );
+              })}
             </div>
             <button type="button" onClick={() => onTabNav("find")} className="sm:hidden mt-4 w-full h-12 rounded-xl text-[14px] font-bold" style={{ color: BRAND, backgroundColor: BRAND_50 }}>
               See all jobs
@@ -9337,24 +12823,7 @@ function HomeScreen({ onTabNav, onOpenCard, authed, city, counts = {}, nearJobs 
 
         {/* Testimonials */}
         <section className="pt-16 sm:pt-20">
-          <SectionHeading center eyebrow="Testimonials" title="Loved by doctors, hospitals and patients" />
-          <div className="grid md:grid-cols-3 gap-4 sm:gap-5">
-            {TESTIMONIALS.map((t, i) => (
-              <figure key={t.name} data-reveal className="rounded-2xl p-6 bg-white flex flex-col" style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: SOFT_SHADOW, transitionDelay: `${i * 100}ms` }}>
-                <div className="flex gap-0.5 mb-3">
-                  {[0, 1, 2, 3, 4].map((i) => <Star key={i} className="w-4 h-4" style={{ color: STAR }} fill={STAR} />)}
-                </div>
-                <blockquote className="text-[15px] leading-relaxed flex-1" style={{ color: INK_2 }}>“{t.text}”</blockquote>
-                <figcaption className="flex items-center gap-3 mt-5 pt-5" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
-                  <img src={`${LANDING_IMG}/${t.img}.jpg`} alt={t.name} loading="lazy" decoding="async" className="w-11 h-11 rounded-full object-cover shrink-0" style={{ border: `2px solid ${BRAND_50}` }} />
-                  <div className="min-w-0">
-                    <p className="text-[14px] font-bold truncate" style={{ color: INK }}>{t.name}</p>
-                    <p className="text-[12.5px] truncate" style={{ color: SUBTLE }}>{t.role}</p>
-                  </div>
-                </figcaption>
-              </figure>
-            ))}
-          </div>
+          <TestimonialsCarousel />
         </section>
 
         {/* Latest */}
@@ -9504,13 +12973,15 @@ function ProfileScreen({ username, onBack }) {
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      <div className="px-5 pt-6 pb-4 flex items-center gap-3" style={{ backgroundColor: CREAM }}>
+      <div className="px-4 sm:px-8 pt-6 pb-4 flex items-center gap-3">
         <button onClick={onBack} className="w-9 h-9 rounded-full flex items-center justify-center bg-white" style={{ border: `1px solid ${CARD_BORDER}` }}>
           <ChevronLeft className="w-5 h-5" style={{ color: INK }} />
         </button>
         <p className="font-bold text-[17px]" style={{ color: INK }}>Profile & Verification</p>
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-6">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-8 pt-2 pb-8">
+        <div className="lg:grid lg:grid-cols-2 lg:gap-6 items-start">
+        <div>
         <div className="rounded-2xl p-4 bg-white flex items-center gap-3.5" style={{ border: `1px solid ${CARD_BORDER}` }}>
           <div className="relative shrink-0">
             <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-white text-xl font-bold" style={{ backgroundColor: INK }}>AK</div>
@@ -9534,7 +13005,9 @@ function ProfileScreen({ username, onBack }) {
           <p className="text-[13px] mt-2 leading-snug" style={{ color: "#4B4A45" }}>{completion < 100 ? "Complete verification to appear higher in hospital search results." : "Your profile is fully verified and visible to all hospitals."}</p>
         </div>
 
-        <p className="text-[14px] font-bold mt-4 mb-1.5" style={{ color: INK, letterSpacing: "-0.01em" }}>Registration details</p>
+        </div>
+        <div>
+        <p className="text-[14px] font-bold mt-4 lg:mt-0 mb-1.5" style={{ color: INK, letterSpacing: "-0.01em" }}>Registration details</p>
         <div className="rounded-2xl bg-white overflow-hidden" style={{ border: `1px solid ${CARD_BORDER}` }}>
           <div className="px-4 py-3">
             <label className="text-[13px] font-semibold" style={{ color: INK_2 }}>PMDC Registration Number</label>
@@ -9574,7 +13047,9 @@ function ProfileScreen({ username, onBack }) {
           <p className="text-[11.5px] leading-snug" style={{ color: SUBTLE }}>Documents are reviewed by PakMed's verification team within 48 hours and are never shared without your consent.</p>
         </div>
 
-        <button className="w-full mt-5 py-3.5 rounded-full font-semibold text-[14px]" style={{ backgroundColor: INK, color: "white" }}>Save Profile</button>
+        <button className="w-full mt-5 h-12 rounded-xl font-bold text-[15px] text-white transition-all hover:brightness-110" style={{ backgroundColor: BRAND }}>Save Profile</button>
+        </div>
+        </div>
       </div>
     </div>
   );
@@ -9627,6 +13102,7 @@ export default function PakMedApp() {
   const [profiles, setProfiles] = useState(JSON.parse(JSON.stringify(EMPTY_PROFILES)));
   const [editProfileType, setEditProfileType] = useState("general");
   const [feedStart, setFeedStart] = useState(0);
+  const [focusPost, setFocusPost] = useState(null);
   const [searchQ, setSearchQ] = useState("");
   const [sectionQ, setSectionQ] = useState("");
   const [favJob, setFavJob] = useState(null);
@@ -9763,6 +13239,9 @@ export default function PakMedApp() {
   const [listings, setListings] = useState(SEED_LISTINGS);
 
   const tab = history[history.length - 1];
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, [history.length, tab, !!signInFor, showIntent]);
   const canGoBack = history.length > 1;
 
   const navigate = (key) => setHistory((prev) => (prev[prev.length - 1] === key ? prev : [...prev, key]));
@@ -9770,6 +13249,7 @@ export default function PakMedApp() {
   const goHome = () => setHistory(["home"]);
   const tabNav = (k) => {
     setSectionQ("");
+    setFocusPost(null);
     if (k === "post") return requireAuth("offer a job", () => navigate("postjob"));
     navigate({ find: "findjob", consult: "consult", market: "market", hospital: "hospital", feeds: "updates" }[k] || "home");
   };
@@ -9802,7 +13282,7 @@ export default function PakMedApp() {
   const showChrome = !signInFor && !showIntent;
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: PAGE_BG, fontFamily: FONT }}>
+    <div className={`${signInFor ? "min-h-screen lg:h-dvh lg:max-h-dvh lg:overflow-hidden" : "min-h-screen"} flex flex-col`} style={{ background: PAGE_BG, fontFamily: FONT }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap');`}</style>
       <HomeNav.Provider value={tab !== "home" && !signInFor && !showIntent ? goHome : null}>
       <AuthGate.Provider value={{ authed, require: requireAuth }}>
@@ -9817,16 +13297,23 @@ export default function PakMedApp() {
                 onAuthenticated={(uname, isNew, extra) => {
                   if (uname) setUsername(uname);
                   // sign-up details feed the General profile as a draft, so nothing is typed twice
-                  if (extra && extra.phone) {
-                    setVerifiedPhone(extra.phone);
-                    updateProfile("general", (g) => ({ ...g, phone: g.phone || extra.phone, email: g.email || extra.email || "" }));
+                  if (extra) {
+                    if (extra.phone) setVerifiedPhone(extra.phone);
+                    updateProfile("general", (g) => ({
+                      ...g,
+                      phone: g.phone || extra.phone || "",
+                      email: g.email || extra.email || "",
+                      fullName: g.fullName || (uname ? uname.replace(/_/g, " ") : g.fullName),
+                    }));
                   }
                   const resume = signInFor && signInFor.run;
                   setAuthed(true);
                   authedRef.current = true;
                   setSignInFor(null);
-                  if (isNew && !introSeen) { setShowIntent(true); setIntroSeen(true); }
-                  else if (resume) setTimeout(resume, 60);
+                  setShowIntent(false);
+                  if (isNew) setIntroSeen(true);
+                  setHistory(["home"]);
+                  if (!isNew && resume) setTimeout(resume, 60);
                 }}
               />
           </AuthShell>
@@ -9867,23 +13354,28 @@ export default function PakMedApp() {
                 onSignIn={() => setSignInFor({ reason: "", run: null })}
                 onSignUp={() => setSignInFor({ reason: "", run: null, mode: "signup" })}
                 onOpenProfile={() => navigate("profile")}
+                onOpenAccount={() => navigate("profileDetail")}
+                onSignOut={() => { setAuthed(false); authedRef.current = false; setHistory(["home"]); }}
                 userInitials={userInitials}
+                username={username}
+                userEmail={profiles.general.email}
+                userPhone={profiles.general.phone || verifiedPhone}
               />
             )}
             <div
               className={`flex-1 flex flex-col w-full min-w-0 ${
-                tab === "home"
+                tab === "home" || tab === "findjob" || tab === "consult" || tab === "market" || tab === "hospital" || tab === "postjob"
                   ? ""
                   : tab === "feed"
                     ? "min-h-[calc(100dvh-64px)]"
-                    : "max-w-3xl mx-auto w-full min-h-[calc(100dvh-68px)] bg-white sm:rounded-3xl sm:my-8 overflow-hidden page-enter"
+                    : "max-w-6xl mx-auto w-full sm:w-[calc(100%-48px)] min-h-[calc(100dvh-68px)] bg-white sm:rounded-3xl sm:my-6 overflow-hidden page-enter"
               }`}
-              style={tab !== "home" && tab !== "feed" ? { border: `1px solid ${CARD_BORDER}`, boxShadow: "0 12px 40px -18px rgba(16,24,40,0.18)" } : undefined}
+              style={!["home", "feed", "findjob", "consult", "market", "hospital", "postjob"].includes(tab) ? { border: `1px solid ${CARD_BORDER}`, boxShadow: "0 12px 40px -18px rgba(16,24,40,0.18)" } : undefined}
             >
               {tab === "home" && (
                 <HomeScreen
                   onTabNav={tabNav}
-                  onOpenCard={(i) => { setFeedStart(i); navigate("feed"); }}
+                  onOpenCard={(i) => { setFocusPost(FEED_CARDS[i] ? FEED_CARDS[i].id : null); navigate("updates"); }}
                   authed={authed}
                   city={profiles.general.city}
                   counts={{
@@ -9903,7 +13395,13 @@ export default function PakMedApp() {
                   onSearch={(q) => { setSearchQ(q); navigate("search"); }}
                   onNavigate={headerNavigate}
                   onHome={goHome}
-                  onSeeAllPosts={() => navigate("updates")}
+                  onSeeAllPosts={() => { setFocusPost(null); navigate("updates"); }}
+                  onGo={({ section, q }) => {
+                    if (section === "postjob") return tabNav("post");
+                    setFocusPost(null);
+                    setSectionQ(q || "");
+                    navigate(section);
+                  }}
                 />
               )}
               {tab === "search" && (
@@ -9930,7 +13428,7 @@ export default function PakMedApp() {
                   employer={live("employer")}
                   employerUnlocked={canPostJob}
                   postedJobs={postedJobs}
-                  onOpenHiring={() => navigate("findjob")}
+                  onOpenHiring={(fac) => { setSectionQ(fac ? fac.name : ""); navigate("findjob"); }}
                   isSaved={isSaved}
                   onToggleSave={toggleSave}
                   onMessage={(f) => requireAuth("message this facility", () => addThread({ business: f.name, product: "Enquiry", text: `Hello, I found ${f.name} on PakMed and have a question.` }))}
@@ -9950,6 +13448,8 @@ export default function PakMedApp() {
               {tab === "news" && <NewsScreen {...navProps} />}
               {tab === "updates" && (
                 <UpdatesScreen
+                  key={"u" + (focusPost || "")}
+                  focusId={focusPost}
                   onOpenCard={(i) => { setFeedStart(i); navigate("feed"); }}
                   {...navProps}
                 />
@@ -10025,7 +13525,7 @@ export default function PakMedApp() {
               {tab === "postjob" && (
                 <PostJobScreen
                   postedJobs={postedJobs}
-                  onPublish={(j) => setPostedJobs((prev) => [j, ...prev])}
+                  onPublish={(j) => setPostedJobs((prev) => (prev.some((x) => x.id === j.id) ? prev.map((x) => (x.id === j.id ? { ...x, ...j } : x)) : [j, ...prev]))}
                   canPost={canPostJob}
                   onNeedProfile={(cb, seed) => setQuickAsk({ type: "employer", label: "post this job", run: cb, seed })}
                   known={known}
@@ -10060,14 +13560,27 @@ export default function PakMedApp() {
               )}
               {tab === "messages" && <MessagesScreen threads={threads} {...navProps} />}
               {tab === "profile" && (
-                <ProfileChooserScreen
-                  onProfiles={() => requireAuth("set up your profile", () => navigate("profiles"))}
-                  onCV={() => navigate("cv")}
-                  profilesNote={(() => {
-                    const liveCount = ["general", "doctor", "employer", "seller"].filter((k) => savedProfiles[k] && profileCompletion(k, savedProfiles[k]) >= GATE_THRESHOLD).length;
-                    return liveCount ? `${liveCount} profile${liveCount > 1 ? "s" : ""} live` : "No profile live yet";
-                  })()}
-                  cvNote={cvDoc.uploaded || cvDoc.savedInApp ? "CV ready" : "No CV yet"}
+                <AccountScreen
+                  authed={authed}
+                  onSignIn={() => setSignInFor({ reason: "see your profile", run: null })}
+                  username={username}
+                  general={savedProfiles.general || profiles.general}
+                  doctor={savedProfiles.doctor || profiles.doctor}
+                  pctGeneral={pctGeneral}
+                  pctDoctor={pctDoctor}
+                  cvReady={cvDoc.uploaded || cvDoc.savedInApp}
+                  verifiedPhone={verifiedPhone}
+                  profilesLive={["general", "doctor", "employer", "seller"].filter((k) => savedProfiles[k] && profileCompletion(k, savedProfiles[k]) >= GATE_THRESHOLD).length}
+                  savedJobs={[...postedJobs, ...SEED_JOBS].filter((j) => jobSocial[j.id] && jobSocial[j.id].favourite)}
+                  savedItems={savedItems}
+                  applications={myApplications}
+                  allJobs={[...postedJobs, ...SEED_JOBS]}
+                  messagesCount={threads.length}
+                  onNavigate={(k) => (k === "home" ? goHome() : navigate(k))}
+                  onOpenSaved={(section, q) => { setSectionQ(q || ""); navigate(section); }}
+                  onToggleJob={toggleJobFav}
+                  onToggleSave={toggleSave}
+                  onSignOut={() => { setAuthed(false); authedRef.current = false; setHistory(["home"]); }}
                   {...navProps}
                 />
               )}
