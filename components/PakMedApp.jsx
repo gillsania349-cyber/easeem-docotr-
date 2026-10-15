@@ -13,6 +13,7 @@ import {
   ScanLine, BedDouble, Sparkles, Package, Truck, Tag,
   Siren, TestTube, Navigation, LayoutGrid,
   Minus, Save, ClipboardList,
+  Ban, LayoutDashboard, Megaphone, Headphones, Trash2, RotateCcw, Inbox, UserCheck, ImagePlus, CheckCheck, ShieldAlert,
 } from "lucide-react";
 
 // ---------------- Theme ----------------
@@ -2985,12 +2986,34 @@ function MarketMessageModal({ target, draft, setDraft, onSend, onClose }) {
   );
 }
 
-function MessagesScreen({ threads, onBack }) {
+function MessagesScreen({ threads, adminMessages = [], onBack }) {
   return (
     <div className="flex flex-col h-full min-h-0">
       <ScreenHeader title="Messages" onBack={onBack} />
       <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-4">
-        {threads.length === 0 ? (
+        {adminMessages.length > 0 && (
+          <div className="flex flex-col gap-2.5 mt-3 mb-1">
+            <p className="text-[11px] font-bold uppercase tracking-wider px-1" style={{ color: SUBTLE }}>From PakMed Admin</p>
+            {adminMessages.map((m) => (
+              <div key={m.id} className="rounded-xl p-3.5" style={{ backgroundColor: BRAND_50, border: "1px solid #B9D3F2" }}>
+                <div className="flex items-start gap-2.5">
+                  <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: BRAND }}>
+                    <Megaphone className="w-4 h-4 text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13.5px] font-semibold leading-tight flex items-center gap-1" style={{ color: INK }}>
+                      PakMed Admin <CheckCircle2 className="w-3.5 h-3.5" style={{ color: BRAND }} />
+                    </p>
+                    <p className="text-[12px] mt-0.5 font-semibold" style={{ color: INK_2 }}>{m.subject}{m.to === "all" ? " · Announcement" : ""}</p>
+                    <p className="text-[12.5px] mt-1.5 whitespace-pre-wrap" style={{ color: "#4B4A45" }}>{m.text}</p>
+                    <p className="text-[10.5px] mt-1.5" style={{ color: SUBTLE }}>{adminAgo(m.at)}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {threads.length === 0 && adminMessages.length > 0 ? null : threads.length === 0 ? (
           <div className="rounded-xl bg-white p-6 text-center mt-2" style={{ border: `1px solid ${CARD_BORDER}` }}>
             <MessageSquareText className="w-8 h-8 mx-auto mb-2" style={{ color: SUBTLE }} />
             <p className="text-[13px]" style={{ color: SUBTLE }}>No messages yet. Message a seller from the Market tab to start a conversation.</p>
@@ -4933,6 +4956,57 @@ const CITIES = [
   "Dera Ghazi Khan", "Kasur", "Vehari", "Wah Cantonment", "Muzaffarabad", "Mirpur", "Gilgit", "Skardu",
   "Gwadar", "Turbat", "Chitral", "Attock", "Chakwal", "Mianwali", "Khuzdar",
 ];
+
+/** Approx. coords used to map browser GPS → nearest Pakistani city (frontend demo). */
+const PK_CITY_COORDS = [
+  { name: "Karachi", lat: 24.8607, lon: 67.0011 },
+  { name: "Lahore", lat: 31.5204, lon: 74.3587 },
+  { name: "Islamabad", lat: 33.6844, lon: 73.0479 },
+  { name: "Rawalpindi", lat: 33.5651, lon: 73.0169 },
+  { name: "Faisalabad", lat: 31.4504, lon: 73.1350 },
+  { name: "Multan", lat: 30.1575, lon: 71.5249 },
+  { name: "Peshawar", lat: 34.0151, lon: 71.5249 },
+  { name: "Quetta", lat: 30.1798, lon: 66.9750 },
+  { name: "Hyderabad", lat: 25.3960, lon: 68.3578 },
+  { name: "Sialkot", lat: 32.4945, lon: 74.5229 },
+  { name: "Gujranwala", lat: 32.1877, lon: 74.1945 },
+  { name: "Bahawalpur", lat: 29.3544, lon: 71.6911 },
+  { name: "Sukkur", lat: 27.7052, lon: 68.8574 },
+  { name: "Abbottabad", lat: 34.1688, lon: 73.2215 },
+  { name: "Mardan", lat: 34.1986, lon: 72.0404 },
+  { name: "Sargodha", lat: 32.0836, lon: 72.6711 },
+  { name: "Gujrat", lat: 32.5731, lon: 74.0789 },
+  { name: "Jhelum", lat: 32.9405, lon: 73.7276 },
+  { name: "Sahiwal", lat: 30.6682, lon: 73.1114 },
+  { name: "Okara", lat: 30.8081, lon: 73.4458 },
+  { name: "Sheikhupura", lat: 31.7167, lon: 73.9850 },
+  { name: "Rahim Yar Khan", lat: 28.4212, lon: 70.2989 },
+  { name: "Dera Ghazi Khan", lat: 30.0489, lon: 70.6455 },
+  { name: "Dera Ismail Khan", lat: 31.8313, lon: 70.9017 },
+  { name: "Kohat", lat: 33.5889, lon: 71.4429 },
+  { name: "Mansehra", lat: 34.3303, lon: 73.1994 },
+  { name: "Mingora", lat: 34.7717, lon: 72.3600 },
+  { name: "Muzaffarabad", lat: 34.3700, lon: 73.4711 },
+  { name: "Mirpur", lat: 33.1478, lon: 73.7497 },
+  { name: "Gilgit", lat: 35.9208, lon: 74.3144 },
+  { name: "Skardu", lat: 35.2971, lon: 75.6335 },
+  { name: "Gwadar", lat: 25.1216, lon: 62.3254 },
+  { name: "Larkana", lat: 27.5590, lon: 68.2120 },
+  { name: "Nawabshah", lat: 26.2442, lon: 68.4100 },
+  { name: "Attock", lat: 33.7667, lon: 72.3667 },
+  { name: "Chakwal", lat: 32.9328, lon: 72.8630 },
+  { name: "Mianwali", lat: 32.5839, lon: 71.5370 },
+];
+
+function nearestPkCity(lat, lon) {
+  let best = "Pakistan";
+  let bestD = Infinity;
+  PK_CITY_COORDS.forEach((c) => {
+    const d = (c.lat - lat) ** 2 + (c.lon - lon) ** 2;
+    if (d < bestD) { bestD = d; best = c.name; }
+  });
+  return best;
+}
 
 const COMMON_REQUIREMENTS = [
   "PMDC / PNC registered", "Fresh graduates welcome", "1+ year experience",
@@ -7618,6 +7692,115 @@ function DoctorMessageSheet({ doctor: d, authed, defaults = {}, onSend, onClose 
   );
 }
 
+function FacilityEnquirySheet({ facility: f, authed, defaults = {}, onSend, onClose }) {
+  const [name, setName] = useState(defaults.name || "");
+  const [phone, setPhone] = useState(defaults.phone || "");
+  const [subject, setSubject] = useState("General enquiry");
+  const [msg, setMsg] = useState("");
+  const [sent, setSent] = useState(false);
+  const ok = msg.trim() && (authed || (name.trim() && phone.replace(/\D/g, "").length >= 10));
+  const subjects = ["General enquiry", "Appointment / OPD", "Services & pricing", "Job enquiry", "Other"];
+  const send = () => {
+    if (!ok) return;
+    onSend({
+      business: f.name,
+      product: subject,
+      text: msg.trim(),
+      from: authed ? null : { name: name.trim(), phone: phone.trim() },
+    });
+    setSent(true);
+  };
+  return (
+    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="absolute inset-0 bg-black/45" onClick={onClose} />
+      <div className="relative w-full max-w-[440px] bg-white rounded-t-3xl sm:rounded-3xl overflow-hidden max-h-[92vh] flex flex-col" style={{ fontFamily: FONT, boxShadow: "0 24px 60px -18px rgba(16,24,40,0.45)" }}>
+        <div className="flex items-center justify-between px-5 pt-4 pb-3 shrink-0" style={{ borderBottom: `1px solid ${CARD_BORDER}` }}>
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: TEAL_TINT }}>
+              <Building2 className="w-5 h-5" style={{ color: TEAL }} />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[15px] font-extrabold truncate" style={{ color: INK }}>Send an enquiry</p>
+              <p className="text-[12.5px] truncate" style={{ color: SUBTLE }}>{f.name} · {f.city}</p>
+            </div>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close" className="w-9 h-9 rounded-xl flex items-center justify-center hover:bg-[#F5F7FA]">
+            <X className="w-5 h-5" style={{ color: SUBTLE }} />
+          </button>
+        </div>
+        {sent ? (
+          <div className="px-5 py-10 text-center">
+            <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3" style={{ backgroundColor: GREEN_TINT }}>
+              <Check className="w-7 h-7" strokeWidth={3} style={{ color: GREEN }} />
+            </div>
+            <p className="text-[17px] font-extrabold" style={{ color: INK }}>Enquiry sent</p>
+            <p className="text-[13.5px] mt-1.5 leading-relaxed px-2" style={{ color: SUBTLE }}>
+              {authed
+                ? `${f.name} will reply in your Messages.`
+                : `They can reach you on WhatsApp at ${phone}.`}
+            </p>
+            <button type="button" onClick={onClose} className="mt-6 px-7 h-11 rounded-xl text-[14px] font-bold text-white" style={{ backgroundColor: TEAL }}>Done</button>
+          </div>
+        ) : (
+          <div className="px-5 pt-4 pb-5 overflow-y-auto">
+            {!authed && (
+              <>
+                <p className="text-[12.5px] mb-3 leading-snug" style={{ color: SUBTLE }}>
+                  You&apos;re not signed in. Leave your name and WhatsApp so the facility can reply.
+                </p>
+                <PFLabel req color={TEAL}>Your name</PFLabel>
+                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" className={PF_INPUT_CLS} style={PF_INPUT_STYLE} />
+                <div className="mt-3">
+                  <PFLabel req color={TEAL}>WhatsApp number</PFLabel>
+                  <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="03XX XXXXXXX" inputMode="tel" className={PF_INPUT_CLS} style={PF_INPUT_STYLE} />
+                </div>
+                <div className="h-3" />
+              </>
+            )}
+            <PFLabel color={TEAL}>Subject</PFLabel>
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {subjects.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setSubject(s)}
+                  className="h-8 px-3 rounded-full text-[12.5px] font-semibold transition-colors"
+                  style={{
+                    color: subject === s ? "#fff" : INK_2,
+                    backgroundColor: subject === s ? TEAL : CREAM,
+                    border: `1px solid ${subject === s ? TEAL : CARD_BORDER}`,
+                  }}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+            <PFLabel req color={TEAL}>Your enquiry</PFLabel>
+            <textarea
+              value={msg}
+              onChange={(e) => setMsg(e.target.value)}
+              rows={4}
+              placeholder={`Write your message to ${f.name}…`}
+              className="w-full text-[14.5px] rounded-xl px-3.5 py-3 outline-none resize-none"
+              style={PF_INPUT_STYLE}
+            />
+            <button
+              type="button"
+              onClick={send}
+              disabled={!ok}
+              className="w-full mt-3 h-12 rounded-xl text-[15px] font-bold text-white inline-flex items-center justify-center gap-2 transition-opacity"
+              style={{ backgroundColor: TEAL, opacity: ok ? 1 : 0.4, boxShadow: ok ? "0 8px 20px -10px rgba(14,124,134,0.55)" : "none" }}
+            >
+              <Send className="w-4 h-4" /> Send enquiry
+            </button>
+            <p className="text-[11.5px] text-center mt-2.5" style={{ color: SUBTLE }}>For medical emergencies call 1122 — don&apos;t use this form.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ---------- extra sample doctors (frontend-only demo data) ---------- */
 const dr = (id, name, specialty, qual, city, area, clinic, fee, rating, reviews, exp, online, slots, extra = {}) => ({
   id, name, specialty, qual, city, area, clinic, fee, rating, reviews, exp, verified: true, online, phone: "", showPhone: false, slots, ...extra,
@@ -10202,7 +10385,8 @@ function FacilityPage({ f, all, jobs, onBack, onOpen, saved, onToggleSave, onMes
   );
 }
 
-function FindHospitalScreen({ initialQuery, onBack, onMenu, userCity, employer, employerUnlocked, postedJobs, onOpenHiring, onMessage, isSaved = () => false, onToggleSave = () => {} }) {
+function FindHospitalScreen({ initialQuery, onBack, onMenu, userCity, employer, employerUnlocked, postedJobs, onOpenHiring, onMessage, guestDefaults = {}, isSaved = () => false, onToggleSave = () => {} }) {
+  const gate = useContext(AuthGate);
   const [query, setQuery] = useState(initialQuery || "");
   const [qDraft, setQDraft] = useState(initialQuery || "");
   const [location, setLocation] = useState(initialQuery ? "" : (userCity || ""));
@@ -10211,6 +10395,7 @@ function FindHospitalScreen({ initialQuery, onBack, onMenu, userCity, employer, 
   const [sort, setSort] = useState("recommended");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [open, setOpen] = useState(null);
+  const [enquiryFac, setEnquiryFac] = useState(null);
   const resultsRef = useRef(null);
 
   useEffect(() => {
@@ -10327,18 +10512,32 @@ function FindHospitalScreen({ initialQuery, onBack, onMenu, userCity, employer, 
   if (open) {
     const jobs = jobsAt(open);
     return (
-      <FacilityPage
-        f={open}
-        all={all}
-        jobs={jobs}
-        jobsCount={jobs.length || open.hiring || 0}
-        onBack={() => setOpen(null)}
-        onOpen={setOpen}
-        saved={isSaved("hospital", open.id)}
-        onToggleSave={() => onToggleSave("hospital", open)}
-        onMessage={() => onMessage(open)}
-        onOpenJobs={() => onOpenHiring(jobs.length ? open : null)}
-      />
+      <>
+        <FacilityPage
+          f={open}
+          all={all}
+          jobs={jobs}
+          jobsCount={jobs.length || open.hiring || 0}
+          onBack={() => setOpen(null)}
+          onOpen={setOpen}
+          saved={isSaved("hospital", open.id)}
+          onToggleSave={() => onToggleSave("hospital", open)}
+          onMessage={() => setEnquiryFac(open)}
+          onOpenJobs={() => onOpenHiring(jobs.length ? open : null)}
+        />
+        {enquiryFac && (
+          <FacilityEnquirySheet
+            facility={enquiryFac}
+            authed={gate.authed}
+            defaults={guestDefaults}
+            onClose={() => setEnquiryFac(null)}
+            onSend={(payload) => {
+              if (onMessage) onMessage(payload);
+              // keep sheet open on success UI handled inside sheet
+            }}
+          />
+        )}
+      </>
     );
   }
 
@@ -10756,7 +10955,7 @@ function SavedScreen({ onBack, onMenu, savedJobs, savedItems, onToggleJob, onTog
 function AccountScreen({
   onBack, onMenu, authed, onSignIn, username, general = {}, doctor = {}, pctGeneral = 0, pctDoctor = 0,
   cvReady, verifiedPhone, profilesLive = 0, savedJobs = [], savedItems = {}, applications = [], allJobs = [],
-  messagesCount = 0, onNavigate, onOpenSaved, onToggleJob, onToggleSave, onSignOut,
+  messagesCount = 0, adminMessages = [], suspended = false, onNavigate, onOpenSaved, onToggleJob, onToggleSave, onSignOut,
 }) {
   const [savedTab, setSavedTab] = useState("jobs");
 
@@ -10824,6 +11023,37 @@ function AccountScreen({
     <div className="flex flex-col h-full min-h-0" style={{ fontFamily: FONT }}>
       <ScreenHeader title="My profile" subtitle="Your account, saved items and applications" onBack={onBack} onMenu={onMenu} />
       <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-5 space-y-4" style={{ backgroundColor: CREAM }}>
+
+        {suspended && (
+          <div className="rounded-2xl p-4 flex items-start gap-3" style={{ backgroundColor: RED_TINT, border: "1px solid #F5C2BE" }}>
+            <ShieldAlert className="w-5 h-5 shrink-0 mt-0.5" style={{ color: RED }} />
+            <div className="flex-1">
+              <p className="text-[14.5px] font-bold" style={{ color: INK }}>Your account is suspended</p>
+              <p className="text-[13px] mt-0.5" style={{ color: INK_2 }}>You can't post, apply or message right now. Contact support to resolve this.</p>
+            </div>
+            <button type="button" onClick={() => onNavigate("help")} className="h-9 px-3 rounded-lg text-[13px] font-bold text-white shrink-0" style={{ backgroundColor: RED }}>Support</button>
+          </div>
+        )}
+
+        {adminMessages.length > 0 && (
+          <Card>
+            <CardHead title="Messages from PakMed Admin" action="Open messages" onAction={() => onNavigate("messages")} />
+            <ul>
+              {adminMessages.slice(0, 3).map((m) => (
+                <li key={m.id} className="px-5 py-3 flex items-start gap-3" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+                  <span className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: m.read ? "#F2F4F7" : BRAND_50 }}>
+                    <Megaphone className="w-[18px] h-[18px]" style={{ color: m.read ? SUBTLE : BRAND }} />
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[14px] font-bold" style={{ color: INK }}>{m.subject}{!m.read && <span className="ml-2 align-middle text-[10.5px] font-bold px-1.5 py-0.5 rounded-full text-white" style={{ backgroundColor: RED }}>New</span>}</p>
+                    <p className="text-[13px] mt-0.5 line-clamp-2" style={{ color: INK_2 }}>{m.text}</p>
+                    <p className="text-[11.5px] mt-1" style={{ color: FAINT }}>{adminAgo(m.at)}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        )}
 
         {/* identity */}
         <Card className="overflow-hidden">
@@ -10998,6 +11228,7 @@ function AccountScreen({
             { icon: Settings, label: "Settings", go: "settings" },
             { icon: HelpCircle, label: "Help & support", go: "help" },
             { icon: Info, label: "About PakMed", go: "about" },
+            { icon: LayoutDashboard, label: "Admin panel", go: "admin" },
           ].map((l) => (
             <button key={l.label} type="button" onClick={() => onNavigate(l.go)}
               className="rounded-2xl bg-white p-4 flex items-center gap-3 text-left transition-colors hover:bg-[#FAFBFC]" style={{ border: `1px solid ${CARD_BORDER}` }}>
@@ -11098,7 +11329,7 @@ function SimpleInfoScreen({ title, lines, onBack, onMenu }) {
   );
 }
 
-function NavDrawer({ open, onClose, onNavigate, username, cvDoc, unreadCount, pendingReports, panels }) {
+function NavDrawer({ open, onClose, onNavigate, username, cvDoc, unreadCount, pendingReports, panels, isAdmin, adminBadge = 0 }) {
   const hasCV = !!(cvDoc && (cvDoc.uploaded || cvDoc.savedInApp));
 
   const panelItems = [];
@@ -11107,6 +11338,7 @@ function NavDrawer({ open, onClose, onNavigate, username, cvDoc, unreadCount, pe
   if (panels.seller)   panelItems.push({ key: "seller",         icon: Store,       label: "Business Panel" });
 
   const groups = [
+    ...(isAdmin ? [{ label: "Admin", items: [{ key: "admin", icon: LayoutDashboard, label: "Admin Panel", badge: adminBadge }] }] : []),
     ...(panelItems.length ? [{ label: "Your panels", items: panelItems }] : []),
     {
       label: "Browse",
@@ -11298,6 +11530,7 @@ function SiteHeader({
   onSignUp,
   onOpenProfile,
   onOpenAccount,
+  onOpenAdmin,
   onSignOut,
   userInitials,
   username,
@@ -11443,6 +11676,17 @@ function SiteHeader({
                         <Settings className="w-[18px] h-[18px]" style={{ color: BRAND }} />
                         <span className="text-[14px] font-semibold" style={{ color: INK }}>Profile details</span>
                       </button>
+                      {onOpenAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => { setProfileOpen(false); onOpenAdmin(); }}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-[#F5F7FA]"
+                        >
+                          <LayoutDashboard className="w-[18px] h-[18px]" style={{ color: BRAND }} />
+                          <span className="flex-1 text-[14px] font-semibold" style={{ color: INK }}>Admin panel</span>
+                          <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full" style={{ color: BRAND, backgroundColor: BRAND_50 }}>Admin</span>
+                        </button>
+                      )}
                     </div>
                     <div className="py-1.5" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
                       <button
@@ -11510,9 +11754,16 @@ function SiteHeader({
                 More options
               </button>
               {authed ? (
-                <button type="button" onClick={go(onOpenProfile)} className="h-11 rounded-xl text-[14px] font-bold text-white" style={{ backgroundColor: BRAND }}>
-                  My profile
-                </button>
+                <>
+                  <button type="button" onClick={go(onOpenProfile)} className="h-11 rounded-xl text-[14px] font-bold text-white" style={{ backgroundColor: BRAND }}>
+                    My profile
+                  </button>
+                  {onOpenAdmin && (
+                    <button type="button" onClick={go(onOpenAdmin)} className="col-span-2 h-11 rounded-xl text-[14px] font-bold inline-flex items-center justify-center gap-2" style={{ color: BRAND, backgroundColor: BRAND_50, border: "1px solid #B9D3F2" }}>
+                      <LayoutDashboard className="w-4 h-4" /> Admin panel
+                    </button>
+                  )}
+                </>
               ) : (
                 <button type="button" onClick={go(onSignUp)} className="h-11 rounded-xl text-[14px] font-bold text-white" style={{ backgroundColor: BRAND }}>
                   Create account
@@ -11638,6 +11889,176 @@ const HOME_FAQS = [
   { q: "Can I buy or sell medical equipment?", a: "Yes. The Market lets verified sellers list new, used and refurbished biomedical equipment, and buyers can message sellers directly." },
   { q: "Is my personal information safe?", a: "Employer names and contact details are only shown to signed-in users, and you control what appears on your public profile. You can report any suspicious listing at any time." },
 ];
+
+const CHAT_QUICK = [
+  "Is PakMed free?",
+  "How do I find a job?",
+  "Find a doctor",
+  "Post a job",
+  "Buy/sell equipment",
+  "PMDC verification",
+];
+
+function chatReply(text) {
+  const t = String(text || "").toLowerCase();
+  if (!t.trim()) return "Ask me about jobs, doctors, hospitals, the market, or verification.";
+  if (/(free|cost|price|fee|pay)/.test(t)) return HOME_FAQS[0].a;
+  if (/(verif|pmdc|pnc|badge)/.test(t)) return HOME_FAQS[1].a;
+  if (/(account|sign ?in|login|register|signup)/.test(t)) return HOME_FAQS[2].a;
+  if (/(post|offer|hire|hospital.*job|employer)/.test(t)) return HOME_FAQS[3].a;
+  if (/(market|equip|buy|sell|device)/.test(t)) return HOME_FAQS[4].a;
+  if (/(privacy|safe|secure|data)/.test(t)) return HOME_FAQS[5].a;
+  if (/(job|career|shift|vacanc|locum|hiring)/.test(t)) {
+    return "Open Find a Job from the top menu, search by role or city, then apply when signed in. You can also set your city with the location chip on the home search bar.";
+  }
+  if (/(doctor|consult|specialist|clinic)/.test(t)) {
+    return "Use Find a Doctor to browse verified professionals by specialty and city. Sign in if you want to message them directly.";
+  }
+  if (/(hospital|facility|lab|pharmacy)/.test(t)) {
+    return "Open Find Hospital to explore facilities near you. Filter by city and facility type to narrow results.";
+  }
+  if (/(hello|hi|salam|assalam|hey)/.test(t)) {
+    return "Assalam o Alaikum! I'm PakMed Assist. Ask about jobs, doctors, hospitals, verification, or the medical market.";
+  }
+  if (/(thank|shukriya|thanks)/.test(t)) return "You're welcome. Happy to help anytime!";
+  return "I can help with jobs, doctors, hospitals, PMDC verification, posting vacancies, and the equipment market. Try a quick question below, or visit Help from the menu.";
+}
+
+function PakMedChatbot({ onNavigate }) {
+  const [open, setOpen] = useState(false);
+  const [input, setInput] = useState("");
+  const [typing, setTyping] = useState(false);
+  const [messages, setMessages] = useState([
+    { id: "w1", role: "bot", text: "Assalam o Alaikum! I'm PakMed Assist. Ask about jobs, doctors, hospitals, verification, or the market." },
+  ]);
+  const endRef = useRef(null);
+  const timerRef = useRef(null);
+
+  useEffect(() => () => clearTimeout(timerRef.current), []);
+  useEffect(() => {
+    if (open && endRef.current) endRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages, open, typing]);
+
+  const pushBot = (text) => {
+    setTyping(true);
+    clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      setMessages((m) => [...m, { id: `b-${Date.now()}`, role: "bot", text }]);
+      setTyping(false);
+    }, 450 + Math.min(900, text.length * 8));
+  };
+
+  const send = (raw) => {
+    const text = String(raw || input).trim();
+    if (!text || typing) return;
+    setInput("");
+    setMessages((m) => [...m, { id: `u-${Date.now()}`, role: "user", text }]);
+    pushBot(chatReply(text));
+  };
+
+  return (
+    <div className="fixed bottom-5 right-4 sm:bottom-6 sm:right-6 z-[60]" style={{ fontFamily: FONT }}>
+      {open && (
+        <div
+          className="mb-3 w-[min(100vw-1.5rem,360px)] h-[min(70vh,520px)] flex flex-col rounded-3xl overflow-hidden bg-white"
+          style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: "0 24px 60px -18px rgba(16,24,40,0.4)" }}
+        >
+          <div className="px-4 py-3.5 flex items-center gap-3 shrink-0" style={{ background: `linear-gradient(135deg, ${BRAND_DK}, ${BRAND})` }}>
+            <span className="w-10 h-10 rounded-xl flex items-center justify-center bg-white/15">
+              <MessageSquareText className="w-5 h-5 text-white" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[15px] font-extrabold text-white leading-tight">PakMed Assist</p>
+              <p className="text-[12px] text-white/75">Usually replies instantly</p>
+            </div>
+            {onNavigate && (
+              <button type="button" onClick={() => { setOpen(false); onNavigate("help"); }} className="hidden sm:inline text-[12px] font-bold text-white/90 px-2 py-1 rounded-lg hover:bg-white/10">
+                Help
+              </button>
+            )}
+            <button type="button" onClick={() => setOpen(false)} aria-label="Close chat" className="w-9 h-9 rounded-xl flex items-center justify-center hover:bg-white/10">
+              <X className="w-5 h-5 text-white" />
+            </button>
+          </div>
+
+          <div className="flex-1 min-h-0 overflow-y-auto px-3.5 py-3 space-y-2.5" style={{ backgroundColor: CREAM }}>
+            {messages.map((m) => (
+              <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div
+                  className="max-w-[88%] rounded-2xl px-3.5 py-2.5 text-[13.5px] leading-relaxed"
+                  style={{
+                    backgroundColor: m.role === "user" ? BRAND : "#fff",
+                    color: m.role === "user" ? "#fff" : INK_2,
+                    border: m.role === "user" ? "none" : `1px solid ${CARD_BORDER}`,
+                    borderBottomRightRadius: m.role === "user" ? 6 : 16,
+                    borderBottomLeftRadius: m.role === "bot" ? 6 : 16,
+                  }}
+                >
+                  {m.text}
+                </div>
+              </div>
+            ))}
+            {typing && (
+              <div className="flex justify-start">
+                <div className="rounded-2xl px-3.5 py-2.5 bg-white text-[13px]" style={{ border: `1px solid ${CARD_BORDER}`, color: FAINT }}>
+                  Typing…
+                </div>
+              </div>
+            )}
+            <div ref={endRef} />
+          </div>
+
+          <div className="px-3 pt-2 pb-1 flex gap-1.5 overflow-x-auto shrink-0" style={{ scrollbarWidth: "none", borderTop: `1px solid ${CARD_BORDER}` }}>
+            {CHAT_QUICK.map((q) => (
+              <button
+                key={q}
+                type="button"
+                onClick={() => send(q)}
+                className="shrink-0 h-8 px-3 rounded-full text-[12px] font-semibold whitespace-nowrap"
+                style={{ color: BRAND, backgroundColor: BRAND_50, border: `1px solid #B9D3F2` }}
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+
+          <form
+            onSubmit={(e) => { e.preventDefault(); send(input); }}
+            className="p-3 flex gap-2 shrink-0 bg-white"
+            style={{ borderTop: `1px solid ${CARD_BORDER}` }}
+          >
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Ask anything about PakMed…"
+              className="flex-1 min-w-0 h-11 px-3.5 rounded-xl text-[14px] outline-none bg-white"
+              style={{ color: INK, border: `1.5px solid ${CARD_BORDER}` }}
+            />
+            <button
+              type="submit"
+              disabled={!input.trim() || typing}
+              className="w-11 h-11 rounded-xl flex items-center justify-center text-white shrink-0 disabled:opacity-45"
+              style={{ backgroundColor: BRAND }}
+              aria-label="Send"
+            >
+              <Send className="w-4 h-4" />
+            </button>
+          </form>
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-label={open ? "Close chatbot" : "Open chatbot"}
+        className="ml-auto w-14 h-14 rounded-full flex items-center justify-center text-white transition-transform hover:scale-105 active:scale-95"
+        style={{ backgroundColor: BRAND, boxShadow: "0 14px 32px -10px rgba(11,87,183,0.65)" }}
+      >
+        {open ? <X className="w-6 h-6" /> : <MessageCircle className="w-6 h-6" />}
+      </button>
+    </div>
+  );
+}
 
 const POPULAR_CITIES = ["Karachi", "Lahore", "Islamabad", "Rawalpindi", "Faisalabad", "Multan", "Peshawar", "Quetta"];
 
@@ -12143,7 +12564,7 @@ function UpdatePost({ card, isNew, onOpen, focused }) {
   );
 }
 
-const UPDATE_CATEGORIES = ["All", "Jobs", "For Hospitals", "Doctors"];
+const UPDATE_CATEGORIES = ["All", "Announcements", "Jobs", "For Hospitals", "Doctors"];
 
 function UpdatesScreen({ onBack, onMenu, onOpenCard, focusId }) {
   const [focused, setFocused] = useState(focusId || null);
@@ -12345,28 +12766,86 @@ function searchSite(index, query, limit = 8) {
   return out;
 }
 
-function SiteSearch({ city, onGo, onSearchAll }) {
+function SiteSearch({ city, onGo, onSearchAll, onCityChange }) {
   const index = useRef(null);
   if (!index.current) index.current = buildSearchIndex();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [hi, setHi] = useState(0);
+  const [loc, setLoc] = useState(city || "");
+  const [locStatus, setLocStatus] = useState("idle"); // idle | loading | error
+  const [locOpen, setLocOpen] = useState(false);
+  const [locQuery, setLocQuery] = useState("");
   const rootRef = useRef(null);
   const inputRef = useRef(null);
+  const locRef = useRef(null);
 
   useEffect(() => {
-    if (!open) return;
-    const handler = (e) => { if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false); };
+    if (city) setLoc(city);
+  }, [city]);
+
+  useEffect(() => {
+    if (!open && !locOpen) return undefined;
+    const handler = (e) => {
+      if (rootRef.current && !rootRef.current.contains(e.target)) {
+        setOpen(false);
+        setLocOpen(false);
+      }
+    };
     document.addEventListener("mousedown", handler);
     document.addEventListener("touchstart", handler, { passive: true });
     return () => {
       document.removeEventListener("mousedown", handler);
       document.removeEventListener("touchstart", handler);
     };
-  }, [open]);
+  }, [open, locOpen]);
 
   const results = q.trim() ? searchSite(index.current, q) : index.current.filter((it) => it.type === "Page");
   useEffect(() => { setHi(0); }, [q]);
+
+  const applyLoc = (name) => {
+    setLoc(name || "");
+    setLocOpen(false);
+    setLocQuery("");
+    setLocStatus("idle");
+    if (onCityChange) onCityChange(name || "");
+  };
+
+  const detectLocation = () => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setLocStatus("error");
+      setLocOpen(true);
+      return;
+    }
+    setLocStatus("loading");
+    setLocOpen(false);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const name = nearestPkCity(pos.coords.latitude, pos.coords.longitude);
+        applyLoc(name);
+      },
+      () => {
+        setLocStatus("error");
+        setLocOpen(true);
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 },
+    );
+  };
+
+  const onLocChipClick = () => {
+    setOpen(false);
+    if (!loc && locStatus !== "loading") {
+      detectLocation();
+      return;
+    }
+    setLocOpen((v) => !v);
+  };
+
+  const citySuggestions = filterSuggestions(
+    CITIES,
+    locQuery,
+    locQuery.trim() ? 8 : 10,
+  );
 
   const go = (it) => { setOpen(false); setQ(""); onGo(it.go); };
   const submit = (e) => {
@@ -12379,7 +12858,7 @@ function SiteSearch({ city, onGo, onSearchAll }) {
   const onKeyDown = (e) => {
     if (e.key === "ArrowDown") { e.preventDefault(); setOpen(true); setHi((i) => Math.min(results.length - 1, i + 1)); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setHi((i) => Math.max(0, i - 1)); }
-    else if (e.key === "Escape") setOpen(false);
+    else if (e.key === "Escape") { setOpen(false); setLocOpen(false); }
   };
 
   const highlight = (text) => {
@@ -12389,17 +12868,19 @@ function SiteSearch({ city, onGo, onSearchAll }) {
     return <>{text.slice(0, i)}<b style={{ color: BRAND }}>{text.slice(i, i + nq.length)}</b>{text.slice(i + nq.length)}</>;
   };
 
+  const locLabel = locStatus === "loading" ? "Detecting…" : (loc || "Pakistan");
+
   return (
     <div ref={rootRef} className="relative z-30 max-w-xl mb-6">
-      <form onSubmit={submit} className="flex flex-col sm:flex-row gap-2 p-2 rounded-2xl bg-white" style={{ border: `1px solid ${open ? "#B9D3F2" : CARD_BORDER}`, boxShadow: "0 12px 32px -12px rgba(16,24,40,0.18)" }}>
+      <form onSubmit={submit} className="flex flex-col sm:flex-row gap-2 p-2 rounded-2xl bg-white" style={{ border: `1px solid ${open || locOpen ? "#B9D3F2" : CARD_BORDER}`, boxShadow: "0 12px 32px -12px rgba(16,24,40,0.18)" }}>
         <label className="flex-1 min-w-0 flex items-center gap-3 h-12 px-3 rounded-xl">
           <Search className="w-5 h-5 shrink-0" style={{ color: open ? BRAND : FAINT }} />
           <span className="sr-only">Search PakMed</span>
           <input
             ref={inputRef}
             value={q}
-            onChange={(e) => { setQ(e.target.value); setOpen(true); }}
-            onFocus={() => setOpen(true)}
+            onChange={(e) => { setQ(e.target.value); setOpen(true); setLocOpen(false); }}
+            onFocus={() => { setOpen(true); setLocOpen(false); }}
             onKeyDown={onKeyDown}
             placeholder="Search jobs, doctors, hospitals…"
             role="combobox"
@@ -12414,14 +12895,81 @@ function SiteSearch({ city, onGo, onSearchAll }) {
             </button>
           )}
         </label>
-        <div className="flex gap-2">
-          <span className="flex items-center gap-1.5 h-12 px-3 rounded-xl text-[14px] font-semibold flex-1 sm:flex-none" style={{ color: INK_2, backgroundColor: CREAM }}>
-            <MapPin className="w-4 h-4 shrink-0" style={{ color: BRAND }} />
-            <span className="truncate">{city || "Pakistan"}</span>
-          </span>
+        <div className="flex gap-2 relative" ref={locRef}>
+          <button
+            type="button"
+            onClick={onLocChipClick}
+            disabled={locStatus === "loading"}
+            aria-label="Use or change location"
+            aria-expanded={locOpen}
+            className="flex items-center gap-1.5 h-12 px-3 rounded-xl text-[14px] font-semibold flex-1 sm:flex-none max-w-[180px] transition-colors hover:bg-[#EAF2FC] disabled:opacity-70"
+            style={{ color: locStatus === "error" ? RED : INK_2, backgroundColor: CREAM, border: locOpen ? `1.5px solid ${BRAND}` : "1.5px solid transparent" }}
+          >
+            <MapPin className={`w-4 h-4 shrink-0 ${locStatus === "loading" ? "animate-pulse" : ""}`} style={{ color: BRAND }} />
+            <span className="truncate">{locLabel}</span>
+            <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-60" style={{ transform: locOpen ? "rotate(180deg)" : "none" }} />
+          </button>
           <button type="submit" className="h-12 px-5 rounded-xl text-[15px] font-bold text-white shrink-0" style={{ backgroundColor: BRAND }}>
             Search
           </button>
+
+          {locOpen && (
+            <div
+              className="absolute right-0 sm:right-auto sm:left-0 top-[calc(100%+8px)] w-[min(100vw-2rem,280px)] rounded-2xl bg-white overflow-hidden z-40"
+              style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: "0 20px 40px -14px rgba(16,24,40,0.28)" }}
+            >
+              <div className="p-2.5" style={{ borderBottom: `1px solid ${CARD_BORDER}` }}>
+                <button
+                  type="button"
+                  onClick={detectLocation}
+                  className="w-full flex items-center gap-2.5 h-11 px-3 rounded-xl text-left text-[14px] font-bold hover:bg-[#EAF2FC]"
+                  style={{ color: BRAND, backgroundColor: BRAND_50 }}
+                >
+                  <MapPin className="w-4 h-4 shrink-0" />
+                  Use my current location
+                </button>
+                {locStatus === "error" && (
+                  <p className="text-[12px] mt-2 px-1" style={{ color: RED }}>
+                    Couldn&apos;t access GPS. Allow location, or pick a city below.
+                  </p>
+                )}
+              </div>
+              <div className="px-2.5 pt-2">
+                <input
+                  value={locQuery}
+                  onChange={(e) => setLocQuery(e.target.value)}
+                  placeholder="Search Pakistani cities…"
+                  className="w-full h-10 px-3 rounded-xl text-[13.5px] outline-none bg-white"
+                  style={{ color: INK, border: `1.5px solid ${CARD_BORDER}` }}
+                />
+              </div>
+              <ul className="max-h-52 overflow-y-auto px-1.5 py-1.5">
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => applyLoc("")}
+                    className="w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-left text-[13.5px] font-semibold hover:bg-[#F5F7FA]"
+                    style={{ color: !loc ? BRAND : INK_2 }}
+                  >
+                    All Pakistan
+                  </button>
+                </li>
+                {citySuggestions.map((c) => (
+                  <li key={c}>
+                    <button
+                      type="button"
+                      onClick={() => applyLoc(c)}
+                      className="w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-left text-[13.5px] font-semibold hover:bg-[#F5F7FA]"
+                      style={{ color: loc === c ? BRAND : INK }}
+                    >
+                      <MapPin className="w-3.5 h-3.5 shrink-0" style={{ color: BRAND }} />
+                      {c}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       </form>
 
@@ -12471,7 +13019,7 @@ function SiteSearch({ city, onGo, onSearchAll }) {
   );
 }
 
-function HomeScreen({ onTabNav, onOpenCard, authed, city, counts = {}, nearJobs = [], onOpenJob, onSearch, onNavigate, onHome, onSeeAllPosts, onGo }) {
+function HomeScreen({ onTabNav, onOpenCard, authed, city, counts = {}, nearJobs = [], onOpenJob, onSearch, onNavigate, onHome, onSeeAllPosts, onGo, onCityChange }) {
   const countFor = (k) => (counts[k] !== undefined ? counts[k] : "");
   const [audience, setAudience] = useState("professionals");
   const [openFaq, setOpenFaq] = useState(0);
@@ -12558,7 +13106,12 @@ function HomeScreen({ onTabNav, onOpenCard, authed, city, counts = {}, nearJobs 
               Find jobs, verified doctors, hospitals and medical equipment across Pakistan. Browse freely — sign in only when you want to apply, message, save or post.
             </p>
 
-            <SiteSearch city={city} onGo={(g) => (onGo ? onGo(g) : onSearch && onSearch(g.q || ""))} onSearchAll={(q) => onSearch && onSearch(q)} />
+            <SiteSearch
+              city={city}
+              onGo={(g) => (onGo ? onGo(g) : onSearch && onSearch(g.q || ""))}
+              onSearchAll={(q) => onSearch && onSearch(q)}
+              onCityChange={onCityChange}
+            />
 
             <div className="flex flex-wrap gap-3 mb-8">
               <button type="button" onClick={() => onTabNav("find")} className="h-12 px-6 rounded-xl text-[15px] font-bold text-white flex items-center gap-2 transition-colors hover:opacity-95" style={{ backgroundColor: INK }}>
@@ -13058,6 +13611,1369 @@ function ProfileScreen({ username, onBack }) {
 /* =========================================================
    ROOT APP — connects Auth -> Home -> Profile
    ========================================================= */
+/* =========================================================
+   ADMIN PANEL
+   Front-end only: every admin action lives in PakMedApp state
+   (`admin`) and is applied to the public catalogue on render.
+   ========================================================= */
+
+// pristine copies — the public arrays are rebuilt from these whenever admin state changes
+const ADMIN_MASTER = {
+  doctor: [...DOCTORS],
+  job: [...SEED_JOBS],
+  market: [...SEED_MARKET_ITEMS],
+  hospital: [...SEED_FACILITIES],
+  feed: [...FEED_CARDS],
+};
+const ADMIN_PUBLIC = { doctor: DOCTORS, job: SEED_JOBS, market: SEED_MARKET_ITEMS, hospital: SEED_FACILITIES };
+const ADMIN_KINDS = ["doctor", "job", "market", "hospital", "feed"];
+const byKind = (make) => Object.fromEntries(ADMIN_KINDS.map((k) => [k, make()]));
+const ADMIN_SYNC = { last: null };
+
+function adminAgo(ts) {
+  const m = Math.max(0, Math.round((Date.now() - ts) / 60000));
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.round(h / 24)}d ago`;
+}
+
+// feed cards keep a compact age ("5m", "3h", "2d") that postAgeHours() understands
+function feedAge(ts) {
+  const m = Math.max(1, Math.round((Date.now() - ts) / 60000));
+  if (m < 60) return `${m}m`;
+  const h = Math.round(m / 60);
+  return h < 24 ? `${h}h` : `${Math.round(h / 24)}d`;
+}
+
+const ADMIN_T0 = Date.now();
+const SEED_TICKETS = [
+  {
+    id: "t1", userId: "doctor:d4", name: "Dr. Bilal Ahmed", contact: "0345 2233445",
+    subject: "Can't upload my PMDC certificate", category: "Verification", status: "open", createdAt: ADMIN_T0 - 40 * 60000,
+    messages: [{ from: "user", text: "The upload keeps failing when I attach my PMDC certificate (PDF, 3 MB). Can you help?", at: ADMIN_T0 - 40 * 60000 }],
+  },
+  {
+    id: "t2", userId: "employer:City Heart Clinic", name: "City Heart Clinic", contact: "042 3577 1100",
+    subject: "Our job post is not showing in search", category: "Jobs", status: "open", createdAt: ADMIN_T0 - 3 * 3600000,
+    messages: [{ from: "user", text: "We posted a Consultant Cardiologist opening yesterday but it doesn't appear when we search Lahore.", at: ADMIN_T0 - 3 * 3600000 }],
+  },
+  {
+    id: "t3", userId: "seeker:cand2", name: "Sana Iqbal", contact: "PNC-88231",
+    subject: "Report a suspicious employer", category: "Safety", status: "open", createdAt: ADMIN_T0 - 7 * 3600000,
+    messages: [{ from: "user", text: "An employer asked me to pay a 'registration fee' before the interview. Is this allowed on PakMed?", at: ADMIN_T0 - 7 * 3600000 }],
+  },
+  {
+    id: "t4", userId: "doctor:d1", name: "Dr. Sara Malik", contact: "0300 1112233",
+    subject: "Change my consultation fee", category: "Account", status: "open", createdAt: ADMIN_T0 - 26 * 3600000,
+    messages: [{ from: "user", text: "Please update my fee to PKR 2,000 — I can't find where to edit it.", at: ADMIN_T0 - 26 * 3600000 }],
+  },
+  {
+    id: "t5", userId: "seller:Al-Noor Surgical", name: "Al-Noor Surgical", contact: "0300 8471290",
+    subject: "How do I mark an item as sold?", category: "Buy / Sell", status: "resolved", createdAt: ADMIN_T0 - 3 * 86400000,
+    messages: [
+      { from: "user", text: "We sold the oxygen concentrator. How do we take the listing down?", at: ADMIN_T0 - 3 * 86400000 },
+      { from: "admin", text: "Open Business Panel → your listing → Pause or Delete. We've paused it for you in the meantime.", at: ADMIN_T0 - 3 * 86400000 + 3600000 },
+    ],
+  },
+];
+
+function initialAdmin() {
+  return {
+    hidden: byKind(() => ({})),
+    deleted: byKind(() => ({})),
+    edits: byKind(() => ({})),
+    added: byKind(() => []),
+    blocked: {},          // userId -> { reason, at }
+    messages: [],         // admin -> user messages { id, to, toName, subject, text, at, read }
+    tickets: SEED_TICKETS,
+    log: [],
+  };
+}
+
+function adminOwnerOf(kind, x) {
+  if (x._owner) return x._owner;
+  if (kind === "doctor") return `doctor:${x.id}`;
+  if (kind === "job") return `employer:${x.facilityName}`;
+  if (kind === "hospital") return `employer:${x.name}`;
+  if (kind === "market") return `seller:${x.seller}`;
+  return null;
+}
+
+function adminRows(kind, list, admin) {
+  const ed = admin.edits[kind];
+  return list.filter((x) => !admin.deleted[kind][x.id]).map((x) => (ed[x.id] ? { ...x, ...ed[x.id] } : x));
+}
+
+function adminIsLive(kind, x, admin) {
+  const owner = adminOwnerOf(kind, x);
+  return !admin.hidden[kind][x.id] && !(owner && admin.blocked[owner]);
+}
+
+const feedWithAge = (c) => (c.createdAt ? { ...c, time: feedAge(c.createdAt) } : c);
+
+function replaceAll(target, next) {
+  target.length = 0;
+  target.push(...next);
+}
+
+// rebuild the module-level catalogue the public screens read from
+function syncPublicCatalog(admin) {
+  if (ADMIN_SYNC.last === admin) return;
+  ADMIN_SYNC.last = admin;
+  Object.entries(ADMIN_PUBLIC).forEach(([kind, target]) => {
+    replaceAll(target, adminRows(kind, [...admin.added[kind], ...ADMIN_MASTER[kind]], admin).filter((x) => adminIsLive(kind, x, admin)));
+  });
+  const feed = adminRows("feed", [...admin.added.feed, ...ADMIN_MASTER.feed], admin)
+    .filter((x) => adminIsLive("feed", x, admin))
+    .map(feedWithAge);
+  replaceAll(FEED_CARDS, feed);
+  replaceAll(LATEST_POSTS, [...feed].sort((a, b) => postAgeHours(a.time) - postAgeHours(b.time)));
+}
+
+const photoSrc = (p) => (typeof p === "string" ? p : p && (p.src || p.url)) || null;
+
+const ADMIN_SECTIONS = {
+  doctor: {
+    label: "Doctors", single: "doctor", icon: Stethoscope, color: RED, tint: RED_TINT, site: "consult",
+    title: (d) => d.name,
+    sub: (d) => [d.specialty, [d.area, d.city].filter(Boolean).join(", ")].filter(Boolean).join(" · "),
+    meta: (d) => (d.fee ? `PKR ${d.fee}` : ""),
+    flag: { k: "verified", on: "Verified", off: "Unverified" },
+    fields: [
+      { k: "name", label: "Full name", req: true },
+      { k: "specialty", label: "Specialty", type: "select", options: DOCTOR_SPECIALTIES },
+      { k: "qual", label: "Qualifications" },
+      { k: "city", label: "City", type: "select", options: CITIES },
+      { k: "area", label: "Area" },
+      { k: "clinic", label: "Clinic / hospital" },
+      { k: "fee", label: "Consultation fee (PKR)" },
+      { k: "exp", label: "Experience" },
+      { k: "phone", label: "Phone" },
+      { k: "slots", label: "Next available slot" },
+    ],
+    toggles: [{ k: "verified", label: "PMDC verified" }, { k: "online", label: "Online consults" }, { k: "showPhone", label: "Show phone publicly" }],
+    blank: () => ({ name: "", specialty: "General Physician", qual: "MBBS", city: "Karachi", area: "", clinic: "", fee: "1,500", rating: 5, reviews: 0, exp: "1 yrs", verified: true, online: false, phone: "", showPhone: false, slots: "Today" }),
+  },
+  job: {
+    label: "Jobs", single: "job", icon: Briefcase, color: BRAND, tint: BRAND_50, site: "findjob",
+    title: (j) => j.jobTitle,
+    sub: (j) => [j.facilityName, [j.area, j.city].filter(Boolean).join(", ")].filter(Boolean).join(" · "),
+    meta: (j) => (j.payAmount ? `PKR ${j.payAmount} ${j.payUnitLabel || ""}` : ""),
+    fields: [
+      { k: "jobTitle", label: "Job title", type: "select", options: JOB_TITLES, req: true },
+      { k: "facilityName", label: "Facility name", req: true },
+      { k: "facilityTypeLabel", label: "Facility type", type: "select", options: FACILITY_TYPES.map((t) => t.label) },
+      { k: "city", label: "City", type: "select", options: CITIES },
+      { k: "area", label: "Area" },
+      { k: "payAmount", label: "Pay amount (PKR)" },
+      { k: "payUnitLabel", label: "Pay unit", type: "select", options: PAY_UNITS.map((p) => p.label) },
+      { k: "startDate", label: "Start date" },
+      { k: "shifts", label: "Shifts (comma separated)", type: "list" },
+      { k: "requirements", label: "Requirements (comma separated)", type: "list" },
+      { k: "contactName", label: "Contact name" },
+      { k: "contactNumber", label: "Contact number" },
+    ],
+    toggles: [{ k: "showNumber", label: "Show contact number" }, { k: "urgent", label: "Mark as urgent" }],
+    blank: () => ({ jobTitle: "Doctor", facilityName: "", facilityTypeLabel: "Hospital", city: "Karachi", area: "", shifts: ["Morning"], payAmount: "", payUnitLabel: "Per Month", requirements: [], contactName: "", contactNumber: "", showNumber: false, startDate: "Immediately", templateId: "c1", status: "posted", posted: "Just now", applicants: 0, photos: [], coverIndex: 0 }),
+  },
+  market: {
+    label: "Buy / Sell", single: "listing", icon: Store, color: VIOLET, tint: VIOLET_TINT, site: "market",
+    title: (i) => i.name,
+    sub: (i) => [i.seller, [i.area, i.city].filter(Boolean).join(", ")].filter(Boolean).join(" · "),
+    meta: (i) => (i.price ? `PKR ${i.price}${i.priceTo ? ` – ${i.priceTo}` : ""}` : ""),
+    flag: { k: "verifiedSeller", on: "Verified seller", off: "Unverified seller" },
+    fields: [
+      { k: "name", label: "Item name", req: true },
+      { k: "category", label: "Category", type: "select", options: MARKET_CATS.map((c) => c.label) },
+      { k: "condition", label: "Condition", type: "select", options: CONDITIONS },
+      { k: "price", label: "Price (PKR)" },
+      { k: "seller", label: "Seller / business", req: true },
+      { k: "city", label: "City", type: "select", options: CITIES },
+      { k: "area", label: "Area" },
+      { k: "phone", label: "Phone" },
+      { k: "stock", label: "Stock", type: "select", options: STOCK_STATES },
+      { k: "warranty", label: "Warranty" },
+      { k: "note", label: "Description", type: "textarea" },
+    ],
+    toggles: [{ k: "verifiedSeller", label: "Verified seller" }, { k: "showPhone", label: "Show phone publicly" }],
+    blank: () => ({ name: "", category: MARKET_CATS[0].label, condition: "New", price: "", seller: "", city: "Karachi", area: "", phone: "", showPhone: false, note: "", kind: "product", stock: "In stock", delivery: [], warranty: "", posted: "Today", verifiedSeller: true }),
+  },
+  hospital: {
+    label: "Hospitals", single: "facility", icon: Building2, color: TEAL, tint: TEAL_TINT, site: "hospital",
+    title: (f) => f.name,
+    sub: (f) => [f.type, [f.area, f.city].filter(Boolean).join(", ")].filter(Boolean).join(" · "),
+    meta: (f) => f.hours || "",
+    flag: { k: "verified", on: "Verified", off: "Unverified" },
+    fields: [
+      { k: "name", label: "Facility name", req: true },
+      { k: "type", label: "Type", type: "select", options: FACILITY_TYPES.map((t) => t.label) },
+      { k: "city", label: "City", type: "select", options: CITIES },
+      { k: "area", label: "Area" },
+      { k: "address", label: "Address" },
+      { k: "phone", label: "Phone" },
+      { k: "hours", label: "Opening hours" },
+      { k: "services", label: "Services (comma separated)", type: "list" },
+    ],
+    toggles: [{ k: "verified", label: "Verified facility" }],
+    blank: () => ({ name: "", type: "Hospital", city: "Karachi", area: "", address: "", phone: "", services: [], hours: "24 hours", verified: true, hiring: 0, rating: 5, reviews: 0 }),
+  },
+  feed: {
+    label: "Our Feeds", single: "post", icon: Newspaper, color: AMBER, tint: AMBER_TINT, site: "updates", media: true,
+    title: (c) => c.title,
+    sub: (c) => [c.author, c.category].filter(Boolean).join(" · "),
+    meta: (c) => (c.time ? `${c.time} ago` : ""),
+    fields: [
+      { k: "title", label: "Headline", req: true },
+      { k: "eyebrow", label: "Tag (shown on the image)" },
+      { k: "category", label: "Category", type: "select", options: ["Announcements", "Jobs", "For Hospitals", "Doctors"] },
+      { k: "author", label: "Posted as" },
+      { k: "body", label: "Post text", type: "textarea", req: true },
+    ],
+    toggles: [],
+    blank: () => ({ title: "", eyebrow: "Announcement", category: "Announcements", author: "PakMed Team", body: "", likes: 0, comments: [], media: FEED_MEDIA[0] }),
+  },
+};
+
+const ADMIN_TEMPLATES = [
+  { label: "Update profile", subject: "Please update your profile", text: "Assalam o Alaikum, some details on your PakMed profile are missing or out of date. Please update your profile so patients and employers see the correct information." },
+  { label: "Verify PMDC", subject: "PMDC verification needed", text: "Please upload a clear copy of your PMDC / PNC registration so we can keep your verified badge active." },
+  { label: "Fix a listing", subject: "Your listing needs changes", text: "One of your listings needs a few changes before it can stay live (price, photos or description). Please review and update it." },
+  { label: "Policy warning", subject: "Community guidelines reminder", text: "We received reports about recent activity on your account. Please review PakMed's terms of use — repeated violations can lead to suspension." },
+];
+
+const SUPPORT_QUICK_REPLIES = [
+  "Thanks for reaching out — we're looking into this now and will update you shortly.",
+  "This has been fixed on our side. Please refresh the page and try again.",
+  "Please update your profile with the correct details so we can complete verification.",
+];
+
+const ADMIN_STATUS = {
+  live:    { label: "Live",          color: GREEN, tint: GREEN_TINT },
+  hidden:  { label: "Hidden",        color: AMBER, tint: AMBER_TINT },
+  blocked: { label: "Owner blocked", color: RED,   tint: RED_TINT },
+};
+const adminStatusStyle = (s) => ADMIN_STATUS[s] || { label: s.charAt(0).toUpperCase() + s.slice(1), color: SUBTLE, tint: "#F2F4F7" };
+
+const ADMIN_BTN = "h-8 px-2.5 rounded-lg text-[12.5px] font-semibold inline-flex items-center gap-1.5 transition-colors hover:bg-[#F5F7FA] shrink-0";
+const ADMIN_INPUT = "w-full rounded-xl px-3.5 text-[14px] outline-none bg-white focus:ring-2 focus:ring-[#B9D3F2]";
+
+function AdminPill({ color, tint, children }) {
+  return <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap" style={{ color, backgroundColor: tint }}>{children}</span>;
+}
+
+function AdminEmpty({ icon: Icon = Inbox, title, sub }) {
+  return (
+    <div className="rounded-2xl bg-white px-6 py-10 text-center" style={{ border: `1px solid ${CARD_BORDER}` }}>
+      <Icon className="w-8 h-8 mx-auto mb-2" style={{ color: FAINT }} />
+      <p className="text-[14.5px] font-bold" style={{ color: INK }}>{title}</p>
+      {sub && <p className="text-[13px] mt-1" style={{ color: SUBTLE }}>{sub}</p>}
+    </div>
+  );
+}
+
+function AdminModal({ title, sub, onClose, children, footer, wide }) {
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+  return (
+    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center sm:p-4" style={{ fontFamily: FONT }}>
+      <div className="absolute inset-0 bg-black/45" onClick={onClose} />
+      <div className={`relative w-full ${wide ? "sm:max-w-2xl" : "sm:max-w-md"} bg-white rounded-t-3xl sm:rounded-3xl flex flex-col max-h-[92dvh]`}>
+        <div className="flex items-start gap-3 px-5 pt-5 pb-3 shrink-0" style={{ borderBottom: `1px solid ${CARD_BORDER}` }}>
+          <div className="flex-1 min-w-0">
+            <p className="text-[17px] font-extrabold" style={{ color: INK }}>{title}</p>
+            {sub && <p className="text-[12.5px] mt-0.5" style={{ color: SUBTLE }}>{sub}</p>}
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close" className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-[#F2F4F7]">
+            <X className="w-5 h-5" style={{ color: INK_2 }} />
+          </button>
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">{children}</div>
+        {footer && <div className="px-5 py-3.5 shrink-0 flex gap-2 justify-end" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>{footer}</div>}
+      </div>
+    </div>
+  );
+}
+
+function AdminConfirm({ title, body, confirmLabel, tone = RED, withReason, onConfirm, onClose }) {
+  const [reason, setReason] = useState("");
+  return (
+    <AdminModal
+      title={title}
+      onClose={onClose}
+      footer={(
+        <>
+          <button type="button" onClick={onClose} className="h-10 px-4 rounded-xl text-[14px] font-bold" style={{ color: INK_2, border: `1px solid ${CARD_BORDER}` }}>Cancel</button>
+          <button type="button" onClick={() => { onConfirm(reason.trim()); onClose(); }} className="h-10 px-4 rounded-xl text-[14px] font-bold text-white" style={{ backgroundColor: tone }}>{confirmLabel}</button>
+        </>
+      )}
+    >
+      <p className="text-[14px] leading-relaxed" style={{ color: INK_2 }}>{body}</p>
+      {withReason && (
+        <label className="block mt-4">
+          <span className="text-[12.5px] font-bold" style={{ color: INK_2 }}>Reason (optional)</span>
+          <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} placeholder="e.g. Fake credentials, repeated spam…"
+            className={`${ADMIN_INPUT} py-2.5 mt-1.5 resize-none`} style={{ border: `1px solid ${CARD_BORDER}`, color: INK }} />
+        </label>
+      )}
+    </AdminModal>
+  );
+}
+
+function AdminInput({ field, value, onChange }) {
+  const style = { border: `1px solid ${CARD_BORDER}`, color: INK };
+  if (field.type === "select") {
+    const opts = value && !field.options.includes(value) ? [value, ...field.options] : field.options;
+    return (
+      <select value={value || ""} onChange={(e) => onChange(e.target.value)} className={`${ADMIN_INPUT} h-11`} style={style}>
+        {opts.map((o) => <option key={o} value={o}>{o}</option>)}
+      </select>
+    );
+  }
+  if (field.type === "textarea") {
+    return <textarea value={value || ""} onChange={(e) => onChange(e.target.value)} rows={4} className={`${ADMIN_INPUT} py-2.5 resize-y`} style={style} />;
+  }
+  if (field.type === "list") {
+    return (
+      <input value={Array.isArray(value) ? value.join(", ") : value || ""}
+        onChange={(e) => onChange(e.target.value.split(",").map((s) => s.trimStart()))}
+        onBlur={(e) => onChange(e.target.value.split(",").map((s) => s.trim()).filter(Boolean))}
+        className={`${ADMIN_INPUT} h-11`} style={style} />
+    );
+  }
+  return <input value={value || ""} onChange={(e) => onChange(e.target.value)} className={`${ADMIN_INPUT} h-11`} style={style} />;
+}
+
+function AdminEditor({ kind, item, isNew, onSave, onClose }) {
+  const cfg = ADMIN_SECTIONS[kind];
+  const [draft, setDraft] = useState(item);
+  const [err, setErr] = useState("");
+  const set = (k, v) => setDraft((d) => ({ ...d, [k]: v }));
+
+  const onPhoto = (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return setErr("Please choose an image file (JPG, PNG or WebP).");
+    if (file.size > 4 * 1024 * 1024) return setErr("Image is too large — please use one under 4 MB.");
+    const reader = new FileReader();
+    reader.onload = () => { set("media", { kind: "image", src: reader.result }); setErr(""); };
+    reader.readAsDataURL(file);
+  };
+
+  const save = () => {
+    const missing = cfg.fields.filter((f) => f.req && !String(draft[f.k] || "").trim());
+    if (missing.length) return setErr(`Please fill in: ${missing.map((f) => f.label).join(", ")}`);
+    onSave(draft);
+    onClose();
+  };
+
+  const media = draft.media;
+  return (
+    <AdminModal
+      wide
+      title={isNew ? `New ${cfg.single}` : `Edit ${cfg.single}`}
+      sub={isNew ? "It goes live on the site as soon as you save." : "Changes show on the site immediately."}
+      onClose={onClose}
+      footer={(
+        <>
+          <button type="button" onClick={onClose} className="h-10 px-4 rounded-xl text-[14px] font-bold" style={{ color: INK_2, border: `1px solid ${CARD_BORDER}` }}>Cancel</button>
+          <button type="button" onClick={save} className="h-10 px-5 rounded-xl text-[14px] font-bold text-white inline-flex items-center gap-2" style={{ backgroundColor: BRAND }}>
+            <Save className="w-4 h-4" /> {isNew ? (kind === "feed" ? "Publish post" : "Add") : "Save changes"}
+          </button>
+        </>
+      )}
+    >
+      {cfg.media && (
+        <div className="mb-4">
+          <p className="text-[12.5px] font-bold mb-1.5" style={{ color: INK_2 }}>Image</p>
+          <div className="relative aspect-[16/8] rounded-2xl overflow-hidden flex items-center justify-center"
+            style={{ background: media && media.kind === "gradient" ? media.g : CREAM, border: `1px solid ${CARD_BORDER}` }}>
+            {media && media.kind === "image" && <img src={media.src} alt="" className="absolute inset-0 w-full h-full object-cover" />}
+            <label className="relative z-10 h-10 px-4 rounded-xl text-[13.5px] font-bold inline-flex items-center gap-2 cursor-pointer bg-white/95" style={{ color: BRAND, border: `1px solid ${CARD_BORDER}` }}>
+              <ImagePlus className="w-4 h-4" /> {media && media.kind === "image" ? "Change image" : "Upload image"}
+              <input type="file" accept="image/*" className="hidden" onChange={onPhoto} />
+            </label>
+          </div>
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
+            <span className="text-[12px]" style={{ color: SUBTLE }}>or a colour:</span>
+            {FEED_MEDIA.map((m) => (
+              <button key={m.g} type="button" onClick={() => set("media", m)} aria-label="Use colour background"
+                className="w-7 h-7 rounded-full" style={{ background: m.g, outline: media && media.g === m.g ? `2px solid ${BRAND}` : "none", outlineOffset: 2 }} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {cfg.fields.map((f) => (
+          <label key={f.k} className={`block ${f.type === "textarea" || f.type === "list" ? "sm:col-span-2" : ""}`}>
+            <span className="text-[12.5px] font-bold" style={{ color: INK_2 }}>{f.label}{f.req && <span style={{ color: RED }}> *</span>}</span>
+            <div className="mt-1.5"><AdminInput field={f} value={draft[f.k]} onChange={(v) => set(f.k, v)} /></div>
+          </label>
+        ))}
+      </div>
+
+      {cfg.toggles.length > 0 && (
+        <div className="flex flex-wrap gap-2 mt-4">
+          {cfg.toggles.map((t) => {
+            const on = !!draft[t.k];
+            return (
+              <button key={t.k} type="button" onClick={() => set(t.k, !on)}
+                className="h-9 px-3 rounded-full text-[13px] font-semibold inline-flex items-center gap-1.5"
+                style={{ color: on ? BRAND : INK_2, backgroundColor: on ? BRAND_50 : "#fff", border: `1px solid ${on ? "#B9D3F2" : CARD_BORDER}` }}>
+                {on ? <CheckCircle2 className="w-4 h-4" /> : <span className="w-4 h-4 rounded-full" style={{ border: `1.5px solid ${FAINT}` }} />}
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {err && <p className="text-[13px] font-semibold mt-3" style={{ color: RED }}>{err}</p>}
+    </AdminModal>
+  );
+}
+
+function AdminThumb({ kind, x }) {
+  const cfg = ADMIN_SECTIONS[kind];
+  let src = null;
+  let bg = cfg.tint;
+  if (kind === "feed" && x.media) {
+    if (x.media.kind === "image") src = x.media.src;
+    else bg = x.media.g;
+  }
+  if (kind === "market") src = (x.photos && x.photos.length && photoSrc(x.photos[x.coverIndex || 0])) || x.img || null;
+  if (kind === "hospital") src = facImage(x);
+  return (
+    <div className="w-12 h-12 rounded-xl overflow-hidden flex items-center justify-center shrink-0" style={{ background: bg }}>
+      {src ? <img src={src} alt="" className="w-full h-full object-cover" loading="lazy" /> : <cfg.icon className="w-5 h-5" style={{ color: kind === "feed" ? "#fff" : cfg.color }} />}
+    </div>
+  );
+}
+
+const ADMIN_PAGE = 25;
+
+function AdminCollection({ kind, rows, admin, onSave, onHide, onDelete, onFlag, onMessageOwner, onViewSite }) {
+  const cfg = ADMIN_SECTIONS[kind];
+  const [q, setQ] = useState("");
+  const [filter, setFilter] = useState("all");
+  const [limit, setLimit] = useState(ADMIN_PAGE);
+  const [editing, setEditing] = useState(null);   // { item, isNew }
+  const [confirm, setConfirm] = useState(null);
+
+  const statusOf = (x) => {
+    if (admin.hidden[kind][x.id]) return "hidden";
+    const owner = adminOwnerOf(kind, x);
+    if (owner && admin.blocked[owner]) return "blocked";
+    if (x.status && !["posted", "live"].includes(x.status)) return x.status;
+    return "live";
+  };
+  const withStatus = rows.map((x) => ({ x, status: statusOf(x) }));
+  const counts = withStatus.reduce((acc, r) => ({ ...acc, [r.status]: (acc[r.status] || 0) + 1 }), {});
+  const needle = q.trim().toLowerCase();
+  const shown = withStatus.filter(({ x, status }) =>
+    (filter === "all" || status === filter) &&
+    (!needle || `${cfg.title(x)} ${cfg.sub(x)}`.toLowerCase().includes(needle))
+  );
+
+  const filters = [["all", "All", rows.length], ["live", "Live", counts.live || 0], ["hidden", "Hidden", counts.hidden || 0], ["blocked", "Owner blocked", counts.blocked || 0]];
+
+  return (
+    <div>
+      <div className="flex flex-col sm:flex-row gap-2.5 sm:items-center">
+        <label className="flex items-center gap-2 h-11 px-3.5 rounded-xl flex-1 min-w-0" style={{ backgroundColor: "#fff", border: `1px solid ${CARD_BORDER}` }}>
+          <Search className="w-4 h-4 shrink-0" style={{ color: FAINT }} />
+          <input value={q} onChange={(e) => { setQ(e.target.value); setLimit(ADMIN_PAGE); }} placeholder={`Search ${cfg.label.toLowerCase()}…`}
+            className="flex-1 min-w-0 bg-transparent outline-none text-[14px]" style={{ color: INK }} />
+          {q && <button type="button" onClick={() => setQ("")} aria-label="Clear"><X className="w-4 h-4" style={{ color: SUBTLE }} /></button>}
+        </label>
+        <div className="flex gap-2 shrink-0">
+          <button type="button" onClick={() => onViewSite(cfg.site)} className="h-11 px-3.5 rounded-xl text-[13.5px] font-bold inline-flex items-center gap-1.5 bg-white" style={{ color: INK_2, border: `1px solid ${CARD_BORDER}` }}>
+            <Eye className="w-4 h-4" /> View on site
+          </button>
+          <button type="button" onClick={() => setEditing({ item: cfg.blank(), isNew: true })} className="h-11 px-4 rounded-xl text-[13.5px] font-bold inline-flex items-center gap-1.5 text-white" style={{ backgroundColor: BRAND }}>
+            <Plus className="w-4 h-4" /> {kind === "feed" ? "New post" : `Add ${cfg.single}`}
+          </button>
+        </div>
+      </div>
+
+      <div className="flex gap-1.5 overflow-x-auto mt-3 pb-1" style={{ scrollbarWidth: "none" }}>
+        {filters.map(([k, label, n]) => {
+          const on = filter === k;
+          return (
+            <button key={k} type="button" onClick={() => { setFilter(k); setLimit(ADMIN_PAGE); }}
+              className="h-8 px-3 rounded-full text-[12.5px] whitespace-nowrap shrink-0"
+              style={{ fontWeight: on ? 700 : 600, color: on ? "#fff" : INK_2, backgroundColor: on ? BRAND : "#fff", border: `1px solid ${on ? BRAND : CARD_BORDER}` }}>
+              {label} · {n}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-3 flex flex-col gap-2.5">
+        {shown.length === 0 && <AdminEmpty icon={cfg.icon} title={`No ${cfg.label.toLowerCase()} here`} sub={needle ? "Try a different search." : "Nothing matches this filter."} />}
+        {shown.slice(0, limit).map(({ x, status }) => {
+          const st = adminStatusStyle(status);
+          const owner = adminOwnerOf(kind, x);
+          const flagOn = cfg.flag && !!x[cfg.flag.k];
+          return (
+            <div key={x.id} className="rounded-2xl bg-white p-3.5" style={{ border: `1px solid ${CARD_BORDER}`, opacity: status === "live" ? 1 : 0.92 }}>
+              <div className="flex items-start gap-3">
+                <AdminThumb kind={kind} x={x} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <p className="text-[14.5px] font-bold leading-snug" style={{ color: INK }}>{cfg.title(x) || "Untitled"}</p>
+                    <AdminPill color={st.color} tint={st.tint}>{st.label}</AdminPill>
+                    {cfg.flag && <AdminPill color={flagOn ? GREEN : SUBTLE} tint={flagOn ? GREEN_TINT : "#F2F4F7"}>{flagOn ? cfg.flag.on : cfg.flag.off}</AdminPill>}
+                    {x._src === "admin" && <AdminPill color={BRAND} tint={BRAND_50}>Added by admin</AdminPill>}
+                    {x._src === "user" && <AdminPill color={VIOLET} tint={VIOLET_TINT}>User post</AdminPill>}
+                  </div>
+                  <p className="text-[12.5px] mt-0.5 truncate" style={{ color: SUBTLE }}>{cfg.sub(x)}</p>
+                  {cfg.meta(x) && <p className="text-[12.5px] font-semibold mt-0.5" style={{ color: INK_2 }}>{cfg.meta(x)}</p>}
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-1.5 mt-3 pt-3" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+                <button type="button" onClick={() => setEditing({ item: x, isNew: false })} className={ADMIN_BTN} style={{ color: BRAND, border: `1px solid ${CARD_BORDER}` }}>
+                  <Pencil className="w-3.5 h-3.5" /> Edit
+                </button>
+                <button type="button" onClick={() => onHide(x, !admin.hidden[kind][x.id])} className={ADMIN_BTN} style={{ color: admin.hidden[kind][x.id] ? GREEN : AMBER, border: `1px solid ${CARD_BORDER}` }}>
+                  {admin.hidden[kind][x.id] ? <><Eye className="w-3.5 h-3.5" /> Show</> : <><EyeOff className="w-3.5 h-3.5" /> Hide</>}
+                </button>
+                {cfg.flag && (
+                  <button type="button" onClick={() => onFlag(x, cfg.flag.k, !flagOn)} className={ADMIN_BTN} style={{ color: flagOn ? SUBTLE : GREEN, border: `1px solid ${CARD_BORDER}` }}>
+                    <BadgeCheck className="w-3.5 h-3.5" /> {flagOn ? "Remove verification" : "Verify"}
+                  </button>
+                )}
+                {owner && kind !== "feed" && (
+                  <button type="button" onClick={() => onMessageOwner(owner, x)} className={ADMIN_BTN} style={{ color: INK_2, border: `1px solid ${CARD_BORDER}` }}>
+                    <Send className="w-3.5 h-3.5" /> Message owner
+                  </button>
+                )}
+                <button type="button" onClick={() => setConfirm(x)} className={`${ADMIN_BTN} sm:ml-auto`} style={{ color: RED, border: `1px solid ${CARD_BORDER}` }}>
+                  <Trash2 className="w-3.5 h-3.5" /> Delete
+                </button>
+              </div>
+            </div>
+          );
+        })}
+        {shown.length > limit && (
+          <button type="button" onClick={() => setLimit((n) => n + ADMIN_PAGE)} className="h-11 rounded-xl text-[13.5px] font-bold bg-white" style={{ color: BRAND, border: `1px solid ${CARD_BORDER}` }}>
+            Show more ({shown.length - limit} left)
+          </button>
+        )}
+      </div>
+
+      {editing && <AdminEditor kind={kind} item={editing.item} isNew={editing.isNew} onSave={(d) => onSave(d, editing.isNew)} onClose={() => setEditing(null)} />}
+      {confirm && (
+        <AdminConfirm
+          title={`Delete this ${cfg.single}?`}
+          body={`“${cfg.title(confirm)}” will be removed from PakMed for everyone. Use Hide instead if you may want to bring it back.`}
+          confirmLabel="Delete"
+          onConfirm={() => onDelete(confirm)}
+          onClose={() => setConfirm(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+const USER_ROLE_STYLE = {
+  You: { color: BRAND, tint: BRAND_50 },
+  Doctor: { color: RED, tint: RED_TINT },
+  Employer: { color: TEAL, tint: TEAL_TINT },
+  Seller: { color: VIOLET, tint: VIOLET_TINT },
+  "Job seeker": { color: AMBER, tint: AMBER_TINT },
+};
+
+function AdminUsers({ users, admin, onBlock, onUnblock, onMessage }) {
+  const [q, setQ] = useState("");
+  const [role, setRole] = useState("All");
+  const [limit, setLimit] = useState(ADMIN_PAGE);
+  const [confirm, setConfirm] = useState(null);
+  const needle = q.trim().toLowerCase();
+  const roles = ["All", "Doctor", "Employer", "Seller", "Job seeker", "Blocked"];
+  const shown = users.filter((u) =>
+    (role === "All" || (role === "Blocked" ? !!admin.blocked[u.id] : u.role === role)) &&
+    (!needle || `${u.name} ${u.city} ${u.contact}`.toLowerCase().includes(needle))
+  );
+
+  return (
+    <div>
+      <label className="flex items-center gap-2 h-11 px-3.5 rounded-xl" style={{ backgroundColor: "#fff", border: `1px solid ${CARD_BORDER}` }}>
+        <Search className="w-4 h-4 shrink-0" style={{ color: FAINT }} />
+        <input value={q} onChange={(e) => { setQ(e.target.value); setLimit(ADMIN_PAGE); }} placeholder="Search users by name, city or contact…"
+          className="flex-1 min-w-0 bg-transparent outline-none text-[14px]" style={{ color: INK }} />
+      </label>
+      <div className="flex gap-1.5 overflow-x-auto mt-3 pb-1" style={{ scrollbarWidth: "none" }}>
+        {roles.map((r) => {
+          const on = role === r;
+          const n = r === "All" ? users.length : r === "Blocked" ? users.filter((u) => admin.blocked[u.id]).length : users.filter((u) => u.role === r).length;
+          return (
+            <button key={r} type="button" onClick={() => { setRole(r); setLimit(ADMIN_PAGE); }}
+              className="h-8 px-3 rounded-full text-[12.5px] whitespace-nowrap shrink-0"
+              style={{ fontWeight: on ? 700 : 600, color: on ? "#fff" : INK_2, backgroundColor: on ? BRAND : "#fff", border: `1px solid ${on ? BRAND : CARD_BORDER}` }}>
+              {r} · {n}
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-[12px] mt-2" style={{ color: SUBTLE }}>Blocking a user hides everything they've posted and stops them from taking actions on PakMed.</p>
+
+      <div className="mt-3 flex flex-col gap-2">
+        {shown.length === 0 && <AdminEmpty icon={Users} title="No users found" />}
+        {shown.slice(0, limit).map((u) => {
+          const blocked = admin.blocked[u.id];
+          const rs = USER_ROLE_STYLE[u.role] || USER_ROLE_STYLE.You;
+          return (
+            <div key={u.id} className="rounded-2xl bg-white p-3.5 flex flex-col sm:flex-row sm:items-center gap-3" style={{ border: `1px solid ${blocked ? RED + "55" : CARD_BORDER}` }}>
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <span className="w-10 h-10 rounded-full flex items-center justify-center text-[13px] font-bold shrink-0" style={{ backgroundColor: rs.tint, color: rs.color }}>
+                  {initialsOf(u.name)}
+                </span>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <p className="text-[14.5px] font-bold truncate" style={{ color: INK }}>{u.name}</p>
+                    <AdminPill color={rs.color} tint={rs.tint}>{u.role}</AdminPill>
+                    {blocked && <AdminPill color={RED} tint={RED_TINT}>Blocked</AdminPill>}
+                  </div>
+                  <p className="text-[12.5px] truncate" style={{ color: SUBTLE }}>
+                    {[u.city, u.contact, `${u.items} item${u.items === 1 ? "" : "s"} on site`].filter(Boolean).join(" · ")}
+                  </p>
+                  {blocked && blocked.reason && <p className="text-[12px] mt-0.5" style={{ color: RED }}>Reason: {blocked.reason}</p>}
+                </div>
+              </div>
+              <div className="flex gap-1.5 shrink-0">
+                <button type="button" onClick={() => onMessage(u)} className={ADMIN_BTN} style={{ color: BRAND, border: `1px solid ${CARD_BORDER}` }}>
+                  <Send className="w-3.5 h-3.5" /> Message
+                </button>
+                {blocked ? (
+                  <button type="button" onClick={() => onUnblock(u)} className={ADMIN_BTN} style={{ color: GREEN, border: `1px solid ${CARD_BORDER}` }}>
+                    <UserCheck className="w-3.5 h-3.5" /> Unblock
+                  </button>
+                ) : (
+                  <button type="button" onClick={() => setConfirm(u)} className={ADMIN_BTN} style={{ color: RED, border: `1px solid ${CARD_BORDER}` }}>
+                    <Ban className="w-3.5 h-3.5" /> Block
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+        {shown.length > limit && (
+          <button type="button" onClick={() => setLimit((n) => n + ADMIN_PAGE)} className="h-11 rounded-xl text-[13.5px] font-bold bg-white" style={{ color: BRAND, border: `1px solid ${CARD_BORDER}` }}>
+            Show more ({shown.length - limit} left)
+          </button>
+        )}
+      </div>
+
+      {confirm && (
+        <AdminConfirm
+          title={`Block ${confirm.name}?`}
+          body={confirm.id === "me"
+            ? "This is your own account. You'll see a suspension banner and won't be able to post, apply or message until you unblock it here."
+            : `Their ${confirm.items} item${confirm.items === 1 ? "" : "s"} will disappear from the site and they won't be able to use PakMed until unblocked.`}
+          confirmLabel="Block user"
+          withReason
+          onConfirm={(reason) => onBlock(confirm, reason)}
+          onClose={() => setConfirm(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function AdminSupport({ tickets, admin, onReply, onStatus, onBlock }) {
+  const [filter, setFilter] = useState("open");
+  const [openId, setOpenId] = useState(null);
+  const [draft, setDraft] = useState("");
+  const sorted = [...tickets].sort((a, b) => lastAt(b) - lastAt(a));
+  const shown = filter === "all" ? sorted : sorted.filter((t) => t.status === filter);
+  const open = tickets.find((t) => t.id === openId) || null;
+
+  const send = () => {
+    const text = draft.trim();
+    if (!text || !open) return;
+    onReply(open, text);
+    setDraft("");
+  };
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-3">
+      <div className={open ? "hidden lg:block" : ""}>
+        <div className="flex gap-1.5 mb-3">
+          {[["open", "Open"], ["resolved", "Resolved"], ["all", "All"]].map(([k, label]) => {
+            const on = filter === k;
+            const n = k === "all" ? tickets.length : tickets.filter((t) => t.status === k).length;
+            return (
+              <button key={k} type="button" onClick={() => setFilter(k)} className="h-8 px-3 rounded-full text-[12.5px]"
+                style={{ fontWeight: on ? 700 : 600, color: on ? "#fff" : INK_2, backgroundColor: on ? BRAND : "#fff", border: `1px solid ${on ? BRAND : CARD_BORDER}` }}>
+                {label} · {n}
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex flex-col gap-2">
+          {shown.length === 0 && <AdminEmpty icon={Headphones} title="No tickets here" sub="Messages sent from Help & Support land in this inbox." />}
+          {shown.map((t) => {
+            const last = t.messages[t.messages.length - 1];
+            const on = openId === t.id;
+            return (
+              <button key={t.id} type="button" onClick={() => setOpenId(t.id)} className="rounded-2xl bg-white p-3.5 text-left"
+                style={{ border: `1px solid ${on ? BRAND : CARD_BORDER}`, boxShadow: on ? "0 0 0 3px rgba(11,87,183,0.12)" : "none" }}>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <p className="text-[13.5px] font-bold flex-1 min-w-0 truncate" style={{ color: INK }}>{t.subject}</p>
+                  {t.unreadAdmin && <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: RED }} />}
+                </div>
+                <p className="text-[12px] mt-0.5" style={{ color: SUBTLE }}>{t.name} · {t.category} · {adminAgo(lastAt(t))}</p>
+                <p className="text-[12.5px] mt-1 line-clamp-2" style={{ color: INK_2 }}>{last.from === "admin" ? "You: " : ""}{last.text}</p>
+                <div className="mt-1.5 flex gap-1.5">
+                  <AdminPill color={t.status === "open" ? AMBER : GREEN} tint={t.status === "open" ? AMBER_TINT : GREEN_TINT}>{t.status === "open" ? "Open" : "Resolved"}</AdminPill>
+                  {admin.blocked[t.userId] && <AdminPill color={RED} tint={RED_TINT}>User blocked</AdminPill>}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className={open ? "" : "hidden lg:block"}>
+        {!open ? (
+          <AdminEmpty icon={MessageSquareText} title="Select a ticket" sub="Pick a conversation on the left to read and reply." />
+        ) : (
+          <div className="rounded-2xl bg-white flex flex-col" style={{ border: `1px solid ${CARD_BORDER}` }}>
+            <div className="px-4 py-3.5 flex items-start gap-2.5" style={{ borderBottom: `1px solid ${CARD_BORDER}` }}>
+              <button type="button" onClick={() => setOpenId(null)} className="lg:hidden w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ border: `1px solid ${CARD_BORDER}` }} aria-label="Back to tickets">
+                <ChevronLeft className="w-4 h-4" style={{ color: INK }} />
+              </button>
+              <div className="flex-1 min-w-0">
+                <p className="text-[15px] font-extrabold" style={{ color: INK }}>{open.subject}</p>
+                <p className="text-[12.5px] mt-0.5" style={{ color: SUBTLE }}>{open.name} · {open.contact} · {open.category}</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-1.5 px-4 pt-3">
+              {open.status === "open" ? (
+                <button type="button" onClick={() => onStatus(open, "resolved")} className={ADMIN_BTN} style={{ color: GREEN, border: `1px solid ${CARD_BORDER}` }}>
+                  <CheckCheck className="w-3.5 h-3.5" /> Mark resolved
+                </button>
+              ) : (
+                <button type="button" onClick={() => onStatus(open, "open")} className={ADMIN_BTN} style={{ color: AMBER, border: `1px solid ${CARD_BORDER}` }}>
+                  <RotateCcw className="w-3.5 h-3.5" /> Reopen
+                </button>
+              )}
+              <button type="button" onClick={() => onBlock(open)} className={ADMIN_BTN} style={{ color: admin.blocked[open.userId] ? GREEN : RED, border: `1px solid ${CARD_BORDER}` }}>
+                {admin.blocked[open.userId] ? <><UserCheck className="w-3.5 h-3.5" /> Unblock user</> : <><Ban className="w-3.5 h-3.5" /> Block user</>}
+              </button>
+            </div>
+            <div className="px-4 py-4 flex flex-col gap-2.5 max-h-[420px] overflow-y-auto">
+              {open.messages.map((m, i) => (
+                <div key={i} className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 ${m.from === "admin" ? "self-end" : "self-start"}`}
+                  style={{ backgroundColor: m.from === "admin" ? BRAND : CREAM, color: m.from === "admin" ? "#fff" : INK }}>
+                  <p className="text-[13.5px] leading-relaxed whitespace-pre-wrap">{m.text}</p>
+                  <p className="text-[10.5px] mt-1" style={{ opacity: 0.7 }}>{m.from === "admin" ? "PakMed Support" : open.name} · {adminAgo(m.at)}</p>
+                </div>
+              ))}
+            </div>
+            <div className="px-4 pb-4">
+              <div className="flex gap-1.5 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
+                {SUPPORT_QUICK_REPLIES.map((r) => (
+                  <button key={r} type="button" onClick={() => setDraft(r)} className="h-8 px-3 rounded-full text-[12px] font-semibold whitespace-nowrap shrink-0"
+                    style={{ color: INK_2, backgroundColor: CREAM, border: `1px solid ${CARD_BORDER}` }}>
+                    {r.length > 38 ? `${r.slice(0, 38)}…` : r}
+                  </button>
+                ))}
+              </div>
+              <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); send(); }}>
+                <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={2} placeholder="Write a reply…"
+                  className={`${ADMIN_INPUT} py-2.5 resize-none flex-1`} style={{ border: `1px solid ${CARD_BORDER}`, color: INK }} />
+                <button type="submit" disabled={!draft.trim()} className="h-auto px-4 rounded-xl text-[14px] font-bold text-white inline-flex items-center gap-1.5 disabled:opacity-50" style={{ backgroundColor: BRAND }}>
+                  <Send className="w-4 h-4" /> Reply
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const lastAt = (t) => t.messages[t.messages.length - 1].at;
+
+function AdminMessages({ users, messages, preset, onSend }) {
+  const [to, setTo] = useState(preset ? preset.to : "all");
+  const [subject, setSubject] = useState(preset ? preset.subject : "");
+  const [text, setText] = useState(preset ? preset.text : "");
+  const [sent, setSent] = useState("");
+  const byId = Object.fromEntries(users.map((u) => [u.id, u]));
+  const sortedUsers = [...users].sort((a, b) => (a.id === "me" ? -1 : b.id === "me" ? 1 : a.name.localeCompare(b.name)));
+
+  const send = () => {
+    if (!subject.trim() || !text.trim()) return;
+    const toName = to === "all" ? "All users" : (byId[to] ? byId[to].name : to);
+    onSend({ to, toName, subject: subject.trim(), text: text.trim() });
+    setSent(toName);
+    setSubject("");
+    setText("");
+  };
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="rounded-2xl bg-white p-4" style={{ border: `1px solid ${CARD_BORDER}` }}>
+        <p className="text-[15px] font-extrabold" style={{ color: INK }}>New message</p>
+        <p className="text-[12.5px] mt-0.5" style={{ color: SUBTLE }}>Shows in the user's Messages and as a notice when they're signed in.</p>
+        <label className="block mt-4">
+          <span className="text-[12.5px] font-bold" style={{ color: INK_2 }}>To</span>
+          <select value={to} onChange={(e) => setTo(e.target.value)} className={`${ADMIN_INPUT} h-11 mt-1.5`} style={{ border: `1px solid ${CARD_BORDER}`, color: INK }}>
+            <option value="all">📢 All users (announcement)</option>
+            {sortedUsers.map((u) => <option key={u.id} value={u.id}>{u.name} — {u.role}</option>)}
+          </select>
+        </label>
+        <div className="flex gap-1.5 flex-wrap mt-3">
+          {ADMIN_TEMPLATES.map((t) => (
+            <button key={t.label} type="button" onClick={() => { setSubject(t.subject); setText(t.text); }} className="h-8 px-3 rounded-full text-[12px] font-semibold"
+              style={{ color: BRAND, backgroundColor: BRAND_50, border: "1px solid #B9D3F2" }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <label className="block mt-3">
+          <span className="text-[12.5px] font-bold" style={{ color: INK_2 }}>Subject</span>
+          <input value={subject} onChange={(e) => setSubject(e.target.value)} className={`${ADMIN_INPUT} h-11 mt-1.5`} style={{ border: `1px solid ${CARD_BORDER}`, color: INK }} />
+        </label>
+        <label className="block mt-3">
+          <span className="text-[12.5px] font-bold" style={{ color: INK_2 }}>Message</span>
+          <textarea value={text} onChange={(e) => setText(e.target.value)} rows={5} className={`${ADMIN_INPUT} py-2.5 mt-1.5 resize-y`} style={{ border: `1px solid ${CARD_BORDER}`, color: INK }} />
+        </label>
+        <button type="button" onClick={send} disabled={!subject.trim() || !text.trim()}
+          className="mt-4 w-full h-11 rounded-xl text-[14px] font-bold text-white inline-flex items-center justify-center gap-2 disabled:opacity-50" style={{ backgroundColor: BRAND }}>
+          <Send className="w-4 h-4" /> Send message
+        </button>
+        {sent && <p className="text-[13px] font-semibold mt-2.5 text-center" style={{ color: GREEN }}>Sent to {sent}.</p>}
+      </div>
+
+      <div>
+        <p className="text-[15px] font-extrabold mb-2.5" style={{ color: INK }}>Sent messages</p>
+        {messages.length === 0 ? (
+          <AdminEmpty icon={Send} title="Nothing sent yet" sub="Messages you send to users will be listed here." />
+        ) : (
+          <div className="flex flex-col gap-2">
+            {messages.map((m) => (
+              <div key={m.id} className="rounded-2xl bg-white p-3.5" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <p className="text-[13.5px] font-bold flex-1 min-w-0 truncate" style={{ color: INK }}>{m.subject}</p>
+                  <span className="text-[11.5px]" style={{ color: FAINT }}>{adminAgo(m.at)}</span>
+                </div>
+                <p className="text-[12px] mt-0.5" style={{ color: SUBTLE }}>To {m.toName}{(m.to === "me" || m.to === "all") ? (m.read ? " · Seen" : " · Not seen yet") : ""}</p>
+                <p className="text-[12.5px] mt-1.5 line-clamp-3" style={{ color: INK_2 }}>{m.text}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const REPORT_KIND = { job: "job", listing: "market", service: "market", doctor: "doctor", post: "feed" };
+
+function AdminReports({ reports, onSetStatus }) {
+  const [filter, setFilter] = useState("pending");
+  const grouped = Object.values(
+    reports.reduce((acc, r) => {
+      const k = r.targetId;
+      if (!acc[k]) acc[k] = { ...r, count: 0, reasons: [], ids: [] };
+      acc[k].count += 1;
+      acc[k].reasons.push(r.details ? `${r.reason} — ${r.details}` : r.reason);
+      acc[k].ids.push(r.id);
+      if (r.status !== "pending") acc[k].status = r.status;
+      return acc;
+    }, {})
+  ).sort((a, b) => b.count - a.count);
+  const shown = filter === "all" ? grouped : grouped.filter((g) => g.status === filter);
+
+  return (
+    <div>
+      <div className="flex gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+        {[["pending", "Pending"], ["reviewing", "Reviewing"], ["removed", "Removed"], ["dismissed", "Dismissed"], ["all", "All"]].map(([k, label]) => {
+          const on = filter === k;
+          const n = k === "all" ? grouped.length : grouped.filter((g) => g.status === k).length;
+          return (
+            <button key={k} type="button" onClick={() => setFilter(k)} className="h-8 px-3 rounded-full text-[12.5px] whitespace-nowrap shrink-0"
+              style={{ fontWeight: on ? 700 : 600, color: on ? "#fff" : INK_2, backgroundColor: on ? BRAND : "#fff", border: `1px solid ${on ? BRAND : CARD_BORDER}` }}>
+              {label} · {n}
+            </button>
+          );
+        })}
+      </div>
+      <div className="mt-3 flex flex-col gap-2.5">
+        {shown.length === 0 && <AdminEmpty icon={ShieldCheck} title="Nothing to review" sub="Content users flag with the report button appears here." />}
+        {shown.map((g) => {
+          const st = REPORT_STATUS[g.status] || REPORT_STATUS.pending;
+          return (
+            <div key={g.targetId} className="rounded-2xl bg-white p-3.5" style={{ border: `1px solid ${g.count >= 3 ? RED + "55" : CARD_BORDER}` }}>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <AdminPill color={st.color} tint={st.tint}>{st.label}</AdminPill>
+                <AdminPill color={SUBTLE} tint="#F2F4F7">{REPORT_TYPE_LABEL[g.type] || g.type}</AdminPill>
+                {g.count > 1 && <AdminPill color={RED} tint={RED_TINT}>{g.count} reports</AdminPill>}
+              </div>
+              <p className="text-[14.5px] font-bold mt-1.5" style={{ color: INK }}>{g.title}</p>
+              {g.subtitle && <p className="text-[12.5px]" style={{ color: SUBTLE }}>{g.subtitle}</p>}
+              <ul className="mt-1.5">
+                {g.reasons.map((r, i) => <li key={i} className="text-[12.5px]" style={{ color: INK_2 }}>• {r}</li>)}
+              </ul>
+              <div className="flex flex-wrap gap-1.5 mt-3 pt-3" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+                <button type="button" onClick={() => onSetStatus(g, "reviewing")} className={ADMIN_BTN} style={{ color: BRAND, border: `1px solid ${CARD_BORDER}` }}>
+                  <Clock className="w-3.5 h-3.5" /> Reviewing
+                </button>
+                <button type="button" onClick={() => onSetStatus(g, "removed")} className={ADMIN_BTN} style={{ color: RED, border: `1px solid ${CARD_BORDER}` }}>
+                  <EyeOff className="w-3.5 h-3.5" /> Remove content
+                </button>
+                <button type="button" onClick={() => onSetStatus(g, "dismissed")} className={ADMIN_BTN} style={{ color: GREEN, border: `1px solid ${CARD_BORDER}` }}>
+                  <Check className="w-3.5 h-3.5" /> Dismiss
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function AdminOverview({ stats, log, tickets, onGo, onNewPost }) {
+  const open = tickets.filter((t) => t.status === "open").sort((a, b) => lastAt(b) - lastAt(a)).slice(0, 4);
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5">
+        {stats.map((s) => (
+          <button key={s.label} type="button" onClick={() => onGo(s.go)} className="rounded-2xl bg-white p-3.5 text-left transition-colors hover:bg-[#FAFBFC]" style={{ border: `1px solid ${CARD_BORDER}` }}>
+            <span className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: s.tint }}>
+              <s.icon className="w-[18px] h-[18px]" style={{ color: s.color }} />
+            </span>
+            <p className="text-[24px] font-extrabold mt-2 leading-none" style={{ color: INK }}>{s.value}</p>
+            <p className="text-[12.5px] font-semibold mt-1" style={{ color: SUBTLE }}>{s.label}</p>
+            {s.note && <p className="text-[11.5px] mt-0.5" style={{ color: s.noteColor || FAINT }}>{s.note}</p>}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+        {[
+          { icon: Megaphone, label: "Write a feed post", run: onNewPost },
+          { icon: Send, label: "Message users", run: () => onGo("messages") },
+          { icon: Headphones, label: "Open support inbox", run: () => onGo("support") },
+        ].map((a) => (
+          <button key={a.label} type="button" onClick={a.run} className="h-12 rounded-xl text-[14px] font-bold inline-flex items-center justify-center gap-2 bg-white" style={{ color: BRAND, border: `1px solid ${CARD_BORDER}` }}>
+            <a.icon className="w-4 h-4" /> {a.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="rounded-2xl bg-white" style={{ border: `1px solid ${CARD_BORDER}` }}>
+          <div className="px-4 pt-4 pb-2 flex items-center justify-between">
+            <p className="text-[15px] font-extrabold" style={{ color: INK }}>Open support tickets</p>
+            <button type="button" onClick={() => onGo("support")} className="text-[13px] font-bold" style={{ color: BRAND }}>See all</button>
+          </div>
+          {open.length === 0 ? (
+            <p className="px-4 pb-4 text-[13px]" style={{ color: SUBTLE }}>All caught up.</p>
+          ) : open.map((t) => (
+            <button key={t.id} type="button" onClick={() => onGo("support")} className="w-full text-left px-4 py-2.5 hover:bg-[#FAFBFC]" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+              <p className="text-[13.5px] font-bold truncate" style={{ color: INK }}>{t.subject}</p>
+              <p className="text-[12px]" style={{ color: SUBTLE }}>{t.name} · {adminAgo(lastAt(t))}</p>
+            </button>
+          ))}
+        </div>
+        <div className="rounded-2xl bg-white" style={{ border: `1px solid ${CARD_BORDER}` }}>
+          <p className="px-4 pt-4 pb-2 text-[15px] font-extrabold" style={{ color: INK }}>Recent admin activity</p>
+          {log.length === 0 ? (
+            <p className="px-4 pb-4 text-[13px]" style={{ color: SUBTLE }}>Changes you make in the admin panel are logged here.</p>
+          ) : (
+            <ul className="max-h-72 overflow-y-auto">
+              {log.slice(0, 20).map((l) => (
+                <li key={l.id} className="px-4 py-2.5 flex items-start gap-2.5" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+                  <History className="w-4 h-4 mt-0.5 shrink-0" style={{ color: FAINT }} />
+                  <span className="flex-1 text-[13px]" style={{ color: INK_2 }}>{l.text}</span>
+                  <span className="text-[11.5px] shrink-0" style={{ color: FAINT }}>{adminAgo(l.at)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdminPanelScreen({
+  admin, setAdmin, postedJobs, listings, seller, reports, setReports,
+  me, onViewSite, onBack, onMenu,
+}) {
+  const [section, setSection] = useState("overview");
+  const [preset, setPreset] = useState(null);       // prefilled compose for Messages
+  const [newPostOpen, setNewPostOpen] = useState(false);
+
+  // ---- rows the admin sees (everything except deleted, with edits applied) ----
+  const tag = (src) => (x) => ({ ...x, _src: src });
+  const mine = (x) => ({ ...x, _owner: "me", _src: "user" });
+  const rows = {
+    doctor: adminRows("doctor", [...admin.added.doctor.map(tag("admin")), ...ADMIN_MASTER.doctor], admin),
+    job: adminRows("job", [...admin.added.job.map(tag("admin")), ...postedJobs.map(mine), ...ADMIN_MASTER.job], admin),
+    market: adminRows("market", [
+      ...admin.added.market.map(tag("admin")),
+      ...listings.map((l) => ({ ...mine(l), seller: seller.business || "Your store", city: seller.city, area: seller.area, phone: seller.phone })),
+      ...ADMIN_MASTER.market,
+    ], admin),
+    hospital: adminRows("hospital", [...admin.added.hospital.map(tag("admin")), ...ADMIN_MASTER.hospital], admin),
+    feed: adminRows("feed", [...admin.added.feed.map(tag("admin")), ...ADMIN_MASTER.feed], admin).map(feedWithAge),
+  };
+
+  // ---- users, derived from who owns content on the site ----
+  const userMap = { me: { id: "me", name: me.name, role: "You", city: me.city, contact: me.phone ? `+92 ${me.phone}` : `@${me.username}`, items: 0 } };
+  const addUser = (id, u) => {
+    if (!id) return;
+    if (!userMap[id]) userMap[id] = { id, items: 0, ...u };
+    else if (!userMap[id].contact && u.contact) userMap[id].contact = u.contact;
+    userMap[id].items += 1;
+  };
+  rows.doctor.forEach((d) => addUser(adminOwnerOf("doctor", d), { name: d.name, role: "Doctor", city: d.city, contact: d.phone }));
+  rows.hospital.forEach((f) => addUser(adminOwnerOf("hospital", f), { name: f.name, role: "Employer", city: f.city, contact: f.phone }));
+  rows.job.forEach((j) => addUser(adminOwnerOf("job", j), { name: j.facilityName, role: "Employer", city: j.city, contact: j.contactNumber }));
+  rows.market.forEach((i) => addUser(adminOwnerOf("market", i), { name: i.seller, role: "Seller", city: i.city, contact: i.phone }));
+  SEED_CANDIDATES.forEach((c) => { userMap[`seeker:${c.id}`] = { id: `seeker:${c.id}`, name: c.name, role: "Job seeker", city: c.city, contact: c.pmdc, items: 0 }; });
+  const users = Object.values(userMap);
+  const nameOf = (id) => (userMap[id] ? userMap[id].name : id);
+
+  // ---- state helpers ----
+  const update = (fn, text) => setAdmin((a) => {
+    const next = fn(a);
+    return { ...next, log: [{ id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, at: Date.now(), text }, ...a.log].slice(0, 80) };
+  });
+  const putIn = (a, bucket, kind, id, val) => {
+    const m = { ...a[bucket][kind] };
+    if (val === undefined) delete m[id]; else m[id] = val;
+    return { ...a, [bucket]: { ...a[bucket], [kind]: m } };
+  };
+  const isAdded = (kind, id) => admin.added[kind].some((x) => x.id === id);
+  const editableKeys = (cfg) => [...cfg.fields.map((f) => f.k), ...cfg.toggles.map((t) => t.k), ...(cfg.media ? ["media"] : [])];
+
+  const saveItem = (kind, item, isNew) => {
+    const cfg = ADMIN_SECTIONS[kind];
+    const clean = Object.fromEntries(Object.entries(item).filter(([k]) => !k.startsWith("_")));
+    if (isNew) {
+      const rec = { ...clean, id: `adm-${kind}-${Date.now()}`, createdAt: Date.now() };
+      if (kind === "market" && !rec.img) rec.img = marketCatOf(rec.category).img;
+      update((a) => ({ ...a, added: { ...a.added, [kind]: [rec, ...a.added[kind]] } }), `Added ${cfg.single} “${cfg.title(rec)}”`);
+      return;
+    }
+    if (isAdded(kind, item.id)) {
+      update((a) => ({ ...a, added: { ...a.added, [kind]: a.added[kind].map((x) => (x.id === item.id ? { ...x, ...clean, id: x.id } : x)) } }), `Edited ${cfg.single} “${cfg.title(clean)}”`);
+      return;
+    }
+    const patch = Object.fromEntries(editableKeys(cfg).filter((k) => clean[k] !== undefined).map((k) => [k, clean[k]]));
+    update((a) => putIn(a, "edits", kind, item.id, { ...(a.edits[kind][item.id] || {}), ...patch }), `Edited ${cfg.single} “${cfg.title(clean)}”`);
+  };
+
+  const setFlag = (kind, x, key, val) => {
+    const cfg = ADMIN_SECTIONS[kind];
+    const text = `${val ? "Verified" : "Removed verification from"} ${cfg.single} “${cfg.title(x)}”`;
+    if (isAdded(kind, x.id)) {
+      update((a) => ({ ...a, added: { ...a.added, [kind]: a.added[kind].map((y) => (y.id === x.id ? { ...y, [key]: val } : y)) } }), text);
+    } else {
+      update((a) => putIn(a, "edits", kind, x.id, { ...(a.edits[kind][x.id] || {}), [key]: val }), text);
+    }
+  };
+
+  const hideItem = (kind, x, hide) => {
+    const cfg = ADMIN_SECTIONS[kind];
+    update((a) => putIn(a, "hidden", kind, x.id, hide ? true : undefined), `${hide ? "Hid" : "Restored"} ${cfg.single} “${cfg.title(x)}”`);
+  };
+
+  const deleteItem = (kind, x) => {
+    const cfg = ADMIN_SECTIONS[kind];
+    update((a) => {
+      if (a.added[kind].some((y) => y.id === x.id)) return { ...a, added: { ...a.added, [kind]: a.added[kind].filter((y) => y.id !== x.id) } };
+      return putIn(a, "deleted", kind, x.id, true);
+    }, `Deleted ${cfg.single} “${cfg.title(x)}”`);
+  };
+
+  const blockUser = (u, reason) => update((a) => ({ ...a, blocked: { ...a.blocked, [u.id]: { reason, at: Date.now() } } }), `Blocked ${u.name}${reason ? ` — ${reason}` : ""}`);
+  const unblockUser = (u) => update((a) => {
+    const b = { ...a.blocked };
+    delete b[u.id];
+    return { ...a, blocked: b };
+  }, `Unblocked ${u.name}`);
+
+  const sendMessage = (m) => update((a) => ({ ...a, messages: [{ ...m, id: `am-${Date.now()}`, at: Date.now(), read: false }, ...a.messages] }), `Messaged ${m.toName}: “${m.subject}”`);
+
+  const compose = (to, subject = "", text = "") => {
+    setPreset({ key: Date.now(), to, subject, text });
+    setSection("messages");
+  };
+  const messageOwner = (kind, owner, x) => {
+    const tpl = ADMIN_TEMPLATES[kind === "doctor" ? 0 : 2];
+    compose(owner, tpl.subject, `${tpl.text}\n\nItem: ${ADMIN_SECTIONS[kind].title(x)}`);
+  };
+
+  const replyTicket = (t, text) => update((a) => ({
+    ...a,
+    tickets: a.tickets.map((x) => (x.id === t.id ? { ...x, unreadAdmin: false, unreadUser: true, messages: [...x.messages, { from: "admin", text, at: Date.now() }] } : x)),
+  }), `Replied to ticket “${t.subject}”`);
+  const setTicketStatus = (t, status) => update((a) => ({ ...a, tickets: a.tickets.map((x) => (x.id === t.id ? { ...x, status, unreadAdmin: false } : x)) }), `${status === "resolved" ? "Resolved" : "Reopened"} ticket “${t.subject}”`);
+  const toggleTicketBlock = (t) => (admin.blocked[t.userId] ? unblockUser({ id: t.userId, name: t.name }) : blockUser({ id: t.userId, name: t.name }, `Support ticket: ${t.subject}`));
+
+  const setReportStatus = (g, status) => {
+    setReports((prev) => prev.map((r) => (g.ids.includes(r.id) ? { ...r, status } : r)));
+    const kind = REPORT_KIND[g.type];
+    if (kind && (status === "removed" || admin.hidden[kind][g.targetId])) {
+      update((a) => putIn(a, "hidden", kind, g.targetId, status === "removed" ? true : undefined), `${status === "removed" ? "Removed" : "Restored"} reported ${REPORT_TYPE_LABEL[g.type] || "item"} “${g.title}”`);
+    }
+  };
+
+  // ---- navigation ----
+  const liveCount = (kind) => rows[kind].filter((x) => adminIsLive(kind, x, admin) && (!x.status || ["posted", "live"].includes(x.status))).length;
+  const openTickets = admin.tickets.filter((t) => t.status === "open").length;
+  const pendingReports = new Set(reports.filter((r) => r.status === "pending").map((r) => r.targetId)).size;
+  const blockedCount = Object.keys(admin.blocked).length;
+
+  const nav = [
+    { key: "overview", label: "Overview", icon: LayoutDashboard },
+    { key: "users", label: "Users", icon: Users, n: users.length },
+    { key: "doctor", label: "Doctors", icon: Stethoscope, n: rows.doctor.length },
+    { key: "job", label: "Jobs", icon: Briefcase, n: rows.job.length },
+    { key: "market", label: "Buy / Sell", icon: Store, n: rows.market.length },
+    { key: "hospital", label: "Hospitals", icon: Building2, n: rows.hospital.length },
+    { key: "feed", label: "Our Feeds", icon: Newspaper, n: rows.feed.length },
+    { key: "support", label: "Support", icon: Headphones, alert: openTickets },
+    { key: "messages", label: "Messages", icon: Send },
+    { key: "reports", label: "Reports", icon: Flag, alert: pendingReports },
+  ];
+  const current = nav.find((n) => n.key === section) || nav[0];
+
+  const stats = [
+    { label: "Users", value: users.length, icon: Users, color: BRAND, tint: BRAND_50, go: "users", note: blockedCount ? `${blockedCount} blocked` : "", noteColor: RED },
+    { label: "Doctors live", value: liveCount("doctor"), icon: Stethoscope, color: RED, tint: RED_TINT, go: "doctor", note: `${rows.doctor.length} total` },
+    { label: "Jobs live", value: liveCount("job"), icon: Briefcase, color: BRAND, tint: BRAND_50, go: "job", note: `${rows.job.length} total` },
+    { label: "Listings live", value: liveCount("market"), icon: Store, color: VIOLET, tint: VIOLET_TINT, go: "market", note: `${rows.market.length} total` },
+    { label: "Hospitals live", value: liveCount("hospital"), icon: Building2, color: TEAL, tint: TEAL_TINT, go: "hospital", note: `${rows.hospital.length} total` },
+    { label: "Feed posts", value: liveCount("feed"), icon: Newspaper, color: AMBER, tint: AMBER_TINT, go: "feed" },
+    { label: "Open tickets", value: openTickets, icon: Headphones, color: openTickets ? AMBER : GREEN, tint: openTickets ? AMBER_TINT : GREEN_TINT, go: "support" },
+    { label: "Pending reports", value: pendingReports, icon: Flag, color: pendingReports ? RED : GREEN, tint: pendingReports ? RED_TINT : GREEN_TINT, go: "reports" },
+  ];
+
+  return (
+    <div className="flex flex-col h-full min-h-0" style={{ fontFamily: FONT }}>
+      <ScreenHeader
+        title="Admin panel"
+        subtitle="Manage everything on PakMed"
+        onBack={onBack}
+        onMenu={onMenu}
+        right={<span className="hidden sm:inline-flex"><AdminPill color={BRAND} tint={BRAND_50}>Admin</AdminPill></span>}
+      />
+      <div className="flex-1 min-h-0 lg:flex" style={{ backgroundColor: CREAM }}>
+        {/* section nav: horizontal on mobile, sidebar on desktop */}
+        <nav className="shrink-0 lg:w-56 bg-white lg:border-r" style={{ borderColor: CARD_BORDER, borderBottom: `1px solid ${CARD_BORDER}` }} aria-label="Admin sections">
+          <div className="flex lg:flex-col gap-1 overflow-x-auto px-3 py-2.5 lg:py-4" style={{ scrollbarWidth: "none" }}>
+            {nav.map((n) => {
+              const on = section === n.key;
+              return (
+                <button key={n.key} type="button" onClick={() => setSection(n.key)}
+                  className="h-10 px-3 rounded-xl flex items-center gap-2.5 text-[13.5px] whitespace-nowrap shrink-0 lg:w-full transition-colors"
+                  style={{ fontWeight: on ? 700 : 600, color: on ? BRAND : INK_2, backgroundColor: on ? BRAND_50 : "transparent" }}>
+                  <n.icon className="w-[18px] h-[18px] shrink-0" />
+                  <span className="lg:flex-1 text-left">{n.label}</span>
+                  {n.alert > 0 && <span className="text-[10.5px] font-bold px-1.5 py-0.5 rounded-full text-white" style={{ backgroundColor: RED }}>{n.alert}</span>}
+                  {!n.alert && n.n !== undefined && <span className="hidden lg:inline text-[11.5px] font-semibold" style={{ color: FAINT }}>{n.n}</span>}
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+
+        <div className="flex-1 min-w-0 px-4 sm:px-6 py-5">
+          <div className="flex items-center gap-2 mb-4">
+            <current.icon className="w-5 h-5" style={{ color: BRAND }} />
+            <p className="text-[18px] font-extrabold tracking-[-0.01em]" style={{ color: INK }}>{current.label}</p>
+          </div>
+
+          {section === "overview" && (
+            <AdminOverview stats={stats} log={admin.log} tickets={admin.tickets} onGo={setSection} onNewPost={() => setNewPostOpen(true)} />
+          )}
+          {section === "users" && (
+            <AdminUsers users={users} admin={admin} onBlock={blockUser} onUnblock={unblockUser} onMessage={(u) => compose(u.id)} />
+          )}
+          {ADMIN_SECTIONS[section] && (
+            <AdminCollection
+              key={section}
+              kind={section}
+              rows={rows[section]}
+              admin={admin}
+              onSave={(item, isNew) => saveItem(section, item, isNew)}
+              onHide={(x, hide) => hideItem(section, x, hide)}
+              onDelete={(x) => deleteItem(section, x)}
+              onFlag={(x, key, val) => setFlag(section, x, key, val)}
+              onMessageOwner={(owner, x) => messageOwner(section, owner, x)}
+              onViewSite={onViewSite}
+            />
+          )}
+          {section === "support" && (
+            <AdminSupport tickets={admin.tickets} admin={admin} onReply={replyTicket} onStatus={setTicketStatus} onBlock={toggleTicketBlock} />
+          )}
+          {section === "messages" && (
+            <AdminMessages key={preset ? preset.key : "compose"} users={users} messages={admin.messages} preset={preset} onSend={sendMessage} />
+          )}
+          {section === "reports" && <AdminReports reports={reports} onSetStatus={setReportStatus} />}
+          {section === "users" && blockedCount > 0 && (
+            <p className="text-[12px] mt-4" style={{ color: SUBTLE }}>Blocked: {Object.keys(admin.blocked).map(nameOf).join(", ")}</p>
+          )}
+        </div>
+      </div>
+
+      {newPostOpen && (
+        <AdminEditor kind="feed" item={ADMIN_SECTIONS.feed.blank()} isNew onSave={(d) => saveItem("feed", d, true)} onClose={() => setNewPostOpen(false)} />
+      )}
+    </div>
+  );
+}
+
+/* ---------- user side: Help & Support (tickets go to the admin inbox) ---------- */
+const SUPPORT_CATEGORIES = ["Account", "Verification", "Jobs", "Buy / Sell", "Doctors", "Hospitals", "Safety", "Other"];
+
+function SupportScreen({ authed, onSignIn, tickets, onCreate, onReply, onBack, onMenu }) {
+  const [category, setCategory] = useState("Account");
+  const [subject, setSubject] = useState("");
+  const [text, setText] = useState("");
+  const [sent, setSent] = useState(false);
+  const [openId, setOpenId] = useState(null);
+  const [reply, setReply] = useState("");
+  const mine = [...tickets].sort((a, b) => lastAt(b) - lastAt(a));
+
+  const submit = (e) => {
+    e.preventDefault();
+    if (!subject.trim() || !text.trim()) return;
+    const id = onCreate({ category, subject: subject.trim(), text: text.trim() });
+    setSubject("");
+    setText("");
+    setSent(true);
+    setOpenId(id);
+  };
+
+  const field = { border: `1px solid ${CARD_BORDER}`, color: INK };
+  return (
+    <div className="flex flex-col h-full min-h-0" style={{ fontFamily: FONT }}>
+      <ScreenHeader title="Help & Support" subtitle="Message the PakMed team — we usually reply within a few hours" onBack={onBack} onMenu={onMenu} />
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-5 grid grid-cols-1 lg:grid-cols-2 gap-4 items-start" style={{ backgroundColor: CREAM }}>
+        <div className="rounded-2xl bg-white p-4 sm:p-5" style={{ border: `1px solid ${CARD_BORDER}` }}>
+          <p className="text-[16px] font-extrabold" style={{ color: INK }}>Contact support</p>
+          <p className="text-[13px] mt-0.5" style={{ color: SUBTLE }}>Questions about verification, job posts, the market or your account.</p>
+          {!authed ? (
+            <div className="mt-4 rounded-xl p-4 text-center" style={{ backgroundColor: BRAND_50 }}>
+              <p className="text-[13.5px] font-semibold" style={{ color: INK }}>Sign in so we can reply to you</p>
+              <button type="button" onClick={onSignIn} className="mt-3 h-10 px-5 rounded-xl text-[14px] font-bold text-white" style={{ backgroundColor: BRAND }}>Sign in</button>
+              <p className="text-[12.5px] mt-3" style={{ color: SUBTLE }}>Or email <a href="mailto:support@pakmed.pk" className="font-semibold" style={{ color: BRAND }}>support@pakmed.pk</a></p>
+            </div>
+          ) : (
+            <form onSubmit={submit} className="mt-4 space-y-3">
+              <label className="block">
+                <span className="text-[12.5px] font-bold" style={{ color: INK_2 }}>Topic</span>
+                <select value={category} onChange={(e) => setCategory(e.target.value)} className={`${ADMIN_INPUT} h-11 mt-1.5`} style={field}>
+                  {SUPPORT_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-[12.5px] font-bold" style={{ color: INK_2 }}>Subject</span>
+                <input value={subject} onChange={(e) => { setSubject(e.target.value); setSent(false); }} placeholder="e.g. My job post isn't showing" className={`${ADMIN_INPUT} h-11 mt-1.5`} style={field} />
+              </label>
+              <label className="block">
+                <span className="text-[12.5px] font-bold" style={{ color: INK_2 }}>Message</span>
+                <textarea value={text} onChange={(e) => { setText(e.target.value); setSent(false); }} rows={5} placeholder="Tell us what happened…" className={`${ADMIN_INPUT} py-2.5 mt-1.5 resize-y`} style={field} />
+              </label>
+              <button type="submit" disabled={!subject.trim() || !text.trim()} className="w-full h-11 rounded-xl text-[14px] font-bold text-white inline-flex items-center justify-center gap-2 disabled:opacity-50" style={{ backgroundColor: BRAND }}>
+                <Send className="w-4 h-4" /> Send to support
+              </button>
+              {sent && <p className="text-[13px] font-semibold text-center" style={{ color: GREEN }}>Sent! You'll see our reply below and in your notifications.</p>}
+            </form>
+          )}
+        </div>
+
+        <div>
+          <p className="text-[15px] font-extrabold mb-2.5" style={{ color: INK }}>Your requests</p>
+          {mine.length === 0 ? (
+            <AdminEmpty icon={Headphones} title="No requests yet" sub="Messages you send to support will appear here with our replies." />
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {mine.map((t) => {
+                const isOpen = openId === t.id;
+                return (
+                  <div key={t.id} className="rounded-2xl bg-white" style={{ border: `1px solid ${isOpen ? BRAND : CARD_BORDER}` }}>
+                    <button type="button" onClick={() => setOpenId(isOpen ? null : t.id)} className="w-full text-left p-3.5 flex items-start gap-2.5">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[14px] font-bold truncate" style={{ color: INK }}>{t.subject}</p>
+                        <p className="text-[12px] mt-0.5" style={{ color: SUBTLE }}>{t.category} · {adminAgo(lastAt(t))} · {t.messages.length} message{t.messages.length === 1 ? "" : "s"}</p>
+                      </div>
+                      <AdminPill color={t.status === "open" ? AMBER : GREEN} tint={t.status === "open" ? AMBER_TINT : GREEN_TINT}>{t.status === "open" ? "Open" : "Resolved"}</AdminPill>
+                      <ChevronDown className="w-4 h-4 shrink-0 mt-0.5 transition-transform" style={{ color: SUBTLE, transform: isOpen ? "rotate(180deg)" : "none" }} />
+                    </button>
+                    {isOpen && (
+                      <div className="px-3.5 pb-3.5">
+                        <div className="flex flex-col gap-2">
+                          {t.messages.map((m, i) => (
+                            <div key={i} className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 ${m.from === "user" ? "self-end" : "self-start"}`}
+                              style={{ backgroundColor: m.from === "user" ? BRAND : CREAM, color: m.from === "user" ? "#fff" : INK }}>
+                              <p className="text-[13.5px] leading-relaxed whitespace-pre-wrap">{m.text}</p>
+                              <p className="text-[10.5px] mt-1" style={{ opacity: 0.7 }}>{m.from === "user" ? "You" : "PakMed Support"} · {adminAgo(m.at)}</p>
+                            </div>
+                          ))}
+                        </div>
+                        <form className="flex gap-2 mt-3" onSubmit={(e) => { e.preventDefault(); if (reply.trim()) { onReply(t, reply.trim()); setReply(""); } }}>
+                          <input value={reply} onChange={(e) => setReply(e.target.value)} placeholder="Add a reply…" className={`${ADMIN_INPUT} h-10 flex-1`} style={field} />
+                          <button type="submit" disabled={!reply.trim()} className="h-10 px-3.5 rounded-xl text-white disabled:opacity-50" style={{ backgroundColor: BRAND }} aria-label="Send reply">
+                            <Send className="w-4 h-4" />
+                          </button>
+                        </form>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* slim bars under the site header: admin notices and account suspension */
+function AdminNoticeBar({ tone = "info", icon: Icon = Megaphone, title, text, actionLabel, onAction, onDismiss }) {
+  const danger = tone === "danger";
+  return (
+    <div className="w-full" style={{ backgroundColor: danger ? RED_TINT : BRAND_50, borderBottom: `1px solid ${danger ? "#F5C2BE" : "#B9D3F2"}`, fontFamily: FONT }}>
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-2.5 flex items-center gap-3">
+        <Icon className="w-[18px] h-[18px] shrink-0" style={{ color: danger ? RED : BRAND }} />
+        <p className="flex-1 min-w-0 text-[13.5px] truncate" style={{ color: INK }}>
+          <span className="font-bold">{title}</span>{text ? <span style={{ color: INK_2 }}> — {text}</span> : null}
+        </p>
+        {onAction && (
+          <button type="button" onClick={onAction} className="h-8 px-3 rounded-lg text-[12.5px] font-bold shrink-0 text-white" style={{ backgroundColor: danger ? RED : BRAND }}>
+            {actionLabel}
+          </button>
+        )}
+        {onDismiss && (
+          <button type="button" onClick={onDismiss} aria-label="Dismiss" className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 hover:bg-white/60">
+            <X className="w-4 h-4" style={{ color: INK_2 }} />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function PakMedApp() {
   const [authed, setAuthed] = useState(false);
   const [signInFor, setSignInFor] = useState(null);   // { reason, run }
@@ -13067,7 +14983,20 @@ export default function PakMedApp() {
   // a ref, so actions resumed after sign-in see the CURRENT state, not the one captured before
   const authedRef = useRef(authed);
   authedRef.current = authed;
+  // admin panel state — applied to the public catalogue below, so admin changes show site-wide
+  const [admin, setAdmin] = useState(initialAdmin);
+  syncPublicCatalog(admin);
+  const suspended = !!admin.blocked.me;
+  const suspendedRef = useRef(suspended);
+  suspendedRef.current = suspended;
+  const [suspendToast, setSuspendToast] = useState(false);
+  useEffect(() => {
+    if (!suspendToast) return undefined;
+    const t = setTimeout(() => setSuspendToast(false), 3500);
+    return () => clearTimeout(t);
+  }, [suspendToast]);
   const requireAuth = (reason, run) => {
+    if (authedRef.current && suspendedRef.current) { setSuspendToast(true); return false; }
     if (authedRef.current) { run && run(); return true; }
     setSignInFor({ reason, run });
     return false;
@@ -13238,7 +15167,46 @@ export default function PakMedApp() {
   });
   const [listings, setListings] = useState(SEED_LISTINGS);
 
+  // what the public sees: the user's own posts minus anything the admin hid, deleted or blocked
+  const pubPostedJobs = adminRows("job", postedJobs.map((j) => ({ ...j, _owner: "me" })), admin).filter((j) => adminIsLive("job", j, admin));
+  const pubListings = adminRows("market", listings.map((l) => ({ ...l, _owner: "me" })), admin).filter((l) => adminIsLive("market", l, admin));
+
+  // admin <-> this user: direct messages, announcements and support tickets
+  const myAdminMessages = admin.messages.filter((m) => m.to === "me" || m.to === "all");
+  const unreadAdmin = myAdminMessages.filter((m) => !m.read);
+  const myTickets = admin.tickets.filter((t) => t.userId === "me");
+  const supportUnread = myTickets.filter((t) => t.unreadUser);
+  const [dismissedNotice, setDismissedNotice] = useState(null);
+  const createTicket = ({ category, subject, text }) => {
+    const id = `t-${Date.now()}`;
+    const at = Date.now();
+    setAdmin((a) => ({
+      ...a,
+      tickets: [{
+        id, userId: "me", name: profiles.general.fullName || `@${username}`,
+        contact: profiles.general.phone || verifiedPhone ? `+92 ${profiles.general.phone || verifiedPhone}` : `@${username}`,
+        subject, category, status: "open", createdAt: at, unreadAdmin: true,
+        messages: [{ from: "user", text, at }],
+      }, ...a.tickets],
+    }));
+    return id;
+  };
+  const replyAsUser = (t, text) => setAdmin((a) => ({
+    ...a,
+    tickets: a.tickets.map((x) => (x.id === t.id ? { ...x, status: "open", unreadAdmin: true, messages: [...x.messages, { from: "user", text, at: Date.now() }] } : x)),
+  }));
+
   const tab = history[history.length - 1];
+  // opening Messages / Help marks the admin's messages and replies as seen
+  useEffect(() => {
+    if (!authed) return;
+    if (tab === "messages" && unreadAdmin.length) {
+      setAdmin((a) => ({ ...a, messages: a.messages.map((m) => ((m.to === "me" || m.to === "all") && !m.read ? { ...m, read: true } : m)) }));
+    }
+    if (tab === "help" && supportUnread.length) {
+      setAdmin((a) => ({ ...a, tickets: a.tickets.map((t) => (t.userId === "me" && t.unreadUser ? { ...t, unreadUser: false } : t)) }));
+    }
+  }, [tab, authed, unreadAdmin.length, supportUnread.length]);
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
   }, [history.length, tab, !!signInFor, showIntent]);
@@ -13355,6 +15323,7 @@ export default function PakMedApp() {
                 onSignUp={() => setSignInFor({ reason: "", run: null, mode: "signup" })}
                 onOpenProfile={() => navigate("profile")}
                 onOpenAccount={() => navigate("profileDetail")}
+                onOpenAdmin={() => navigate("admin")}
                 onSignOut={() => { setAuthed(false); authedRef.current = false; setHistory(["home"]); }}
                 userInitials={userInitials}
                 username={username}
@@ -13362,6 +15331,27 @@ export default function PakMedApp() {
                 userPhone={profiles.general.phone || verifiedPhone}
               />
             )}
+            {showChrome && authed && suspended && (
+              <AdminNoticeBar
+                tone="danger"
+                icon={ShieldAlert}
+                title={suspendToast ? "This action isn't available" : "Your account has been suspended"}
+                text={admin.blocked.me.reason ? `Reason: ${admin.blocked.me.reason}` : "Contact support if you think this is a mistake."}
+                actionLabel="Contact support"
+                onAction={tab === "help" ? null : () => navigate("help")}
+              />
+            )}
+            {showChrome && authed && !suspended && tab !== "admin" && (() => {
+              const m = unreadAdmin[0];
+              const t = supportUnread[0];
+              if (m && dismissedNotice !== m.id && tab !== "messages") {
+                return <AdminNoticeBar title={`PakMed Admin: ${m.subject}`} text={m.text} actionLabel="View" onAction={() => navigate("messages")} onDismiss={() => setDismissedNotice(m.id)} />;
+              }
+              if (!m && t && dismissedNotice !== t.id && tab !== "help") {
+                return <AdminNoticeBar icon={Headphones} title="Support replied" text={t.subject} actionLabel="Read reply" onAction={() => navigate("help")} onDismiss={() => setDismissedNotice(t.id)} />;
+              }
+              return null;
+            })()}
             <div
               className={`flex-1 flex flex-col w-full min-w-0 ${
                 tab === "home" || tab === "findjob" || tab === "consult" || tab === "market" || tab === "hospital" || tab === "postjob"
@@ -13379,14 +15369,14 @@ export default function PakMedApp() {
                   authed={authed}
                   city={profiles.general.city}
                   counts={{
-                    find: SEED_JOBS.length + postedJobs.filter((j) => j.status === "posted").length,
+                    find: SEED_JOBS.length + pubPostedJobs.filter((j) => j.status === "posted").length,
                     consult: DOCTORS.length,
-                    market: SEED_MARKET_ITEMS.length + listings.filter((l) => l.status === "live").length,
+                    market: SEED_MARKET_ITEMS.length + pubListings.filter((l) => l.status === "live").length,
                     hospital: SEED_FACILITIES.length,
                     feeds: LATEST_POSTS.length,
                   }}
                   nearJobs={(() => {
-                    const all = [...postedJobs.filter((j) => j.status === "posted"), ...SEED_JOBS];
+                    const all = [...pubPostedJobs.filter((j) => j.status === "posted"), ...SEED_JOBS];
                     const c = profiles.general.city;
                     const mine = c ? all.filter((j) => j.city === c) : [];
                     return mine.length ? mine : all;
@@ -13402,6 +15392,7 @@ export default function PakMedApp() {
                     setSectionQ(q || "");
                     navigate(section);
                   }}
+                  onCityChange={(c) => updateProfile("general", (g) => ({ ...g, city: c || "" }))}
                 />
               )}
               {tab === "search" && (
@@ -13410,10 +15401,10 @@ export default function PakMedApp() {
                   query={searchQ}
                   authed={authed}
                   userCity={profiles.general.city}
-                  postedJobs={postedJobs}
-                  listings={listings}
+                  postedJobs={pubPostedJobs}
+                  listings={pubListings}
                   facilities={[
-                    ...(canPostJob && live("employer").facilityName ? [{ id: "own", name: live("employer").facilityName, type: live("employer").facilityType || "Facility", city: live("employer").city, area: live("employer").area, services: [], hiring: postedJobs.filter((j) => j.status === "posted").length }] : []),
+                    ...(canPostJob && live("employer").facilityName ? [{ id: "own", name: live("employer").facilityName, type: live("employer").facilityType || "Facility", city: live("employer").city, area: live("employer").area, services: [], hiring: pubPostedJobs.filter((j) => j.status === "posted").length }] : []),
                     ...SEED_FACILITIES,
                   ]}
                   onSeeAll={(section, q) => { setSectionQ(q || ""); navigate(section); }}
@@ -13427,11 +15418,12 @@ export default function PakMedApp() {
                   userCity={profiles.general.city}
                   employer={live("employer")}
                   employerUnlocked={canPostJob}
-                  postedJobs={postedJobs}
+                  postedJobs={pubPostedJobs}
                   onOpenHiring={(fac) => { setSectionQ(fac ? fac.name : ""); navigate("findjob"); }}
                   isSaved={isSaved}
                   onToggleSave={toggleSave}
-                  onMessage={(f) => requireAuth("message this facility", () => addThread({ business: f.name, product: "Enquiry", text: `Hello, I found ${f.name} on PakMed and have a question.` }))}
+                  guestDefaults={{ name: profiles.general.fullName || "", phone: profiles.general.phone || verifiedPhone || "" }}
+                  onMessage={(payload) => addThread(payload)}
                   {...navProps}
                 />
               )}
@@ -13495,7 +15487,7 @@ export default function PakMedApp() {
                   key={"j" + sectionQ}
                   initialQuery={sectionQ}
                   userCity={profiles.general.city}
-                  postedJobs={postedJobs}
+                  postedJobs={pubPostedJobs}
                   onReport={setReportTarget}
                   reportedIds={reportedIds}
                   jobSocial={jobSocial}
@@ -13540,7 +15532,7 @@ export default function PakMedApp() {
                   onOpenSeller={() => requireAuth("sell on PakMed", () => navigate("seller"))}
                   onReport={setReportTarget}
                   reportedIds={reportedIds}
-                  listings={listings}
+                  listings={pubListings}
                   canSell={canSell}
                   requireAuth={requireAuth}
                   isSaved={isSaved}
@@ -13558,7 +15550,30 @@ export default function PakMedApp() {
                   {...navProps}
                 />
               )}
-              {tab === "messages" && <MessagesScreen threads={threads} {...navProps} />}
+              {tab === "messages" && <MessagesScreen threads={threads} adminMessages={authed ? myAdminMessages : []} {...navProps} />}
+              {tab === "admin" && (authed ? (
+                <AdminPanelScreen
+                  admin={admin}
+                  setAdmin={setAdmin}
+                  postedJobs={postedJobs}
+                  listings={listings}
+                  seller={seller}
+                  reports={reports}
+                  setReports={setReports}
+                  me={{ name: profiles.general.fullName || `@${username}`, username, city: profiles.general.city, phone: profiles.general.phone || verifiedPhone }}
+                  onViewSite={(section) => { setSectionQ(""); setFocusPost(null); navigate(section); }}
+                  {...navProps}
+                />
+              ) : (
+                <div className="flex flex-col h-full min-h-0" style={{ fontFamily: FONT }}>
+                  <ScreenHeader title="Admin panel" {...navProps} />
+                  <div className="flex-1 flex flex-col items-center justify-center text-center px-6 py-16">
+                    <Lock className="w-10 h-10 mb-3" style={{ color: BRAND }} />
+                    <p className="text-[18px] font-extrabold" style={{ color: INK }}>Sign in to open the admin panel</p>
+                    <button type="button" onClick={() => setSignInFor({ reason: "open the admin panel", run: () => navigate("admin") })} className="mt-5 h-11 px-6 rounded-xl text-[14.5px] font-bold text-white" style={{ backgroundColor: BRAND }}>Sign in</button>
+                  </div>
+                </div>
+              ))}
               {tab === "profile" && (
                 <AccountScreen
                   authed={authed}
@@ -13576,6 +15591,8 @@ export default function PakMedApp() {
                   applications={myApplications}
                   allJobs={[...postedJobs, ...SEED_JOBS]}
                   messagesCount={threads.length}
+                  adminMessages={myAdminMessages}
+                  suspended={suspended}
                   onNavigate={(k) => (k === "home" ? goHome() : navigate(k))}
                   onOpenSaved={(section, q) => { setSectionQ(q || ""); navigate(section); }}
                   onToggleJob={toggleJobFav}
@@ -13644,12 +15661,12 @@ export default function PakMedApp() {
                 />
               )}
               {tab === "help" && (
-                <SimpleInfoScreen
-                  title="Help & Support"
-                  lines={[
-                    "Questions about verification, job posts, payments or the Market can be raised here.",
-                    "In the live app this will connect to PakMed support over WhatsApp and email.",
-                  ]}
+                <SupportScreen
+                  authed={authed}
+                  onSignIn={() => setSignInFor({ reason: "contact support", run: () => navigate("help") })}
+                  tickets={myTickets}
+                  onCreate={createTicket}
+                  onReply={replyAsUser}
                   {...navProps}
                 />
               )}
@@ -13711,10 +15728,13 @@ export default function PakMedApp() {
               onNavigate={handleDrawerNav}
               username={username}
               cvDoc={cvDoc}
-              unreadCount={threads.length}
+              unreadCount={threads.length + (authed ? unreadAdmin.length : 0)}
               pendingReports={reports.filter((r) => r.status === "pending").length}
               panels={{ doctor: pctDoctor >= GATE_THRESHOLD, employer: canPostJob, seller: canSell }}
+              isAdmin={authed}
+              adminBadge={admin.tickets.filter((t) => t.status === "open").length}
             />
+            {showChrome && <PakMedChatbot onNavigate={headerNavigate} />}
           </>
         )}
       </AuthGate.Provider>
