@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, createContext, useContext } from "react";
+import { createPortal } from "react-dom";
 import {
   Bell, Home, Briefcase, Activity, Mail, User, Heart, MessageCircle, Repeat2, Bookmark, Send, X,
   Eye, EyeOff, ArrowRight, ArrowLeft, Check, MessageCircle as WhatsAppIcon,
@@ -13,7 +14,7 @@ import {
   ScanLine, BedDouble, Sparkles, Package, Truck, Tag,
   Siren, TestTube, Navigation, LayoutGrid,
   Minus, Save, ClipboardList,
-  Ban, LayoutDashboard, Megaphone, Headphones, Trash2, RotateCcw, Inbox, UserCheck, ImagePlus, CheckCheck, ShieldAlert,
+  Ban, CircleAlert, LayoutDashboard, Megaphone, Headphones, Trash2, RotateCcw, Inbox, UserCheck, ImagePlus, CheckCheck, ShieldAlert,
 } from "lucide-react";
 
 // ---------------- Theme ----------------
@@ -949,31 +950,55 @@ function VerticalFeedScreen({ cards, startIndex = 0, onBack, onTabNav, onReport,
   const [shareFor, setShareFor] = useState(null);
   const [draft, setDraft] = useState("");
   const [expanded, setExpanded] = useState({});
-  const swipeX = useRef(null);
-  const swipeY = useRef(null);
+  const [moreText, setMoreText] = useState({});      // cardId -> body expanded
+  const [dragX, setDragX] = useState(0);
+  const drag = useRef(null);                         // { x, y, moved }
+  const last = cards.length - 1;
+  const goTo = (i) => { setActive(Math.max(0, Math.min(last, i))); setDragX(0); };
 
-  const onTouchStart = (e) => { swipeX.current = e.touches[0].clientX; swipeY.current = e.touches[0].clientY; };
-  const onTouchEnd = (e) => {
-    if (swipeX.current === null) return;
-    const dx = e.changedTouches[0].clientX - swipeX.current;
-    const dy = e.changedTouches[0].clientY - swipeY.current;
-    swipeX.current = null;
-    // horizontal swipe (either direction) leaves the feed; vertical is handled by scroll-snap
-    if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.6) onBack();
-  };
-
-  // jump to the tapped card on mount
+  // full-screen viewer: lock page scroll, arrow keys move, Esc closes
   useEffect(() => {
-    const el = scrollRef.current;
-    if (el) el.scrollTop = startIndex * el.clientHeight;
-  }, [startIndex]);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+  useEffect(() => {
+    const onKey = (e) => {
+      if (commentFor || shareFor) return;
+      if (e.key === "ArrowRight") setActive((i) => Math.min(last, i + 1));
+      if (e.key === "ArrowLeft") setActive((i) => Math.max(0, i - 1));
+      if (e.key === "Escape") onBack();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [commentFor, shareFor, last, onBack]);
 
-  const onScroll = () => {
-    const el = scrollRef.current;
-    if (!el || !el.clientHeight) return;
-    const i = Math.round(el.scrollTop / el.clientHeight);
-    if (i !== active) setActive(i);
+  // drag with mouse or finger; a real drag swallows the click that follows it
+  const onPointerDown = (e) => {
+    if (e.button !== undefined && e.button !== 0) return;
+    drag.current = { x: e.clientX, y: e.clientY, moved: false };
   };
+  const onPointerMove = (e) => {
+    const d = drag.current;
+    if (!d) return;
+    const dx = e.clientX - d.x;
+    if (!d.moved && Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(e.clientY - d.y)) d.moved = true;
+    if (d.moved) {
+      // resist past the first/last post
+      const edge = (active === 0 && dx > 0) || (active === last && dx < 0);
+      setDragX(edge ? dx / 4 : dx);
+    }
+  };
+  const onPointerUp = () => {
+    const d = drag.current;
+    if (!d) return;
+    const threshold = Math.min(120, window.innerWidth * 0.18);
+    if (d.moved && dragX < -threshold) goTo(active + 1);
+    else if (d.moved && dragX > threshold) goTo(active - 1);
+    else setDragX(0);
+    setTimeout(() => { drag.current = null; }, 0);
+  };
+  const swallowDragClick = (e) => { if (drag.current && drag.current.moved) { e.stopPropagation(); e.preventDefault(); } };
 
   const toggleLike = (id) => setState((p) => ({ ...p, [id]: { ...p[id], liked: !p[id].liked, likes: p[id].liked ? p[id].likes - 1 : p[id].likes + 1 } }));
   const toggleSave = (id) => setState((p) => ({ ...p, [id]: { ...p[id], saved: !p[id].saved } }));
@@ -998,8 +1023,8 @@ function VerticalFeedScreen({ cards, startIndex = 0, onBack, onTabNav, onReport,
   const sheetCard = commentFor ? cards.find((c) => c.id === commentFor) : null;
   const sheetState = commentFor ? state[commentFor] : null;
 
-  return (
-    <div className="relative h-full min-h-0" style={{ backgroundColor: "#0B0D10" }} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+  return createPortal(
+    <div className="fixed inset-0 z-[60] overflow-hidden select-none" style={{ backgroundColor: "#0B0D10", fontFamily: FONT }}>
 
       {/* floating top tabs — same colours as home, tuned for dark media */}
       <div className="absolute top-0 left-0 right-0 z-30 px-2.5 pt-3 pb-2">
@@ -1037,28 +1062,60 @@ function VerticalFeedScreen({ cards, startIndex = 0, onBack, onTabNav, onReport,
         </div>
       </div>
 
-      {/* position dots */}
-      <div className="absolute right-1.5 top-1/2 -translate-y-1/2 z-20 flex flex-col gap-1">
-        {cards.slice(0, 20).map((c, i) => (
-          <span key={c.id} className="rounded-full transition-all"
-            style={{ width: 3, height: i === active ? 14 : 3, backgroundColor: i === active ? "#FFFFFF" : "#FFFFFF55" }} />
-        ))}
+      {/* counter + progress */}
+      <div className="absolute top-[62px] left-0 right-0 z-30 flex flex-col items-center gap-2 pointer-events-none">
+        <span className="text-[12px] font-bold text-white px-2.5 py-1 rounded-full" style={{ background: "rgba(0,0,0,0.45)" }}>{active + 1} / {cards.length}</span>
+        <div className="flex gap-1">
+          {cards.slice(0, 30).map((c, i) => (
+            <span key={c.id} className="rounded-full transition-all"
+              style={{ height: 3, width: i === active ? 16 : 5, backgroundColor: i === active ? "#FFFFFF" : "#FFFFFF55" }} />
+          ))}
+        </div>
       </div>
 
-      {/* vertical snap scroller */}
+      {/* prev / next */}
+      {active > 0 && (
+        <button type="button" onClick={() => goTo(active - 1)} aria-label="Previous post"
+          className="absolute left-2 sm:left-5 top-[42%] -translate-y-1/2 z-30 w-11 h-11 sm:w-14 sm:h-14 rounded-full flex items-center justify-center transition-transform active:scale-95 hover:scale-105"
+          style={{ background: "rgba(255,255,255,0.92)", boxShadow: "0 6px 20px rgba(0,0,0,.35)" }}>
+          <ChevronLeft className="w-6 h-6 sm:w-7 sm:h-7" style={{ color: INK }} />
+        </button>
+      )}
+      {active < last && (
+        <button type="button" onClick={() => goTo(active + 1)} aria-label="Next post"
+          className="absolute right-2 sm:right-5 top-[42%] -translate-y-1/2 z-30 w-11 h-11 sm:w-14 sm:h-14 rounded-full flex items-center justify-center transition-transform active:scale-95 hover:scale-105"
+          style={{ background: "rgba(255,255,255,0.92)", boxShadow: "0 6px 20px rgba(0,0,0,.35)" }}>
+          <ChevronRight className="w-6 h-6 sm:w-7 sm:h-7" style={{ color: INK }} />
+        </button>
+      )}
+
+      {/* horizontal carousel track — drag, swipe, buttons or arrow keys */}
       <div
         ref={scrollRef}
-        onScroll={onScroll}
-        className="h-full overflow-y-auto"
-        style={{ scrollSnapType: "y mandatory", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}
+        className="h-full flex cursor-grab active:cursor-grabbing"
+        style={{
+          transform: `translateX(calc(${-active * 100}% + ${dragX}px))`,
+          transition: dragX ? "none" : "transform 380ms cubic-bezier(.22,.61,.36,1)",
+          touchAction: "pan-y",
+        }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        onPointerLeave={() => drag.current && onPointerUp()}
+        onClickCapture={swallowDragClick}
+        onDragStart={(e) => e.preventDefault()}
       >
-        {cards.map((c) => {
+        {cards.map((c, i) => {
           const st = state[c.id];
+          const near = Math.abs(i - active) <= 1;
+          const long = (c.body || "").length > 110;
+          const open = !!moreText[c.id];
           return (
-            <div key={c.id} className="relative h-full w-full shrink-0" style={{ scrollSnapAlign: "start", scrollSnapStop: "always" }}>
+            <div key={c.id} className="relative h-full w-full shrink-0" aria-hidden={i !== active}>
               {/* media */}
               <div className="absolute inset-0" style={{ background: c.media.kind === "gradient" ? c.media.g : "#111" }}>
-                {c.media.kind === "image" && <img src={c.media.src} alt="" className="w-full h-full object-cover" />}
+                {c.media.kind === "image" && near && <img src={c.media.src} alt="" draggable={false} className="w-full h-full object-cover" />}
                 {c.media.kind === "video" && (
                   <video src={c.media.src} className="w-full h-full object-cover" autoPlay muted loop playsInline />
                 )}
@@ -1094,7 +1151,7 @@ function VerticalFeedScreen({ cards, startIndex = 0, onBack, onTabNav, onReport,
               </div>
 
               {/* bottom content */}
-              <div className="absolute left-0 right-14 bottom-0 z-20 px-4 pb-6">
+              <div className="absolute left-0 right-14 sm:right-24 bottom-0 z-20 px-4 sm:px-10 pb-6 sm:pb-10 max-w-3xl">
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[11px] font-bold shrink-0" style={{ background: "rgba(255,255,255,0.22)" }}>
                     {c.author[0]}
@@ -1105,8 +1162,18 @@ function VerticalFeedScreen({ cards, startIndex = 0, onBack, onTabNav, onReport,
                 <span className="inline-block text-[10px] font-bold tracking-wide uppercase px-2 py-0.5 rounded-full mb-2" style={{ background: "rgba(255,255,255,0.2)", color: "#fff" }}>
                   {c.eyebrow}
                 </span>
-                <p className="text-[19px] font-bold leading-snug text-white">{c.title}</p>
-                <p className="text-[13.5px] leading-snug text-white/85 mt-1.5">{c.body}</p>
+                <p className="text-[19px] sm:text-[26px] font-bold leading-snug text-white">{c.title}</p>
+                <div className={open ? "max-h-[38vh] overflow-y-auto mt-1.5 pr-1" : "mt-1.5"} onPointerDown={(e) => open && e.stopPropagation()}>
+                  <p className={`text-[13.5px] sm:text-[15px] leading-relaxed text-white/85 whitespace-pre-wrap ${open ? "" : "line-clamp-2"}`}>{c.body}</p>
+                </div>
+                {long && (
+                  <button type="button" onClick={() => setMoreText((p) => ({ ...p, [c.id]: !open }))}
+                    className="mt-2 text-[13px] font-bold text-white inline-flex items-center gap-1 px-3 py-1.5 rounded-full"
+                    style={{ background: "rgba(255,255,255,0.18)" }}>
+                    {open ? "See less" : "See more"}
+                    <ChevronDown className="w-4 h-4 transition-transform" style={{ transform: open ? "rotate(180deg)" : "none" }} />
+                  </button>
+                )}
               </div>
             </div>
           );
@@ -1194,7 +1261,8 @@ function VerticalFeedScreen({ cards, startIndex = 0, onBack, onTabNav, onReport,
       )}
 
       {shareFor && <ShareSheet card={shareFor} onClose={() => setShareFor(null)} />}
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -2986,57 +3054,189 @@ function MarketMessageModal({ target, draft, setDraft, onSend, onClose }) {
   );
 }
 
-function MessagesScreen({ threads, adminMessages = [], onBack }) {
-  return (
+const chatTime = (ts) => {
+  if (!ts) return "";
+  const d = new Date(ts);
+  return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+};
+const chatWaLink = (phone) => `https://wa.me/92${String(phone || "").replace(/\D/g, "").replace(/^0|^92/, "")}`;
+
+function MessagesScreen({ threads, adminMessages = [], onBack, onSend, onRead, myPhone = "", myName = "You" }) {
+  const [openId, setOpenId] = useState(null);
+  const [view, setView] = useState("chats");   // chats | admin (mobile tabs)
+  const [draft, setDraft] = useState("");
+  const [shareAsk, setShareAsk] = useState(false);
+  const endRef = useRef(null);
+  const open = threads.find((t) => t.id === openId) || null;
+  const lastOf = (t) => t.messages[t.messages.length - 1] || {};
+  const sorted = [...threads].sort((a, b) => (lastOf(b).at || 0) - (lastOf(a).at || 0));
+
+  useEffect(() => { if (endRef.current) endRef.current.scrollIntoView({ block: "end" }); }, [openId, open && open.messages.length]);
+
+  const send = (e) => {
+    if (e) e.preventDefault();
+    const text = draft.trim();
+    if (!text || !open) return;
+    onSend(open.id, { from: "me", text });
+    setDraft("");
+  };
+  const shareNumber = () => {
+    if (!open || !myPhone) return;
+    onSend(open.id, { from: "me", kind: "phone", phone: myPhone, text: `${myName} shared their phone number` });
+    setShareAsk(false);
+  };
+  const alreadyShared = open && open.messages.some((m) => m.kind === "phone" && m.from === "me");
+
+  const Avatar = ({ name, size = 40 }) => (
+    <span className="rounded-full flex items-center justify-center text-white font-bold shrink-0"
+      style={{ width: size, height: size, fontSize: size * 0.34, backgroundColor: LIKER_COLORS[(name || "?").length % LIKER_COLORS.length] }}>
+      {(name || "?").replace(/^Dr\.?\s*/i, "").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase()}
+    </span>
+  );
+
+  const list = (
+    <div className="flex flex-col min-h-0 h-full">
+      <div className="px-4 pt-3 pb-2 flex gap-1.5">
+        {[["chats", `Chats · ${threads.length}`], ["admin", `From PakMed · ${adminMessages.length}`]].map(([k, label]) => (
+          <button key={k} type="button" onClick={() => setView(k)} className="h-8 px-3 rounded-full text-[12.5px]"
+            style={{ fontWeight: view === k ? 700 : 600, color: view === k ? "#fff" : INK_2, backgroundColor: view === k ? BRAND : "#fff", border: `1px solid ${view === k ? BRAND : CARD_BORDER}` }}>
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="flex-1 min-h-0 overflow-y-auto px-2 pb-3">
+        {view === "admin" ? (
+          adminMessages.length === 0 ? (
+            <p className="text-[13px] text-center py-10 px-4" style={{ color: SUBTLE }}>No messages from PakMed yet.</p>
+          ) : adminMessages.map((m) => (
+            <div key={m.id} className="rounded-xl p-3.5 m-1.5" style={{ backgroundColor: m.priority === "important" ? RED_TINT : BRAND_50, border: `1px solid ${m.priority === "important" ? "#F5C2BE" : "#B9D3F2"}` }}>
+              <div className="flex items-start gap-2.5">
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: m.priority === "important" ? RED : BRAND }}>
+                  <Megaphone className="w-4 h-4 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13.5px] font-semibold leading-tight flex items-center gap-1" style={{ color: INK }}>
+                    PakMed Admin <CheckCircle2 className="w-3.5 h-3.5" style={{ color: BRAND }} />
+                    <span className="ml-auto text-[10.5px] font-normal" style={{ color: SUBTLE }}>{adminAgo(m.at)}</span>
+                  </p>
+                  <p className="text-[12.5px] mt-0.5 font-semibold" style={{ color: INK_2 }}>{m.subject}{m.to === "all" ? " · Announcement" : ""}{m.priority === "important" && <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ color: RED, backgroundColor: "#fff" }}>Important</span>}</p>
+                  <p className="text-[12.5px] mt-1.5 whitespace-pre-wrap" style={{ color: "#4B4A45" }}>{m.text}</p>
+                </div>
+              </div>
+            </div>
+          ))
+        ) : sorted.length === 0 ? (
+          <div className="text-center py-10 px-6">
+            <MessageSquareText className="w-9 h-9 mx-auto mb-2" style={{ color: FAINT }} />
+            <p className="text-[13.5px] font-semibold" style={{ color: INK }}>No conversations yet</p>
+            <p className="text-[12.5px] mt-1" style={{ color: SUBTLE }}>Message a doctor, hospital or seller to start a chat.</p>
+          </div>
+        ) : sorted.map((t) => {
+          const last = lastOf(t);
+          const on = t.id === openId;
+          return (
+            <button key={t.id} type="button" onClick={() => { setOpenId(t.id); setShareAsk(false); if (t.unread && onRead) onRead(t.id); }}
+              className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-colors hover:bg-[#F5F7FA]"
+              style={{ backgroundColor: on ? BRAND_50 : undefined }}>
+              <Avatar name={t.business} />
+              <span className="flex-1 min-w-0">
+                <span className="flex items-center gap-2">
+                  <span className="text-[14px] font-bold truncate flex-1" style={{ color: INK }}>{t.business}</span>
+                  <span className="text-[11px] shrink-0" style={{ color: FAINT }}>{chatTime(last.at)}</span>
+                </span>
+                <span className="block text-[11.5px] truncate" style={{ color: SUBTLE }}>{t.product}</span>
+                <span className="block text-[12.5px] truncate mt-0.5" style={{ color: t.unread ? INK : INK_2, fontWeight: t.unread ? 700 : 400 }}>
+                  {last.from === "me" ? "You: " : ""}{last.kind === "phone" ? "📞 Phone number shared" : last.text}
+                </span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const chat = open && (
     <div className="flex flex-col h-full min-h-0">
-      <ScreenHeader title="Messages" onBack={onBack} />
-      <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-4">
-        {adminMessages.length > 0 && (
-          <div className="flex flex-col gap-2.5 mt-3 mb-1">
-            <p className="text-[11px] font-bold uppercase tracking-wider px-1" style={{ color: SUBTLE }}>From PakMed Admin</p>
-            {adminMessages.map((m) => (
-              <div key={m.id} className="rounded-xl p-3.5" style={{ backgroundColor: BRAND_50, border: "1px solid #B9D3F2" }}>
-                <div className="flex items-start gap-2.5">
-                  <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: BRAND }}>
-                    <Megaphone className="w-4 h-4 text-white" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13.5px] font-semibold leading-tight flex items-center gap-1" style={{ color: INK }}>
-                      PakMed Admin <CheckCircle2 className="w-3.5 h-3.5" style={{ color: BRAND }} />
-                    </p>
-                    <p className="text-[12px] mt-0.5 font-semibold" style={{ color: INK_2 }}>{m.subject}{m.to === "all" ? " · Announcement" : ""}</p>
-                    <p className="text-[12.5px] mt-1.5 whitespace-pre-wrap" style={{ color: "#4B4A45" }}>{m.text}</p>
-                    <p className="text-[10.5px] mt-1.5" style={{ color: SUBTLE }}>{adminAgo(m.at)}</p>
-                  </div>
+      <div className="px-4 py-3 flex items-center gap-3 shrink-0" style={{ borderBottom: `1px solid ${CARD_BORDER}` }}>
+        <button type="button" onClick={() => setOpenId(null)} className="lg:hidden w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ border: `1px solid ${CARD_BORDER}` }} aria-label="Back to chats">
+          <ChevronLeft className="w-5 h-5" style={{ color: INK }} />
+        </button>
+        <Avatar name={open.business} size={38} />
+        <div className="flex-1 min-w-0">
+          <p className="text-[14.5px] font-bold truncate" style={{ color: INK }}>{open.business}</p>
+          <p className="text-[12px] truncate" style={{ color: SUBTLE }}>{open.product}</p>
+        </div>
+        <button type="button" onClick={() => setShareAsk(true)} disabled={!myPhone || alreadyShared}
+          title={!myPhone ? "Add a phone number to your profile first" : alreadyShared ? "Already shared in this chat" : "Share your number in this chat"}
+          className="h-9 px-3 rounded-xl text-[12.5px] font-bold inline-flex items-center gap-1.5 shrink-0 disabled:opacity-45"
+          style={{ color: GREEN, backgroundColor: GREEN_TINT }}>
+          <Phone className="w-4 h-4" /> <span className="hidden sm:inline">{alreadyShared ? "Number shared" : "Share my number"}</span>
+        </button>
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 flex flex-col gap-2" style={{ backgroundColor: CREAM }}>
+        <p className="text-center text-[11.5px] mb-2" style={{ color: FAINT }}>
+          <Shield className="w-3.5 h-3.5 inline -mt-0.5 mr-1" />Messages stay on PakMed. Your number is only shared if you choose to.
+        </p>
+        {open.messages.map((m, i) => {
+          const mine = m.from === "me";
+          if (m.kind === "phone") {
+            return (
+              <div key={i} className={`max-w-[80%] rounded-2xl p-3.5 bg-white ${mine ? "self-end" : "self-start"}`} style={{ border: `1px solid ${CARD_BORDER}` }}>
+                <p className="text-[11.5px] font-semibold flex items-center gap-1.5" style={{ color: SUBTLE }}><Phone className="w-3.5 h-3.5" style={{ color: GREEN }} /> {mine ? "You shared your number" : `${open.business} shared their number`}</p>
+                <p className="text-[17px] font-extrabold mt-1 tracking-wide" style={{ color: INK }}>{m.phone}</p>
+                <div className="flex gap-2 mt-2.5">
+                  <a href={`tel:${String(m.phone).replace(/\s/g, "")}`} className="h-8 px-3 rounded-lg text-[12.5px] font-bold inline-flex items-center gap-1.5 text-white" style={{ backgroundColor: BRAND }}><Phone className="w-3.5 h-3.5" /> Call</a>
+                  <a href={chatWaLink(m.phone)} target="_blank" rel="noreferrer" className="h-8 px-3 rounded-lg text-[12.5px] font-bold inline-flex items-center gap-1.5" style={{ color: "#128C4A", backgroundColor: "#E7F7EE" }}><WhatsAppGlyph size={14} color="#128C4A" /> WhatsApp</a>
                 </div>
+                <p className="text-[10.5px] mt-1.5 text-right" style={{ color: FAINT }}>{chatTime(m.at)}</p>
               </div>
-            ))}
-          </div>
-        )}
-        {threads.length === 0 && adminMessages.length > 0 ? null : threads.length === 0 ? (
-          <div className="rounded-xl bg-white p-6 text-center mt-2" style={{ border: `1px solid ${CARD_BORDER}` }}>
-            <MessageSquareText className="w-8 h-8 mx-auto mb-2" style={{ color: SUBTLE }} />
-            <p className="text-[13px]" style={{ color: SUBTLE }}>No messages yet. Message a seller from the Market tab to start a conversation.</p>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2.5 mt-1">
-            {threads.map((t, i) => (
-              <div key={i} className="rounded-xl bg-white p-3.5" style={{ border: `1px solid ${CARD_BORDER}` }}>
-                <div className="flex items-start gap-2.5">
-                  <div className="w-9 h-9 rounded-lg flex items-center justify-center text-white text-[12px] font-bold shrink-0" style={{ backgroundColor: NAVY }}>
-                    {t.business[0]}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13.5px] font-semibold leading-tight" style={{ color: INK }}>{t.business}</p>
-                    <p className="text-[11px] mt-0.5" style={{ color: SUBTLE }}>Re: {t.product}</p>
-                    <p className="text-[12.5px] mt-1.5" style={{ color: "#4B4A45" }}>{t.text}</p>
-                    <p className="text-[10.5px] mt-1.5" style={{ color: SUBTLE }}>Sent · awaiting reply</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+            );
+          }
+          return (
+            <div key={i} className={`max-w-[78%] rounded-2xl px-3.5 py-2.5 ${mine ? "self-end rounded-br-md" : "self-start rounded-bl-md"}`}
+              style={{ backgroundColor: mine ? BRAND : "#fff", color: mine ? "#fff" : INK, border: mine ? "none" : `1px solid ${CARD_BORDER}` }}>
+              <p className="text-[13.5px] leading-relaxed whitespace-pre-wrap">{m.text}</p>
+              <p className="text-[10.5px] mt-1 text-right" style={{ opacity: 0.7 }}>{chatTime(m.at)}{mine ? " ✓" : ""}</p>
+            </div>
+          );
+        })}
+        <div ref={endRef} />
+      </div>
+
+      {shareAsk && (
+        <div className="px-4 py-3 flex items-center gap-3 flex-wrap shrink-0" style={{ backgroundColor: GREEN_TINT, borderTop: `1px solid ${CARD_BORDER}` }}>
+          <Phone className="w-4 h-4 shrink-0" style={{ color: GREEN }} />
+          <p className="flex-1 min-w-[180px] text-[13px]" style={{ color: INK_2 }}>Share <b>{myPhone}</b> with {open.business}? Only this chat will see it.</p>
+          <button type="button" onClick={() => setShareAsk(false)} className="h-9 px-3 rounded-lg text-[13px] font-bold" style={{ color: INK_2 }}>Cancel</button>
+          <button type="button" onClick={shareNumber} className="h-9 px-4 rounded-lg text-[13px] font-bold text-white" style={{ backgroundColor: GREEN }}>Share number</button>
+        </div>
+      )}
+      <form onSubmit={send} className="px-3 py-3 flex items-center gap-2 shrink-0 bg-white" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+        <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={`Message ${open.business}…`}
+          className="flex-1 min-w-0 h-11 px-4 rounded-full text-[14px] outline-none" style={{ backgroundColor: CREAM, color: INK, border: `1px solid ${CARD_BORDER}` }} />
+        <button type="submit" disabled={!draft.trim()} className="w-11 h-11 rounded-full flex items-center justify-center text-white shrink-0 disabled:opacity-40" style={{ backgroundColor: BRAND }} aria-label="Send">
+          <Send className="w-[18px] h-[18px]" />
+        </button>
+      </form>
+    </div>
+  );
+
+  return (
+    <div className="flex flex-col h-full min-h-0" style={{ fontFamily: FONT }}>
+      <ScreenHeader title="Messages" subtitle="Chats with doctors, hospitals and sellers" onBack={onBack} />
+      <div className="flex-1 min-h-[560px] lg:h-[calc(100dvh-200px)] grid grid-cols-1 lg:grid-cols-[340px_1fr]">
+        <div className={`${open ? "hidden lg:flex" : "flex"} flex-col min-h-0 lg:border-r`} style={{ borderColor: CARD_BORDER }}>{list}</div>
+        <div className={`${open ? "flex" : "hidden lg:flex"} flex-col min-h-0`}>
+          {chat || (
+            <div className="flex-1 flex flex-col items-center justify-center text-center px-6" style={{ backgroundColor: CREAM }}>
+              <span className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ backgroundColor: BRAND_50 }}><MessageSquareText className="w-7 h-7" style={{ color: BRAND }} /></span>
+              <p className="text-[15px] font-bold mt-3" style={{ color: INK }}>Select a conversation</p>
+              <p className="text-[13px] mt-1 max-w-xs" style={{ color: SUBTLE }}>Reply to patients, employers and sellers — and share your number only when you want to.</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -3072,12 +3272,18 @@ function IconText({ icon: I, children, color = SUBTLE, size = 13 }) {
 const HomeNav = createContext(null);
 // requireAuth(reason, fn): runs fn if signed in, otherwise opens sign-in and runs fn afterwards
 const AuthGate = createContext({ authed: true, require: (reason, fn) => fn && fn() });
+// the signed-in user's CV, so apply forms can reuse it, upload to it or open the builder
+const CvContext = createContext({ cvDoc: null, openBuilder: null, uploadCV: null });
+
+// true inside the user dashboard: its own top bar replaces page headers on small screens
+const InDashboard = createContext(false);
 
 function ScreenHeader({ title, subtitle, onBack, onMenu, right }) {
   const goHome = useContext(HomeNav);
+  const inDash = useContext(InDashboard);
   const iconBtn = "w-10 h-10 rounded-xl flex items-center justify-center bg-white shrink-0 transition-colors hover:bg-[#F5F7FA]";
   return (
-    <div className="px-4 sm:px-6 pt-4 pb-3.5 flex items-center gap-2.5 shrink-0 bg-white" style={{ borderBottom: `1px solid ${CARD_BORDER}`, fontFamily: FONT }}>
+    <div className={`px-4 sm:px-6 pt-4 pb-3.5 items-center gap-2.5 shrink-0 bg-white ${inDash ? "hidden lg:flex" : "flex"}`} style={{ borderBottom: `1px solid ${CARD_BORDER}`, fontFamily: FONT }}>
       {onBack && (
         <button onClick={onBack} className={iconBtn} style={{ border: `1px solid ${CARD_BORDER}` }} aria-label="Back">
           <ChevronLeft className="w-5 h-5" style={{ color: INK }} />
@@ -6967,8 +7173,15 @@ function jobRequirementsFor(job) {
   });
 }
 
+const isCvDoc = (d) => d.id === "cv" || /\b(cv|resume)\b/i.test(d.label || "");
+// applying needs a CV only — every other document is optional
+function cvOnlyRequired(docs) {
+  const list = docs.some(isCvDoc) ? docs : [{ id: "cv", label: "Updated CV / Resume" }, ...docs];
+  return list.map((d) => (isCvDoc(d) ? { ...d, id: "cv", required: true } : { ...d, required: false }));
+}
+
 function jobDocumentsFor(job) {
-  if (Array.isArray(job.documents) && job.documents.length) return job.documents;
+  if (Array.isArray(job.documents) && job.documents.length) return cvOnlyRequired(job.documents);
   const kind = jobRoleKind(job.jobTitle);
   const reqText = (job.requirements || []).join(" ").toLowerCase();
   const degree = {
@@ -6990,7 +7203,7 @@ function jobDocumentsFor(job) {
   docs.push({ id: "exp", label: "Experience letter(s)", required: /experience/.test(reqText) && !/fresh/.test(reqText) });
   if (/local/.test(reqText)) docs.push({ id: "domicile", label: "Domicile certificate", required: false });
   docs.push({ id: "photo", label: "Passport-size photograph", required: false });
-  return docs;
+  return cvOnlyRequired(docs);
 }
 
 function fmtBytes(n) {
@@ -7061,6 +7274,10 @@ function ApplyDocsChecklist({ job, hasApplied, draft, onApply }) {
 /* the upload form that opens from "Apply now" */
 function ApplyFormModal({ job, onClose, onSubmit, onDraftChange }) {
   const docs = jobDocumentsFor(job);
+  const cvCtx = useContext(CvContext);
+  const myCv = cvCtx.cvDoc && (cvCtx.cvDoc.uploaded || cvCtx.cvDoc.savedInApp) ? cvCtx.cvDoc : null;
+  const myCvName = myCv ? (myCv.uploaded ? myCv.uploaded.name : `PakMed CV — ${(myCv.cv && myCv.cv.fullName) || "my profile"}`) : "";
+  const otherDocs = docs.filter((d) => d.id !== "cv");
   const initial = loadApplyDraft(job.id) || {};
   const [files, setFiles] = useState(initial.files || {});
   const [note, setNote] = useState(initial.note || "");
@@ -7108,6 +7325,19 @@ function ApplyFormModal({ job, onClose, onSubmit, onDraftChange }) {
     setFiles((p) => ({ ...p, [id]: { name: f.name, size: f.size } }));
   };
   const remove = (id) => setFiles((p) => { const n = { ...p }; delete n[id]; return n; });
+  // CV: Word files allowed too; an uploaded CV is also saved to the user's profile
+  const pickCv = (e) => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!f) return;
+    if (f.size > APPLY_MAX_BYTES) { setErrors((p) => ({ ...p, cv: "File is larger than 5 MB" })); return; }
+    if (!/\.(pdf|docx?|jpe?g|png)$/i.test(f.name)) { setErrors((p) => ({ ...p, cv: "Use a PDF, Word, JPG or PNG file" })); return; }
+    setErrors((p) => ({ ...p, cv: "" }));
+    setFiles((p) => ({ ...p, cv: { name: f.name, size: f.size } }));
+    if (cvCtx.uploadCV) cvCtx.uploadCV(f);
+  };
+  const useSavedCv = () => { setErrors((p) => ({ ...p, cv: "" })); setFiles((p) => ({ ...p, cv: { name: myCvName, size: 0, source: "profile" } })); };
+  const createCv = () => { onClose(); if (cvCtx.openBuilder) cvCtx.openBuilder(); };
 
   const submit = () => {
     if (!ready || !confirm || submitting) return;
@@ -7144,7 +7374,10 @@ function ApplyFormModal({ job, onClose, onSubmit, onDraftChange }) {
           {!done && (
             <div className="mt-4">
               <div className="flex items-center justify-between text-[12.5px] font-semibold mb-1.5">
-                <span style={{ color: doneCount === required.length ? GREEN : INK_2 }}>{doneCount} of {required.length} required documents</span>
+                <span style={{ color: doneCount === required.length ? GREEN : INK_2 }}>
+                  {files.cv ? "CV added — you can submit now" : "Add your CV to apply"}
+                  {otherDocs.some((d) => files[d.id]) && ` · ${otherDocs.filter((d) => files[d.id]).length} optional document${otherDocs.filter((d) => files[d.id]).length === 1 ? "" : "s"}`}
+                </span>
                 <span className="inline-flex items-center gap-1 transition-opacity" style={{ color: GREEN, opacity: savedFlash ? 1 : 0 }}>
                   <Check className="w-3.5 h-3.5" strokeWidth={3} /> Draft saved
                 </span>
@@ -7170,8 +7403,57 @@ function ApplyFormModal({ job, onClose, onSubmit, onDraftChange }) {
         ) : (
           <>
             <div className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-7 py-5">
+              {/* CV — the only required document */}
+              <div className="rounded-2xl p-4" style={{ border: `1.5px solid ${errors.cv ? RED : files.cv ? "#C7E8D9" : "#B9D3F2"}`, backgroundColor: files.cv ? "#F6FBF8" : BRAND_50 }}>
+                <div className="flex items-start gap-3">
+                  <span className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 bg-white">
+                    {files.cv ? <CheckCircle2 className="w-6 h-6" style={{ color: GREEN }} /> : <FileText className="w-5 h-5" style={{ color: BRAND }} />}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[15.5px] font-extrabold" style={{ color: INK }}>Your CV / Resume <span style={{ color: RED }}>*</span></p>
+                    <p className="text-[12.5px] mt-0.5" style={{ color: errors.cv ? RED : files.cv ? GREEN : SUBTLE }}>
+                      {errors.cv || (files.cv
+                        ? (files.cv.source === "profile" ? `${files.cv.name} · from your profile` : `${files.cv.name} · ${fmtBytes(files.cv.size)}`)
+                        : "The only document you must add — everything else is optional.")}
+                    </p>
+                  </div>
+                  {files.cv && (
+                    <button type="button" onClick={() => remove("cv")} aria-label="Remove CV" className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0 bg-white" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                      <X className="w-4 h-4" style={{ color: SUBTLE }} />
+                    </button>
+                  )}
+                </div>
+                {!files.cv && (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3.5">
+                    <button type="button" onClick={useSavedCv} disabled={!myCv}
+                      className="rounded-xl p-3 text-left bg-white transition-colors enabled:hover:bg-[#F5F9FF] disabled:opacity-55" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                      <UserRound className="w-4 h-4" style={{ color: BRAND }} />
+                      <span className="block text-[13.5px] font-bold mt-1.5" style={{ color: INK }}>Use my saved CV</span>
+                      <span className="block text-[11.5px] mt-0.5 truncate" style={{ color: SUBTLE }}>{myCv ? myCvName : "No CV on your profile yet"}</span>
+                    </button>
+                    <label className="rounded-xl p-3 text-left bg-white cursor-pointer transition-colors hover:bg-[#F5F9FF]" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                      <Upload className="w-4 h-4" style={{ color: BRAND }} />
+                      <span className="block text-[13.5px] font-bold mt-1.5" style={{ color: INK }}>Upload a CV</span>
+                      <span className="block text-[11.5px] mt-0.5" style={{ color: SUBTLE }}>PDF, Word or image · max 5 MB</span>
+                      <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" className="sr-only" onChange={pickCv} />
+                    </label>
+                    <button type="button" onClick={createCv}
+                      className="rounded-xl p-3 text-left bg-white transition-colors hover:bg-[#F5F9FF]" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                      <Pencil className="w-4 h-4" style={{ color: BRAND }} />
+                      <span className="block text-[13.5px] font-bold mt-1.5" style={{ color: INK }}>Create a CV</span>
+                      <span className="block text-[11.5px] mt-0.5" style={{ color: SUBTLE }}>Build one in minutes — your draft is kept</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {otherDocs.length > 0 && (
+                <p className="text-[13px] font-bold mt-5 mb-2.5" style={{ color: INK_2 }}>
+                  Other documents <span className="font-medium" style={{ color: FAINT }}>— optional, but they help your application stand out</span>
+                </p>
+              )}
               <ul className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                {docs.map((d) => {
+                {otherDocs.map((d) => {
                   const f = files[d.id];
                   const err = errors[d.id];
                   return (
@@ -7222,7 +7504,7 @@ function ApplyFormModal({ job, onClose, onSubmit, onDraftChange }) {
 
             <div className="px-5 sm:px-7 py-4 shrink-0 flex flex-col-reverse sm:flex-row sm:items-center gap-2.5" style={{ borderTop: `1px solid ${CARD_BORDER}`, backgroundColor: "#FCFCFD" }}>
               <p className="flex-1 text-[12.5px] leading-snug" style={{ color: SUBTLE }}>
-                {ready && confirm ? "Everything's ready to send." : !ready ? `Upload ${required.length - doneCount} more required ${required.length - doneCount === 1 ? "document" : "documents"} to submit.` : "Tick the confirmation to submit."}
+                {ready && confirm ? "Everything's ready to send." : !ready ? "Add your CV to submit — other documents are optional." : "Tick the confirmation to submit."}
               </p>
               <div className="flex gap-2 shrink-0">
                 <button type="button" onClick={onClose} disabled={submitting}
@@ -8722,6 +9004,13 @@ const REPORT_REASONS = {
     "Contains offensive content",
     "Not a real person",
   ],
+  facility: [
+    "Fake or non-existent facility",
+    "Wrong address or contact details",
+    "Asks patients or staff for advance payment",
+    "Unlicensed or unverified facility",
+    "Misleading services or pricing",
+  ],
   post: [
     "Scam or misleading content",
     "Offensive or harmful content",
@@ -8732,7 +9021,7 @@ const REPORT_REASONS = {
 
 const REPORT_TYPE_LABEL = {
   job: "job post", listing: "market listing", doctor: "doctor profile",
-  service: "service offering", cv: "CV", post: "post",
+  service: "service offering", cv: "CV", post: "post", facility: "hospital profile",
 };
 
 /* tiny flag button — sits bottom-right of any card */
@@ -9152,7 +9441,7 @@ const PRACTICE_TYPES = ["Clinic", "Hospital OPD", "Online only", "Home visit"];
 const WEEK = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 /* ---------- 01 PHYSICIAN PANEL ---------- */
-function PhysicianPanelScreen({ onBack, onMenu, profile, onChange }) {
+function PhysicianPanelScreen({ onBack, onMenu, profile, onChange, adminHidPhone = false }) {
   const [view, setView] = useState("dash");
   const [editing, setEditing] = useState(null);
   const [idx, setIdx] = useState(-1);
@@ -9271,15 +9560,15 @@ function PhysicianPanelScreen({ onBack, onMenu, profile, onChange }) {
         <div className="rounded-2xl bg-white p-4 mb-3" style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: SOFT_SHADOW }}>
           <PFLabel color={C}>Contact number</PFLabel>
           <input value={profile.phone || ""} onChange={(e) => setP("phone", e.target.value)} placeholder="03XX XXXXXXX" inputMode="tel" className={PF_INPUT_CLS} style={PF_INPUT_STYLE} />
-          <button onClick={() => setP("showContact", !profile.showContact)} className="w-full flex items-center gap-3 mt-3">
+          <button onClick={() => !adminHidPhone && setP("showContact", !profile.showContact)} disabled={adminHidPhone} className="w-full flex items-center gap-3 mt-3 disabled:opacity-60">
             <span className="w-12 h-7 rounded-full flex items-center px-0.5 shrink-0 transition-colors"
-              style={{ backgroundColor: profile.showContact ? GREEN : "#D3D9EC", justifyContent: profile.showContact ? "flex-end" : "flex-start" }}>
+              style={{ backgroundColor: profile.showContact && !adminHidPhone ? GREEN : "#D3D9EC", justifyContent: profile.showContact && !adminHidPhone ? "flex-end" : "flex-start" }}>
               <span className="w-6 h-6 rounded-full bg-white block" />
             </span>
             <span className="flex-1 text-left">
               <span className="block text-[13.5px] font-medium" style={{ color: INK }}>Show my number to patients</span>
               <span className="block text-[11.5px]" style={{ color: SUBTLE }}>
-                {profile.showContact ? "Visible on your directory profile" : "Patients book through PakMed instead"}
+                {adminHidPhone ? "Hidden by PakMed admin — contact support to restore it" : profile.showContact ? "Visible on your directory profile" : "Hidden — patients message you through PakMed instead"}
               </span>
             </span>
           </button>
@@ -10175,7 +10464,7 @@ function FacilityCard({ f, saved, jobs, onOpen, onToggleSave }) {
   );
 }
 
-function FacilityPage({ f, all, jobs, onBack, onOpen, saved, onToggleSave, onMessage, onOpenJobs, jobsCount }) {
+function FacilityPage({ f, all, jobs, onBack, onOpen, saved, onToggleSave, onMessage, onOpenJobs, jobsCount, onReport, reported }) {
   const [shareOpen, setShareOpen] = useState(false);
   const trackRef = useRef(null);
   useEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: "instant" }); }, [f.id]);
@@ -10232,6 +10521,14 @@ function FacilityPage({ f, all, jobs, onBack, onOpen, saved, onToggleSave, onMes
               <button type="button" onClick={() => setShareOpen(true)} aria-label="Share" className="w-11 h-11 rounded-xl flex items-center justify-center transition-colors hover:bg-[#F5F7FA]" style={{ border: `1px solid ${CARD_BORDER}` }}>
                 <Repeat2 className="w-[18px] h-[18px]" style={{ color: INK_2 }} />
               </button>
+              {!f.mine && onReport && (
+                <button type="button" onClick={() => onReport({ id: f.id, type: "facility", title: f.name, subtitle: `${f.type} · ${f.city}` })}
+                  aria-label={reported ? "Reported" : "Report this profile"} title={reported ? "Reported — our team is reviewing" : "Report this profile"}
+                  className="w-11 h-11 rounded-xl flex items-center justify-center transition-colors hover:bg-[#FDECEC]"
+                  style={{ border: `1px solid ${reported ? "#F5C2BE" : CARD_BORDER}`, backgroundColor: reported ? RED_TINT : "#fff" }}>
+                  <Flag className="w-[18px] h-[18px]" style={{ color: reported ? RED : INK_2 }} fill={reported ? RED : "none"} />
+                </button>
+              )}
             </div>
           </div>
 
@@ -10385,7 +10682,7 @@ function FacilityPage({ f, all, jobs, onBack, onOpen, saved, onToggleSave, onMes
   );
 }
 
-function FindHospitalScreen({ initialQuery, onBack, onMenu, userCity, employer, employerUnlocked, postedJobs, onOpenHiring, onMessage, guestDefaults = {}, isSaved = () => false, onToggleSave = () => {} }) {
+function FindHospitalScreen({ initialQuery, onBack, onMenu, userCity, employer, employerUnlocked, postedJobs, onOpenHiring, onMessage, guestDefaults = {}, isSaved = () => false, onToggleSave = () => {}, onReport, reportedIds }) {
   const gate = useContext(AuthGate);
   const [query, setQuery] = useState(initialQuery || "");
   const [qDraft, setQDraft] = useState(initialQuery || "");
@@ -10522,6 +10819,8 @@ function FindHospitalScreen({ initialQuery, onBack, onMenu, userCity, employer, 
           onOpen={setOpen}
           saved={isSaved("hospital", open.id)}
           onToggleSave={() => onToggleSave("hospital", open)}
+          onReport={onReport}
+          reported={!!(reportedIds && reportedIds.has(open.id))}
           onMessage={() => setEnquiryFac(open)}
           onOpenJobs={() => onOpenHiring(jobs.length ? open : null)}
         />
@@ -10955,7 +11254,7 @@ function SavedScreen({ onBack, onMenu, savedJobs, savedItems, onToggleJob, onTog
 function AccountScreen({
   onBack, onMenu, authed, onSignIn, username, general = {}, doctor = {}, pctGeneral = 0, pctDoctor = 0,
   cvReady, verifiedPhone, profilesLive = 0, savedJobs = [], savedItems = {}, applications = [], allJobs = [],
-  messagesCount = 0, adminMessages = [], suspended = false, onNavigate, onOpenSaved, onToggleJob, onToggleSave, onSignOut,
+  messagesCount = 0, adminMessages = [], suspended = false, cvDoc = null, onUploadCV, onNavigate, onOpenSaved, onToggleJob, onToggleSave, onSignOut,
 }) {
   const [savedTab, setSavedTab] = useState("jobs");
 
@@ -11035,6 +11334,35 @@ function AccountScreen({
           </div>
         )}
 
+        {/* CV on the profile — used for every job application */}
+        <Card className="overflow-hidden">
+          <div className="p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+            <span className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0" style={{ backgroundColor: cvReady ? GREEN_TINT : BRAND_50 }}>
+              {cvReady ? <CheckCircle2 className="w-7 h-7" style={{ color: GREEN }} /> : <FileText className="w-7 h-7" style={{ color: BRAND }} />}
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-[16px] font-extrabold" style={{ color: INK }}>Your CV</p>
+              <p className="text-[13px] mt-0.5 truncate" style={{ color: SUBTLE }}>
+                {cvDoc && cvDoc.uploaded
+                  ? `${cvDoc.uploaded.name} · ${cvDoc.uploaded.size}`
+                  : cvDoc && cvDoc.savedInApp
+                    ? "PakMed CV created in the app"
+                    : "Add a CV once — apply to any job in one tap."}
+              </p>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <label className="h-10 px-4 rounded-xl text-[13.5px] font-bold inline-flex items-center gap-2 cursor-pointer transition-colors hover:bg-[#F5F9FF]" style={{ color: BRAND, border: "1.5px solid #B9D3F2", backgroundColor: "#fff" }}>
+                <Upload className="w-4 h-4" /> {cvDoc && cvDoc.uploaded ? "Replace" : "Upload CV"}
+                <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" className="sr-only"
+                  onChange={(e) => { const f = e.target.files && e.target.files[0]; e.target.value = ""; if (f && f.size <= 5 * 1024 * 1024 && onUploadCV) onUploadCV(f); }} />
+              </label>
+              <button type="button" onClick={() => onNavigate("cv")} className="h-10 px-4 rounded-xl text-[13.5px] font-bold text-white inline-flex items-center gap-2" style={{ backgroundColor: BRAND }}>
+                <Pencil className="w-4 h-4" /> {cvDoc && cvDoc.savedInApp ? "Edit CV" : "Create CV"}
+              </button>
+            </div>
+          </div>
+        </Card>
+
         {adminMessages.length > 0 && (
           <Card>
             <CardHead title="Messages from PakMed Admin" action="Open messages" onAction={() => onNavigate("messages")} />
@@ -11094,7 +11422,7 @@ function AccountScreen({
           ].map((s) => (
             <button key={s.label} type="button" onClick={s.go} className="rounded-2xl bg-white p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md" style={{ border: `1px solid ${CARD_BORDER}` }}>
               <s.icon className="w-5 h-5" style={{ color: BRAND }} />
-              <p className="text-[24px] font-extrabold mt-2 leading-none" style={{ color: INK }}>{s.value}</p>
+              <p className="text-[24px] font-extrabold mt-2 leading-none tabular-nums" style={{ color: INK }}><CountUp value={s.value} /></p>
               <p className="text-[13px] font-semibold mt-1" style={{ color: SUBTLE }}>{s.label}</p>
             </button>
           ))}
@@ -11536,6 +11864,7 @@ function SiteHeader({
   username,
   userEmail,
   userPhone,
+  search,
 }) {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -11549,7 +11878,20 @@ function SiteHeader({
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  useEffect(() => { setMobileOpen(false); setProfileOpen(false); }, [activeTab]);
+  // the search row stays tucked away until the search icon is clicked
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchRowRef = useRef(null);
+  useEffect(() => { setMobileOpen(false); setProfileOpen(false); setSearchOpen(false); }, [activeTab]);
+  useEffect(() => {
+    if (!searchOpen) return undefined;
+    const t = setTimeout(() => {
+      const input = searchRowRef.current && searchRowRef.current.querySelector("input");
+      if (input) input.focus();
+    }, 180);
+    const onKey = (e) => { if (e.key === "Escape") setSearchOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => { clearTimeout(t); window.removeEventListener("keydown", onKey); };
+  }, [searchOpen]);
 
   useEffect(() => {
     if (!profileOpen) return undefined;
@@ -11593,7 +11935,7 @@ function SiteHeader({
         backgroundColor: "rgba(255,255,255,0.92)",
         backdropFilter: "saturate(180%) blur(12px)",
         WebkitBackdropFilter: "saturate(180%) blur(12px)",
-        borderBottom: `1px solid ${scrolled || mobileOpen ? CARD_BORDER : "transparent"}`,
+        borderBottom: `1px solid ${scrolled || mobileOpen || search ? CARD_BORDER : "transparent"}`,
         boxShadow: scrolled ? "0 4px 20px -10px rgba(16,24,40,0.15)" : "none",
       }}
     >
@@ -11624,6 +11966,14 @@ function SiteHeader({
           </nav>
 
           <div className="flex items-center gap-2 ml-auto shrink-0">
+            {search && (
+              <button type="button" onClick={() => setSearchOpen((v) => !v)}
+                aria-label={searchOpen ? "Close search" : "Open search"} aria-expanded={searchOpen} title={searchOpen ? "Close search" : "Search PakMed"}
+                className="w-10 h-10 rounded-xl flex items-center justify-center transition-colors hover:bg-[#EAF2FC]"
+                style={{ border: `1px solid ${searchOpen ? BRAND : CARD_BORDER}`, backgroundColor: searchOpen ? BRAND_50 : "#fff" }}>
+                {searchOpen ? <X className="w-[18px] h-[18px]" style={{ color: BRAND }} /> : <Search className="w-[18px] h-[18px]" style={{ color: INK }} />}
+              </button>
+            )}
             {authed ? (
               <div className="relative" ref={profileRef}>
                 <button
@@ -11732,6 +12082,13 @@ function SiteHeader({
             </button>
           </div>
         </div>
+
+        {/* row 2: search, shown under the links when the search icon is clicked */}
+        {search && searchOpen && (
+          <div ref={searchRowRef} className="dropdown-pop pb-3 pt-0.5 flex justify-center">
+            <div className="w-full max-w-3xl">{search}</div>
+          </div>
+        )}
       </div>
 
       {/* mobile menu */}
@@ -11779,99 +12136,6 @@ function SiteHeader({
 
 const LANDING_IMG = "/images/landing";
 
-const HERO_SLIDES = [
-  { src: `${LANDING_IMG}/hero-4.jpg`, alt: "Smiling doctor in scrubs with a stethoscope" },
-  { src: `${LANDING_IMG}/hero-3.jpg`, alt: "Female doctor in a white coat with a stethoscope" },
-];
-
-function HeroSlideshow({ interval = 3500 }) {
-  const [active, setActive] = useState(0);
-  const [paused, setPaused] = useState(false);
-  const len = HERO_SLIDES.length;
-
-  useEffect(() => {
-    if (paused || len < 2) return undefined;
-    const t = setInterval(() => {
-      setActive((i) => (i + 1) % len);
-    }, interval);
-    return () => clearInterval(t);
-  }, [paused, interval, len]);
-
-  return (
-    <div
-      className="relative w-full aspect-[4/4.4] rounded-[28px] overflow-hidden"
-      style={{ boxShadow: "0 30px 60px -20px rgba(11,87,183,0.35)", backgroundColor: BRAND_50 }}
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
-    >
-      {HERO_SLIDES.map((s, i) => (
-        <img
-          key={s.src}
-          src={s.src}
-          alt={s.alt}
-          fetchPriority={i === 0 ? "high" : undefined}
-          loading={i === 0 ? "eager" : "eager"}
-          decoding="async"
-          aria-hidden={i !== active}
-          className={`hero-slide absolute inset-0 w-full h-full object-cover ${i === active ? "is-active" : ""}`}
-          style={{ zIndex: i === active ? 2 : 1 }}
-        />
-      ))}
-      <div className="absolute inset-x-0 bottom-0 h-24 pointer-events-none z-[3]" style={{ background: "linear-gradient(180deg, transparent, rgba(16,24,40,0.35))" }} />
-      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-[4]">
-        {HERO_SLIDES.map((s, i) => (
-          <button
-            key={s.src}
-            type="button"
-            onClick={() => setActive(i)}
-            aria-label={`Show image ${i + 1}`}
-            className="h-1.5 rounded-full transition-all duration-500"
-            style={{ width: i === active ? 22 : 8, backgroundColor: i === active ? "#fff" : "rgba(255,255,255,0.55)" }}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-const SERVICE_IMAGES = {
-  find: `${LANDING_IMG}/find-job.jpg`,
-  consult: `${LANDING_IMG}/find-doctor.jpg`,
-  post: `${LANDING_IMG}/offer-job.jpg`,
-  market: `${LANDING_IMG}/market.jpg`,
-  hospital: `${LANDING_IMG}/hospital.jpg`,
-  feeds: `${LANDING_IMG}/post-verified.jpg`,
-};
-
-const SERVICE_BLURBS = {
-  find: "Permanent, locum, part-time and emergency roles at verified facilities.",
-  consult: "PMDC-verified doctors by specialty, city and availability.",
-  post: "Hire doctors, nurses and allied staff — your first listing is free.",
-  market: "New and refurbished biomedical equipment from trusted sellers.",
-  hospital: "Hospitals, clinics, labs and pharmacies near you.",
-  feeds: "Browse verified news and updates posted by the PakMed team.",
-};
-
-const HOW_IT_WORKS = {
-  professionals: [
-    { icon: UserRound, title: "Create your profile", body: "Add your qualifications, specialty and PMDC / PNC registration once." },
-    { icon: ShieldCheck, title: "Get verified", body: "Our team reviews your documents so employers know you're genuine." },
-    { icon: Briefcase, title: "Apply in one tap", body: "Send your CV to matching roles and track every application." },
-  ],
-  facilities: [
-    { icon: Building2, title: "Register your facility", body: "Hospitals, clinics, labs and pharmacies set up in minutes." },
-    { icon: Plus, title: "Post a job", body: "Choose shift, salary and requirements — publish instantly." },
-    { icon: Users, title: "Hire verified staff", body: "Review applicants, view CVs and message candidates directly." },
-  ],
-};
-
-const WHY_PAKMED = [
-  { icon: ShieldCheck, title: "Verified professionals", body: "Doctors and staff are checked against PMDC, PNC and council records." },
-  { icon: MessageSquareText, title: "Direct messaging", body: "Talk to employers, doctors and sellers without middlemen." },
-  { icon: MapPin, title: "City-first results", body: "Opportunities and services nearest to you, across every major city." },
-  { icon: Flag, title: "Safe & moderated", body: "Report anything suspicious — our team reviews every report." },
-];
-
 const TESTIMONIALS = [
   { name: "Dr. Ayesha Siddiqui", role: "Medical Officer, Karachi", img: "avatar-1", text: "I found a locum emergency shift within a day. Payment was on time and the whole process was transparent." },
   { name: "Dr. Bilal Ahmed", role: "Medical Director, Rehman Medical Centre, Multan", img: "avatar-2", text: "Our first free listing brought in fourteen applicants — most of them already verified. Hiring has never been this quick." },
@@ -11880,6 +12144,29 @@ const TESTIMONIALS = [
   { name: "Nurse Fatima Noor", role: "ICU Nurse, Faisalabad", img: "avatar-3", text: "I applied to three night shifts on my phone and got two responses the same evening. Simple and fair." },
   { name: "Kamran Hussain", role: "Pharmacy Owner, Peshawar", img: "avatar-2", text: "We filled a pharmacist role in under a week. Clear salaries and shifts meant fewer mismatched applications." },
 ];
+
+// platform news for the landing page; admin "Announcements" feed posts are shown ahead of these
+const PAKMED_NEWS = [
+  { id: "n1", tag: "Product update", icon: Zap, color: BRAND, tint: BRAND_50, image: `${LANDING_IMG}/post-shifts.jpg`, date: "This week",
+    title: "Instant-apply is now live for night and emergency shifts", body: "Doctors can apply to locum shifts in one tap, and facilities see verified applicants within hours." },
+  { id: "n2", tag: "Verification", icon: ShieldCheck, color: GREEN, tint: GREEN_TINT, image: `${LANDING_IMG}/post-verified.jpg`, date: "3 days ago",
+    title: "Verified badges for hospitals and clinics", body: "Facilities that complete document checks now show a verified badge on every job post." },
+  { id: "n3", tag: "Marketplace", icon: Store, color: VIOLET, tint: VIOLET_TINT, image: `${LANDING_IMG}/market.jpg`, date: "1 week ago",
+    title: "Buy / Sell now covers equipment sellers in 20+ cities", body: "Compare surgical, imaging and lab equipment from trusted sellers across Pakistan." },
+  { id: "n4", tag: "For hospitals", icon: Building2, color: TEAL, tint: TEAL_TINT, image: `${LANDING_IMG}/post-hiring.jpg`, date: "2 weeks ago",
+    title: "Post your first job free this month", body: "New facilities get one free listing to reach PMDC-verified doctors and nurses." },
+  { id: "n5", tag: "Community", icon: Users, color: AMBER, tint: AMBER_TINT, image: `${LANDING_IMG}/find-doctor.jpg`, date: "3 weeks ago",
+    title: "Find a Doctor adds online consultations", body: "Patients can now filter doctors who offer video consults and same-day slots." },
+];
+
+function homeNews() {
+  const announcements = LATEST_POSTS.filter((c) => c.category === "Announcements").map((c) => ({
+    id: c.id, tag: "Announcement", icon: Megaphone, color: AMBER, tint: AMBER_TINT,
+    image: c.media && c.media.kind === "image" ? c.media.src : null, media: c.media,
+    date: `${c.time} ago`, title: c.title, body: c.body,
+  }));
+  return [...announcements, ...PAKMED_NEWS];
+}
 
 const HOME_FAQS = [
   { q: "Is PakMed free to use?", a: "Browsing jobs, doctors, hospitals and the market is completely free. Creating a profile and applying for jobs is free too. Facilities get their first job listing free each month." },
@@ -12060,7 +12347,6 @@ function PakMedChatbot({ onNavigate }) {
   );
 }
 
-const POPULAR_CITIES = ["Karachi", "Lahore", "Islamabad", "Rawalpindi", "Faisalabad", "Multan", "Peshawar", "Quetta"];
 
 function SectionHeading({ eyebrow, title, sub, center, action }) {
   return (
@@ -12194,6 +12480,39 @@ function SiteFooter({ onTabNav, onNavigate, onHome }) {
   );
 }
 
+// "Liked by …" — names come from people engaging on the post, topped up from a pool
+const LIKER_POOL = ["Dr. Zainab", "Hina R.", "Dr. Omar", "Sana M.", "Dr. Kamran", "Ayesha K.", "Dr. Bilal", "Tariq S."];
+const LIKER_COLORS = [BRAND, RED, TEAL, VIOLET, AMBER, GREEN];
+function postLikers(card) {
+  const fromComments = (card.comments || []).map((c) => c.name).filter((n) => n && !/PakMed|Hospital|Clinic|Patient|Centre|HR/i.test(n));
+  const seed = (card.id || "").split("").reduce((n, ch) => n + ch.charCodeAt(0), 0);
+  const pool = LIKER_POOL.map((_, i) => LIKER_POOL[(seed + i) % LIKER_POOL.length]);
+  return [...new Set([...fromComments, ...pool])].slice(0, 3);
+}
+
+function LikedBy({ card, youLiked = false, dark = false }) {
+  const total = (card.likes || 0) + (youLiked ? 1 : 0);
+  if (!total) return null;
+  const names = postLikers(card);
+  const shown = youLiked ? ["you", ...names].slice(0, 2) : names.slice(0, 2);
+  const others = Math.max(0, total - shown.length);
+  return (
+    <div className="flex items-center gap-2 min-w-0">
+      <span className="flex -space-x-1.5 shrink-0">
+        {(youLiked ? ["You", ...names] : names).slice(0, 3).map((n, i) => (
+          <span key={n} className="w-5 h-5 rounded-full flex items-center justify-center text-[8.5px] font-bold text-white"
+            style={{ backgroundColor: LIKER_COLORS[(i + n.length) % LIKER_COLORS.length], border: `1.5px solid ${dark ? "#111" : "#fff"}` }}>
+            {n.replace(/^Dr\.?\s*/i, "")[0]}
+          </span>
+        ))}
+      </span>
+      <p className="text-[12px] truncate" style={{ color: dark ? "rgba(255,255,255,0.8)" : SUBTLE }}>
+        Liked by <b style={{ color: dark ? "#fff" : INK_2 }}>{shown.join(", ")}</b>{others > 0 && <> and <b style={{ color: dark ? "#fff" : INK_2 }}>{others} others</b></>}
+      </p>
+    </div>
+  );
+}
+
 function PostTile({ card, onOpen }) {
   return (
     <button
@@ -12216,7 +12535,8 @@ function PostTile({ card, onOpen }) {
         </p>
         <p className="text-[15.5px] font-bold leading-snug line-clamp-2" style={{ color: INK, letterSpacing: "-0.01em" }}>{card.title}</p>
         <p className="text-[13px] mt-1.5 leading-relaxed line-clamp-2 flex-1" style={{ color: SUBTLE }}>{card.body}</p>
-        <div className="flex items-center gap-4 mt-4 pt-3 text-[12.5px]" style={{ color: SUBTLE, borderTop: `1px solid ${CARD_BORDER}` }}>
+        <div className="mt-3"><LikedBy card={card} /></div>
+        <div className="flex items-center gap-4 mt-3 pt-3 text-[12.5px]" style={{ color: SUBTLE, borderTop: `1px solid ${CARD_BORDER}` }}>
           <span className="flex items-center gap-1"><Heart className="w-3.5 h-3.5" /> {card.likes}</span>
           <span className="flex items-center gap-1"><MessageCircle className="w-3.5 h-3.5" /> {card.comments.length}</span>
           <span className="ml-auto flex items-center gap-1 font-bold" style={{ color: BRAND }}>
@@ -12458,9 +12778,9 @@ function LatestPostsCarousel({ onOpenCard, onSeeMore }) {
   return (
     <div>
       <SectionHeading
-        eyebrow="News & updates"
-        title="Latest on PakMed"
-        sub="Verified updates from the PakMed team. Drag or use arrows to browse."
+        eyebrow="Posts feed"
+        title="Latest posts from the community"
+        sub="See what doctors, hospitals and the PakMed team are sharing — and who liked it."
         action={
           <div className="hidden sm:flex items-center gap-2 shrink-0">
             {arrowBtn(-1, edge.prev, ChevronLeft, "Previous posts")}
@@ -12504,7 +12824,7 @@ function LatestPostsCarousel({ onOpenCard, onSeeMore }) {
   );
 }
 
-function UpdatePost({ card, isNew, onOpen, focused }) {
+function UpdatePost({ card, isNew, onOpen, focused, onReport, reported }) {
   const gate = useContext(AuthGate);
   const [liked, setLiked] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -12513,49 +12833,58 @@ function UpdatePost({ card, isNew, onOpen, focused }) {
   return (
     <article id={`post-${card.id}`} className={`rounded-2xl overflow-hidden bg-white scroll-mt-24 transition-shadow duration-700 ${focused ? "post-focus" : ""}`}
       style={{ border: `1px solid ${focused ? BRAND : CARD_BORDER}`, boxShadow: focused ? "0 0 0 4px rgba(11,87,183,0.18), 0 12px 30px -12px rgba(11,87,183,0.35)" : SOFT_SHADOW }}>
-      <div className="flex items-center gap-3 px-4 pt-4 pb-3">
-        <span className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: BRAND }}>
+      <div className="flex items-center gap-2 sm:gap-3 px-2.5 sm:px-4 pt-2.5 sm:pt-4 pb-2 sm:pb-3">
+        <span className="w-7 h-7 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: BRAND }}>
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" strokeWidth="2.8" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-[14px] font-bold truncate flex items-center gap-1" style={{ color: INK }}>
+          <p className="text-[12px] sm:text-[14px] font-bold truncate flex items-center gap-1" style={{ color: INK }}>
             {card.author} <CheckCircle2 className="w-3.5 h-3.5 shrink-0" style={{ color: BRAND }} />
           </p>
-          <p className="text-[12px]" style={{ color: FAINT }}>{card.time} ago · {card.category}</p>
+          <p className="text-[11px] sm:text-[12px] truncate" style={{ color: FAINT }}>{card.time} ago<span className="hidden sm:inline"> · {card.category}</span></p>
         </div>
         {isNew && (
-          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ color: GREEN, backgroundColor: GREEN_TINT }}>New</span>
+          <span className="hidden sm:inline text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ color: GREEN, backgroundColor: GREEN_TINT }}>New</span>
         )}
       </div>
 
       <button type="button" onClick={onOpen} className="group block w-full text-left">
-        <div className="relative aspect-[16/10] overflow-hidden" style={{ background: card.media.kind === "gradient" ? card.media.g : CARD_BORDER }}>
+        <div className="relative aspect-square sm:aspect-[16/10] overflow-hidden" style={{ background: card.media.kind === "gradient" ? card.media.g : CARD_BORDER }}>
           {card.media.kind === "image" && (
             <img src={card.media.src} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" />
           )}
-          <span className="absolute left-3 top-3 text-[10.5px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full bg-white/95" style={{ color: BRAND }}>
+          <span className="absolute left-2 top-2 sm:left-3 sm:top-3 max-w-[85%] truncate text-[9.5px] sm:text-[10.5px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full bg-white/95" style={{ color: BRAND }}>
             {card.eyebrow}
           </span>
         </div>
-        <div className="px-4 pt-3.5">
-          <p className="text-[17px] font-extrabold leading-snug tracking-[-0.01em]" style={{ color: INK }}>{card.title}</p>
-          <p className="text-[14px] mt-1.5 leading-relaxed" style={{ color: INK_2 }}>{card.body}</p>
+        <div className="px-2.5 sm:px-4 pt-2 sm:pt-3.5">
+          <p className="text-[13.5px] sm:text-[17px] font-extrabold leading-snug tracking-[-0.01em] line-clamp-2 sm:line-clamp-none" style={{ color: INK }}>{card.title}</p>
+          <p className="hidden sm:block text-[14px] mt-1.5 leading-relaxed line-clamp-3" style={{ color: INK_2 }}>{card.body}</p>
+          <span className="inline-flex items-center gap-1 mt-1.5 text-[12px] sm:text-[13px] font-bold" style={{ color: BRAND }}>See more <ArrowRight className="w-3.5 h-3.5" /></span>
         </div>
       </button>
 
-      <div className="flex items-center gap-1 px-2 py-2 mt-2" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+      <div className="px-2.5 sm:px-4 mt-2.5 hidden sm:block"><LikedBy card={card} youLiked={liked} /></div>
+      <div className="flex items-center gap-0.5 sm:gap-1 px-1 sm:px-2 py-1 sm:py-2 mt-1.5 sm:mt-2" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
         <button type="button" onClick={() => gate.require("like posts", () => setLiked((v) => !v))}
-          className="flex items-center gap-1.5 h-9 px-2.5 rounded-lg text-[13px] font-semibold hover:bg-[#F5F7FA]" style={{ color: liked ? RED : SUBTLE }}>
+          className="flex items-center gap-1 sm:gap-1.5 h-8 sm:h-9 px-1.5 sm:px-2.5 rounded-lg text-[12px] sm:text-[13px] font-semibold hover:bg-[#F5F7FA]" style={{ color: liked ? RED : SUBTLE }}>
           <Heart className="w-[18px] h-[18px]" fill={liked ? RED : "none"} /> {card.likes + (liked ? 1 : 0)}
         </button>
-        <button type="button" onClick={onOpen} className="flex items-center gap-1.5 h-9 px-2.5 rounded-lg text-[13px] font-semibold hover:bg-[#F5F7FA]" style={{ color: SUBTLE }}>
+        <button type="button" onClick={onOpen} className="flex items-center gap-1 sm:gap-1.5 h-8 sm:h-9 px-1.5 sm:px-2.5 rounded-lg text-[12px] sm:text-[13px] font-semibold hover:bg-[#F5F7FA]" style={{ color: SUBTLE }}>
           <MessageCircle className="w-[18px] h-[18px]" /> {card.comments.length}
         </button>
-        <button type="button" onClick={() => setShareOpen(true)} className="flex items-center gap-1.5 h-9 px-2.5 rounded-lg text-[13px] font-semibold hover:bg-[#F5F7FA]" style={{ color: SUBTLE }}>
-          <Repeat2 className="w-[18px] h-[18px]" /> Share
+        <button type="button" onClick={() => setShareOpen(true)} className="flex items-center gap-1 sm:gap-1.5 h-8 sm:h-9 px-1.5 sm:px-2.5 rounded-lg text-[12px] sm:text-[13px] font-semibold hover:bg-[#F5F7FA]" style={{ color: SUBTLE }}>
+          <Repeat2 className="w-[18px] h-[18px]" /> <span className="hidden sm:inline">Share</span>
         </button>
+        {onReport && (
+          <button type="button" onClick={() => gate.require("report this", () => onReport({ id: card.id, type: "post", title: card.title, subtitle: card.author }))}
+            aria-label={reported ? "Reported" : "Report post"} title={reported ? "Reported — our team is reviewing" : "Report post"}
+            className="ml-auto w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center hover:bg-[#FDECEC]">
+            <Flag className="w-4 h-4" style={{ color: reported ? RED : FAINT }} fill={reported ? RED : "none"} />
+          </button>
+        )}
         <button type="button" onClick={() => gate.require("save posts", () => setSaved((v) => !v))} aria-label="Save post"
-          className="ml-auto w-9 h-9 rounded-lg flex items-center justify-center hover:bg-[#F5F7FA]">
+          className="ml-auto w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center hover:bg-[#F5F7FA]">
           <Bookmark className="w-[18px] h-[18px]" style={{ color: saved ? BRAND : SUBTLE }} fill={saved ? BRAND : "none"} />
         </button>
       </div>
@@ -12566,7 +12895,7 @@ function UpdatePost({ card, isNew, onOpen, focused }) {
 
 const UPDATE_CATEGORIES = ["All", "Announcements", "Jobs", "For Hospitals", "Doctors"];
 
-function UpdatesScreen({ onBack, onMenu, onOpenCard, focusId }) {
+function UpdatesScreen({ onBack, onMenu, onOpenCard, focusId, onReport, reportedIds }) {
   const [focused, setFocused] = useState(focusId || null);
   useEffect(() => {
     if (!focusId) return;
@@ -12642,13 +12971,15 @@ function UpdatesScreen({ onBack, onMenu, onOpenCard, focusId }) {
             <p className="text-[13.5px] mt-1" style={{ color: SUBTLE }}>Try a different keyword or category.</p>
           </div>
         ) : (
-          <div key={`${cat}-${sort}`} className="grid grid-cols-1 md:grid-cols-2 gap-4 fade-list">
+          <div key={`${cat}-${sort}`} className="grid grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-4 fade-list">
             {list.map((c, i) => (
               <UpdatePost
                 key={c.id}
                 card={c}
                 isNew={sort === "latest" && i === 0 && postAgeHours(c.time) < 24}
                 focused={focused === c.id}
+                onReport={onReport}
+                reported={!!(reportedIds && reportedIds.has(c.id))}
                 onOpen={() => onOpenCard(FEED_CARDS.indexOf(c))}
               />
             ))}
@@ -12766,10 +13097,42 @@ function searchSite(index, query, limit = 8) {
   return out;
 }
 
+// home category cards — extra copy shown under each TABS entry
+// photo for each category card on the landing page
+const HOME_CAT_IMAGES = {
+  find: `${LANDING_IMG}/find-job.jpg`,
+  consult: `${LANDING_IMG}/find-doctor.jpg`,
+  post: `${LANDING_IMG}/offer-job.jpg`,
+  market: `${LANDING_IMG}/market.jpg`,
+  hospital: `${LANDING_IMG}/hospital.jpg`,
+  feeds: `${LANDING_IMG}/post-verified.jpg`,
+};
+
+const HOME_CAT_COPY = {
+  find:     { desc: "Browse verified openings at hospitals, clinics and labs, and apply in a few taps.", tags: ["Medical Officer", "Nurse", "Pharmacist"], cta: "Browse jobs" },
+  consult:  { desc: "Find PMDC-verified doctors by speciality and city, with ratings and availability.", tags: ["Cardiology", "Pediatrics", "GP"], cta: "Find a doctor" },
+  post:     { desc: "Hiring? Post a role for free and reach qualified healthcare staff across Pakistan.", tags: ["Free listing", "Verified applicants"], cta: "Post a job" },
+  market:   { desc: "Buy and sell new or used medical equipment directly with trusted sellers.", tags: ["ECG machines", "Hospital beds", "Monitors"], cta: "View listings" },
+  hospital: { desc: "Locate hospitals, clinics, labs and pharmacies near you, with services and contacts.", tags: ["Hospitals", "Labs", "Pharmacies"], cta: "Find a hospital" },
+  feeds:    { desc: "Stay current with verified news, announcements and updates from the community.", tags: ["News", "Announcements"], cta: "Read updates" },
+};
+
+// hero search category picker — scopes suggestions and decides where "Search" lands
+const HERO_CATS = [
+  { key: "all", label: "All categories", short: "All", icon: LayoutGrid, color: INK_2, tint: "#F2F4F7", types: null, section: null, ph: "Search jobs, doctors, hospitals…" },
+  { key: "jobs", label: "Jobs", short: "Jobs", icon: Briefcase, color: BRAND, tint: BRAND_50, types: ["Job"], section: "findjob", ph: "Job title, e.g. Nurse, Medical Officer" },
+  { key: "doctors", label: "Doctors", short: "Doctors", icon: Stethoscope, color: "#C0362C", tint: "#FDECEC", types: ["Doctor", "Speciality"], section: "consult", ph: "Doctor name or speciality" },
+  { key: "hospitals", label: "Hospitals", short: "Hospitals", icon: Building2, color: "#0E7C86", tint: "#E6F6F7", types: ["Hospital"], section: "hospital", ph: "Hospital, clinic, lab or pharmacy" },
+  { key: "market", label: "Buy / Sell", short: "Buy / Sell", icon: Store, color: "#5B47C7", tint: "#F1EDFC", types: ["Equipment"], section: "market", ph: "Equipment, e.g. ECG machine" },
+  { key: "feeds", label: "Our Feeds", short: "Feeds", icon: Newspaper, color: "#B54708", tint: "#FFF6E8", types: [], section: "updates", ph: "Search news and updates" },
+];
+
 function SiteSearch({ city, onGo, onSearchAll, onCityChange }) {
   const index = useRef(null);
   if (!index.current) index.current = buildSearchIndex();
   const [q, setQ] = useState("");
+  const [cat, setCat] = useState("all");
+  const [catOpen, setCatOpen] = useState(false);
   const [open, setOpen] = useState(false);
   const [hi, setHi] = useState(0);
   const [loc, setLoc] = useState(city || "");
@@ -12785,11 +13148,12 @@ function SiteSearch({ city, onGo, onSearchAll, onCityChange }) {
   }, [city]);
 
   useEffect(() => {
-    if (!open && !locOpen) return undefined;
+    if (!open && !locOpen && !catOpen) return undefined;
     const handler = (e) => {
       if (rootRef.current && !rootRef.current.contains(e.target)) {
         setOpen(false);
         setLocOpen(false);
+        setCatOpen(false);
       }
     };
     document.addEventListener("mousedown", handler);
@@ -12798,9 +13162,22 @@ function SiteSearch({ city, onGo, onSearchAll, onCityChange }) {
       document.removeEventListener("mousedown", handler);
       document.removeEventListener("touchstart", handler);
     };
-  }, [open, locOpen]);
+  }, [open, locOpen, catOpen]);
 
-  const results = q.trim() ? searchSite(index.current, q) : index.current.filter((it) => it.type === "Page");
+  const catDef = HERO_CATS.find((c) => c.key === cat) || HERO_CATS[0];
+  const scoped = catDef.types
+    ? index.current.filter((it) => catDef.types.includes(it.type) || (it.type === "Page" && it.go.section === catDef.section))
+    : index.current;
+  const results = q.trim()
+    ? searchSite(scoped, q)
+    : catDef.types ? scoped.slice(0, 8) : index.current.filter((it) => it.type === "Page");
+  const pickCat = (key) => {
+    setCat(key);
+    setCatOpen(false);
+    setLocOpen(false);
+    setOpen(true);
+    inputRef.current && inputRef.current.focus();
+  };
   useEffect(() => { setHi(0); }, [q]);
 
   const applyLoc = (name) => {
@@ -12848,17 +13225,24 @@ function SiteSearch({ city, onGo, onSearchAll, onCityChange }) {
   );
 
   const go = (it) => { setOpen(false); setQ(""); onGo(it.go); };
+  // search the chosen category, or everything when "All categories" is picked
+  const searchAll = (text) => {
+    setOpen(false);
+    if (catDef.section) onGo({ section: catDef.section, q: text });
+    else onSearchAll(text);
+  };
   const submit = (e) => {
     if (e) e.preventDefault();
     if (results[hi] && q.trim()) return go(results[hi]);
-    if (q.trim()) { setOpen(false); onSearchAll(q.trim()); return; }
+    if (q.trim()) return searchAll(q.trim());
+    if (catDef.section) return searchAll("");
     setOpen(true);
     inputRef.current && inputRef.current.focus();
   };
   const onKeyDown = (e) => {
     if (e.key === "ArrowDown") { e.preventDefault(); setOpen(true); setHi((i) => Math.min(results.length - 1, i + 1)); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setHi((i) => Math.max(0, i - 1)); }
-    else if (e.key === "Escape") { setOpen(false); setLocOpen(false); }
+    else if (e.key === "Escape") { setOpen(false); setLocOpen(false); setCatOpen(false); }
   };
 
   const highlight = (text) => {
@@ -12871,22 +13255,54 @@ function SiteSearch({ city, onGo, onSearchAll, onCityChange }) {
   const locLabel = locStatus === "loading" ? "Detecting…" : (loc || "Pakistan");
 
   return (
-    <div ref={rootRef} className="relative z-30 max-w-xl mb-6">
-      <form onSubmit={submit} className="flex flex-col sm:flex-row gap-2 p-2 rounded-2xl bg-white" style={{ border: `1px solid ${open || locOpen ? "#B9D3F2" : CARD_BORDER}`, boxShadow: "0 12px 32px -12px rgba(16,24,40,0.18)" }}>
-        <label className="flex-1 min-w-0 flex items-center gap-3 h-12 px-3 rounded-xl">
+    <div ref={rootRef} className="relative z-30 w-full text-left">
+      <form onSubmit={submit} className="flex items-center gap-1 p-1 rounded-xl transition-all" style={{ backgroundColor: open || locOpen || catOpen ? "#fff" : "#F2F5F9", border: `1px solid ${open || locOpen || catOpen ? BRAND : CARD_BORDER}`, boxShadow: open || locOpen || catOpen ? `0 0 0 3px ${BRAND}1F` : "none" }}>
+        <div className="flex-1 min-w-0 flex items-center h-10 relative">
+          <button
+            type="button"
+            onClick={() => { setCatOpen((v) => !v); setOpen(false); setLocOpen(false); }}
+            aria-label="Choose a category"
+            aria-expanded={catOpen}
+            className="flex items-center gap-1.5 h-10 pl-3 pr-2.5 rounded-lg text-[13.5px] font-semibold shrink-0 transition-colors hover:bg-[#EAF2FC]"
+            style={{ color: cat === "all" ? INK_2 : catDef.color, backgroundColor: cat === "all" ? "#fff" : catDef.tint, border: catOpen ? `1.5px solid ${BRAND}` : "1.5px solid transparent" }}
+          >
+            <catDef.icon className="w-4 h-4 shrink-0" />
+            <span className="whitespace-nowrap">{cat === "all" ? "All" : <><span className="sm:hidden">{catDef.short}</span><span className="hidden sm:inline">{catDef.label}</span></>}</span>
+            <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-60 transition-transform" style={{ transform: catOpen ? "rotate(180deg)" : "none" }} />
+          </button>
+          {catOpen && (
+            <div className="dropdown-pop absolute left-0 top-[calc(100%+8px)] w-[240px] rounded-2xl bg-white overflow-hidden z-40 p-1.5"
+              style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: "0 20px 40px -14px rgba(16,24,40,0.28)" }} role="listbox" aria-label="Categories">
+              {HERO_CATS.map((c) => {
+                const on = c.key === cat;
+                return (
+                  <button key={c.key} type="button" role="option" aria-selected={on} onClick={() => pickCat(c.key)}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-left text-[14px] font-semibold transition-colors hover:bg-[#F5F7FA]"
+                    style={{ color: on ? BRAND : INK, backgroundColor: on ? BRAND_50 : undefined }}>
+                    <span className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: c.tint }}>
+                      <c.icon className="w-4 h-4" style={{ color: c.color }} />
+                    </span>
+                    <span className="flex-1">{c.label}</span>
+                    {on && <Check className="w-4 h-4 shrink-0" style={{ color: BRAND }} />}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        <label className="flex-1 min-w-0 flex items-center gap-2.5 h-10 px-3 rounded-lg">
           <Search className="w-5 h-5 shrink-0" style={{ color: open ? BRAND : FAINT }} />
           <span className="sr-only">Search PakMed</span>
           <input
             ref={inputRef}
             value={q}
-            onChange={(e) => { setQ(e.target.value); setOpen(true); setLocOpen(false); }}
-            onFocus={() => { setOpen(true); setLocOpen(false); }}
+            onChange={(e) => { setQ(e.target.value); setOpen(true); setLocOpen(false); setCatOpen(false); }}
+            onFocus={() => { setOpen(true); setLocOpen(false); setCatOpen(false); }}
             onKeyDown={onKeyDown}
-            placeholder="Search jobs, doctors, hospitals…"
+            placeholder={catDef.ph}
             role="combobox"
             aria-expanded={open}
             aria-autocomplete="list"
-            className="flex-1 min-w-0 bg-transparent outline-none text-[15px]"
+            className="flex-1 min-w-0 bg-transparent outline-none text-[14.5px]"
             style={{ color: INK }}
           />
           {q && (
@@ -12895,22 +13311,24 @@ function SiteSearch({ city, onGo, onSearchAll, onCityChange }) {
             </button>
           )}
         </label>
-        <div className="flex gap-2 relative" ref={locRef}>
+        </div>
+        <div className="flex gap-1 relative shrink-0" ref={locRef}>
           <button
             type="button"
             onClick={onLocChipClick}
             disabled={locStatus === "loading"}
             aria-label="Use or change location"
             aria-expanded={locOpen}
-            className="flex items-center gap-1.5 h-12 px-3 rounded-xl text-[14px] font-semibold flex-1 sm:flex-none max-w-[180px] transition-colors hover:bg-[#EAF2FC] disabled:opacity-70"
-            style={{ color: locStatus === "error" ? RED : INK_2, backgroundColor: CREAM, border: locOpen ? `1.5px solid ${BRAND}` : "1.5px solid transparent" }}
+            className="flex items-center gap-1.5 h-10 px-2.5 sm:px-3 rounded-lg text-[13.5px] font-semibold max-w-[180px] transition-colors hover:bg-[#EAF2FC] disabled:opacity-70"
+            style={{ color: locStatus === "error" ? RED : INK_2, backgroundColor: "#fff", border: locOpen ? `1.5px solid ${BRAND}` : "1.5px solid transparent" }}
           >
             <MapPin className={`w-4 h-4 shrink-0 ${locStatus === "loading" ? "animate-pulse" : ""}`} style={{ color: BRAND }} />
-            <span className="truncate">{locLabel}</span>
+            <span className="hidden sm:inline truncate">{locLabel}</span>
             <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-60" style={{ transform: locOpen ? "rotate(180deg)" : "none" }} />
           </button>
-          <button type="submit" className="h-12 px-5 rounded-xl text-[15px] font-bold text-white shrink-0" style={{ backgroundColor: BRAND }}>
-            Search
+          <button type="submit" aria-label="Search" className="h-10 px-3 sm:px-5 rounded-lg text-[14px] font-bold text-white shrink-0 inline-flex items-center gap-2 transition-all hover:brightness-110" style={{ backgroundColor: BRAND }}>
+            <Search className="w-4 h-4" />
+            <span className="hidden sm:inline">Search</span>
           </button>
 
           {locOpen && (
@@ -12976,13 +13394,15 @@ function SiteSearch({ city, onGo, onSearchAll, onCityChange }) {
       {open && (
         <div className="dropdown-pop absolute left-0 right-0 top-full mt-2 rounded-2xl bg-white overflow-hidden" style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: "0 24px 50px -16px rgba(16,24,40,0.3)" }}>
           <p className="px-4 pt-3 pb-1.5 text-[11.5px] font-bold uppercase tracking-[0.08em]" style={{ color: FAINT }}>
-            {q.trim() ? (results.length ? "Suggestions" : "No matches") : "Explore PakMed"}
+            {q.trim() ? (results.length ? `Suggestions${cat === "all" ? "" : ` in ${catDef.label}`}` : "No matches") : cat === "all" ? "Explore PakMed" : `Popular in ${catDef.label}`}
           </p>
           {results.length === 0 ? (
             <div className="px-4 pb-4">
-              <p className="text-[14px]" style={{ color: SUBTLE }}>Nothing found for “{q.trim()}”. Try another spelling or a broader word.</p>
-              <button type="button" onClick={() => { setOpen(false); onSearchAll(q.trim()); }} className="mt-3 h-10 px-4 rounded-xl text-[13.5px] font-bold" style={{ color: BRAND, backgroundColor: BRAND_50 }}>
-                Search everything for “{q.trim()}”
+              <p className="text-[14px]" style={{ color: SUBTLE }}>
+                {q.trim() ? <>Nothing found for “{q.trim()}”. Try another spelling or a broader word.</> : <>Press Search to browse {catDef.label}.</>}
+              </p>
+              <button type="button" onClick={() => searchAll(q.trim())} className="mt-3 h-10 px-4 rounded-xl text-[13.5px] font-bold" style={{ color: BRAND, backgroundColor: BRAND_50 }}>
+                {cat === "all" ? `Search everything for “${q.trim()}”` : q.trim() ? `Search ${catDef.label} for “${q.trim()}”` : `Browse ${catDef.label}`}
               </button>
             </div>
           ) : (
@@ -13008,9 +13428,9 @@ function SiteSearch({ city, onGo, onSearchAll, onCityChange }) {
             </ul>
           )}
           {q.trim() && results.length > 0 && (
-            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => { setOpen(false); onSearchAll(q.trim()); }}
+            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => searchAll(q.trim())}
               className="w-full flex items-center justify-between px-4 h-11 text-[13.5px] font-bold" style={{ color: BRAND, borderTop: `1px solid ${CARD_BORDER}` }}>
-              See all results for “{q.trim()}” <ArrowRight className="w-4 h-4" />
+              See all {cat === "all" ? "results" : catDef.label} for “{q.trim()}” <ArrowRight className="w-4 h-4" />
             </button>
           )}
         </div>
@@ -13021,7 +13441,6 @@ function SiteSearch({ city, onGo, onSearchAll, onCityChange }) {
 
 function HomeScreen({ onTabNav, onOpenCard, authed, city, counts = {}, nearJobs = [], onOpenJob, onSearch, onNavigate, onHome, onSeeAllPosts, onGo, onCityChange }) {
   const countFor = (k) => (counts[k] !== undefined ? counts[k] : "");
-  const [audience, setAudience] = useState("professionals");
   const [openFaq, setOpenFaq] = useState(0);
   const rootRef = useRef(null);
 
@@ -13075,155 +13494,136 @@ function HomeScreen({ onTabNav, onOpenCard, authed, city, counts = {}, nearJobs 
     };
   }, [nearJobs.length]);
 
-  const stats = [
-    { value: `${countFor("find") || 0}+`, label: "Open jobs", sub: "Updated daily", go: "find", icon: Briefcase, color: BRAND, tint: BRAND_50 },
-    { value: `${countFor("consult") || 0}+`, label: "Verified doctors", sub: "PMDC registered", go: "consult", icon: Stethoscope, color: "#C0362C", tint: "#FDECEC" },
-    { value: `${CITIES.length}`, label: "Cities covered", sub: "Across Pakistan", go: "hospital", icon: MapPin, color: "#0E7C86", tint: "#E6F6F7" },
-    { value: `${countFor("market") || 0}+`, label: "Equipment listings", sub: "From trusted sellers", go: "market", icon: Store, color: "#5B47C7", tint: "#F1EDFC" },
-  ];
 
   return (
     <div ref={rootRef} className="w-full min-w-0" style={{ fontFamily: FONT }}>
-      {/* Hero */}
+      {/* Hero — headline + the six categories as photo cards (search is in the navbar) */}
       <section
         className="relative z-20 overflow-x-clip"
-        style={{ background: `linear-gradient(135deg, ${BRAND_50} 0%, #fff 48%, ${CREAM} 100%)`, borderBottom: `1px solid ${CARD_BORDER}` }}
+        style={{ background: `linear-gradient(180deg, ${BRAND_50} 0%, #F7FAFE 55%, #fff 100%)`, borderBottom: `1px solid ${CARD_BORDER}` }}
       >
-        <div
-          className="pointer-events-none absolute inset-0"
-          style={{ backgroundImage: `radial-gradient(circle at 90% 10%, ${BRAND}1F 0%, transparent 42%), radial-gradient(circle at 0% 100%, ${TEAL}14 0%, transparent 40%)` }}
-        />
-        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-14 lg:py-20 grid lg:grid-cols-[1.1fr_0.9fr] gap-10 lg:gap-12 items-center">
-          <div className="min-w-0 hero-stagger">
-            <span className="inline-flex items-center gap-2 text-[12px] font-bold px-3 py-1.5 rounded-full mb-5 bg-white"
-              style={{ color: BRAND, border: `1px solid #B9D3F2` }}>
+        <div className="pointer-events-none absolute inset-0"
+          style={{ backgroundImage: `radial-gradient(circle at 8% 0%, ${BRAND}1F 0%, transparent 35%), radial-gradient(circle at 95% 10%, ${TEAL}17 0%, transparent 30%)` }} />
+
+        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-9 sm:pt-12 pb-12 sm:pb-16">
+          <div className="text-center max-w-3xl mx-auto mb-8 sm:mb-10 hero-stagger">
+            <span className="inline-flex items-center gap-2 text-[12px] font-bold px-3 py-1.5 rounded-full mb-4 bg-white"
+              style={{ color: BRAND, border: "1px solid #B9D3F2" }}>
               <ShieldCheck className="w-3.5 h-3.5" /> Pakistan's trusted healthcare network
             </span>
-            <h1 className="text-[36px] sm:text-[48px] lg:text-[56px] font-extrabold leading-[1.05] tracking-[-0.04em] mb-4" style={{ color: INK }}>
+            <h1 className="text-[30px] sm:text-[40px] lg:text-[48px] font-extrabold leading-[1.08] tracking-[-0.035em]" style={{ color: INK }}>
               Healthcare careers & care, <span style={{ color: BRAND }}>connected.</span>
             </h1>
-            <p className="text-[15.5px] sm:text-[17px] leading-relaxed max-w-xl mb-7" style={{ color: SUBTLE }}>
-              Find jobs, verified doctors, hospitals and medical equipment across Pakistan. Browse freely — sign in only when you want to apply, message, save or post.
+            <p className="text-[15px] sm:text-[16.5px] leading-relaxed mt-3 max-w-2xl mx-auto" style={{ color: SUBTLE }}>
+              Jobs, verified doctors, hospitals and medical equipment across Pakistan — pick where you want to start.
             </p>
-
-            <SiteSearch
-              city={city}
-              onGo={(g) => (onGo ? onGo(g) : onSearch && onSearch(g.q || ""))}
-              onSearchAll={(q) => onSearch && onSearch(q)}
-              onCityChange={onCityChange}
-            />
-
-            <div className="flex flex-wrap gap-3 mb-8">
-              <button type="button" onClick={() => onTabNav("find")} className="h-12 px-6 rounded-xl text-[15px] font-bold text-white flex items-center gap-2 transition-colors hover:opacity-95" style={{ backgroundColor: INK }}>
-                Find a Job <ArrowRight className="w-4 h-4" />
-              </button>
-              <button type="button" onClick={() => onTabNav("consult")} className="h-12 px-6 rounded-xl text-[15px] font-bold bg-white" style={{ color: BRAND, border: `1.5px solid ${BRAND}` }}>
-                Find a Doctor
-              </button>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-              {["PMDC-verified doctors", "Free to browse", "Direct messaging"].map((t) => (
-                <span key={t} className="flex items-center gap-1.5 text-[13.5px] font-semibold" style={{ color: INK_2 }}>
-                  <CheckCircle2 className="w-4 h-4" style={{ color: GREEN }} /> {t}
-                </span>
-              ))}
-            </div>
           </div>
 
-          <div className="relative mx-auto w-full max-w-[440px] lg:max-w-none hero-media">
-            <div className="absolute -inset-3 sm:-inset-4 rounded-[36px] rotate-2 pointer-events-none" style={{ backgroundColor: BRAND, opacity: 0.12 }} />
-            <HeroSlideshow />
-            <div
-              className="absolute left-3 bottom-14 sm:left-4 sm:bottom-16 z-20 bg-white rounded-2xl px-3.5 py-2.5 sm:px-4 sm:py-3 flex items-center gap-2.5 sm:gap-3 max-w-[calc(100%-1.5rem)]"
-              style={{ boxShadow: "0 16px 40px -12px rgba(16,24,40,0.35)" }}
-            >
-              <span className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: GREEN_TINT }}>
-                <ShieldCheck className="w-5 h-5" style={{ color: GREEN }} />
-              </span>
-              <div className="min-w-0">
-                <p className="text-[13px] sm:text-[14px] font-extrabold leading-tight" style={{ color: INK }}>PMDC Verified</p>
-                <p className="text-[11px] sm:text-[12px]" style={{ color: SUBTLE }}>Checked by our team</p>
-              </div>
-            </div>
-            <div
-              className="absolute right-3 top-3 sm:right-4 sm:top-4 z-20 bg-white rounded-2xl px-3.5 py-2.5 sm:px-4 sm:py-3"
-              style={{ boxShadow: "0 16px 40px -12px rgba(16,24,40,0.35)" }}
-            >
-              <div className="flex items-center gap-1 mb-0.5">
-                {[0, 1, 2, 3, 4].map((i) => <Star key={i} className="w-3.5 h-3.5" style={{ color: STAR }} fill={STAR} />)}
-              </div>
-              <p className="text-[12px] sm:text-[12.5px] font-semibold" style={{ color: INK_2 }}>Trusted by facilities</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Stats */}
-      <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-8">
-        <div data-reveal className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          {stats.map((s) => (
-            <button type="button" key={s.label} onClick={() => onTabNav(s.go)} aria-label={`${s.label} — open`}
-              className="group relative overflow-hidden rounded-2xl bg-white p-4 sm:p-5 flex items-center gap-3 sm:gap-4 text-left cursor-pointer transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B57B7]"
-              style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: "0 4px 16px -10px rgba(16,24,40,0.18)" }}>
-              <span className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: s.color }} />
-              <span className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-105" style={{ backgroundColor: s.tint }}>
-                <s.icon className="w-5 h-5 sm:w-7 sm:h-7" style={{ color: s.color }} strokeWidth={2} />
-              </span>
-              <div className="min-w-0">
-                <p className="text-[22px] sm:text-[30px] font-extrabold leading-none tracking-[-0.03em]" style={{ color: INK }}>{s.value}</p>
-                <p className="text-[13px] sm:text-[14.5px] font-bold mt-1.5 truncate" style={{ color: INK_2 }}>{s.label}</p>
-                <p className="hidden sm:block text-[12.5px] mt-0.5 truncate" style={{ color: SUBTLE }}>{s.sub}</p>
-              </div>
-              <ArrowRight className="hidden sm:block w-4 h-4 ml-auto shrink-0 opacity-0 -translate-x-1 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0" style={{ color: s.color }} />
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <div className="max-w-6xl mx-auto px-4 sm:px-6">
-        {/* Services */}
-        <section className="pt-16 sm:pt-20">
-          <SectionHeading eyebrow="Our services" title="Everything healthcare, in one place" sub="Six services built for doctors, facilities, patients and suppliers — start with any one." />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
             {Object.entries(TABS).map(([key, t], i) => {
               const Icon = t.icon;
               const n = countFor(key);
+              const copy = HOME_CAT_COPY[key] || {};
               return (
-                <div key={key} data-reveal className="min-w-0" style={{ transitionDelay: `${(i % 3) * 90}ms` }}>
-                <button
-                  type="button"
-                  onClick={() => onTabNav(key)}
-                  className="group w-full h-full min-w-0 rounded-2xl overflow-hidden text-left bg-white flex flex-col transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
-                  style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: SOFT_SHADOW }}
-                >
-                  <div className="relative h-40 sm:h-44 overflow-hidden">
-                    <img src={SERVICE_IMAGES[key]} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-                    <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, transparent 40%, rgba(16,24,40,0.45) 100%)" }} />
-                    <span className="absolute left-4 bottom-4 w-11 h-11 rounded-xl flex items-center justify-center bg-white" style={{ boxShadow: "0 6px 16px rgba(0,0,0,0.15)" }}>
-                      <Icon className="w-5 h-5" style={{ color: t.color }} strokeWidth={2.2} />
+                <button key={key} type="button" onClick={() => onTabNav(key)}
+                  className="group relative h-[230px] sm:h-[250px] rounded-3xl overflow-hidden text-left cat-pop focus-visible:outline-3 focus-visible:outline-offset-2"
+                  style={{ boxShadow: "0 18px 40px -24px rgba(16,24,40,0.55)", animationDelay: `${100 + i * 70}ms`, outlineColor: t.color }}>
+                  <img src={HOME_CAT_IMAGES[key]} alt="" loading={i < 3 ? "eager" : "lazy"} decoding="async"
+                    className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.07]" />
+                  <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(10,22,44,0.10) 0%, rgba(10,22,44,0.28) 40%, rgba(10,22,44,0.90) 100%)" }} />
+                  <div className="absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100" style={{ background: `linear-gradient(0deg, ${t.color}CC 0%, ${t.color}33 45%, transparent 75%)` }} />
+
+                  <div className="absolute inset-x-0 top-0 p-4 flex items-start justify-between">
+                    <span className="w-11 h-11 rounded-xl flex items-center justify-center bg-white/95" style={{ boxShadow: "0 6px 16px rgba(0,0,0,0.18)" }}>
+                      <Icon className="w-5 h-5" style={{ color: t.color }} strokeWidth={2.3} />
                     </span>
-                    {n !== "" && (
-                      <span className="absolute right-3 top-3 text-[12px] font-bold px-2.5 py-1 rounded-full bg-white/95" style={{ color: t.color }}>
-                        {n} {t.sub}
-                      </span>
-                    )}
+                    <span className="text-[12px] font-bold px-2.5 py-1 rounded-full bg-white/95" style={{ color: t.color }}>
+                      {n !== "" ? `${n} ${t.sub}` : t.sub}
+                    </span>
                   </div>
-                  <div className="p-5 flex-1 flex flex-col">
-                    <p className="text-[18px] font-extrabold tracking-[-0.02em]" style={{ color: INK }}>{t.label}</p>
-                    <p className="text-[14px] mt-1.5 leading-relaxed flex-1" style={{ color: SUBTLE }}>{SERVICE_BLURBS[key]}</p>
-                    <span className="mt-4 inline-flex items-center gap-1.5 text-[14px] font-bold" style={{ color: t.color }}>
-                      Explore <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+
+                  <div className="absolute inset-x-0 bottom-0 p-5">
+                    <p className="text-[21px] font-extrabold text-white tracking-[-0.02em] leading-tight">{t.label}</p>
+                    <p className="text-[13.5px] text-white/80 leading-snug mt-1 line-clamp-2">{copy.desc}</p>
+                    <span className="mt-3 inline-flex items-center gap-2 text-[13.5px] font-bold text-white">
+                      {copy.cta || "Explore"}
+                      <span className="w-7 h-7 rounded-full flex items-center justify-center bg-white/20 backdrop-blur-sm transition-all duration-300 group-hover:bg-white group-hover:translate-x-1">
+                        <ArrowRight className="w-4 h-4 text-white transition-colors group-hover:text-[#0B57B7]" />
+                      </span>
                     </span>
                   </div>
                 </button>
-                </div>
               );
             })}
           </div>
+        </div>
+      </section>
+
+      <div className="max-w-6xl mx-auto px-4 sm:px-6">
+        {/* 2 · News & updates */}
+        <section className="pt-14 sm:pt-16">
+          <SectionHeading
+            eyebrow="News & updates"
+            title="What's new on PakMed"
+            sub="Announcements, product updates and news for Pakistan's healthcare community."
+            action={
+              <button type="button" onClick={onSeeAllPosts} className="hidden sm:inline-flex items-center gap-1.5 h-10 px-4 rounded-xl text-[14px] font-bold shrink-0" style={{ color: BRAND, backgroundColor: BRAND_50 }}>
+                All updates <ArrowRight className="w-4 h-4" />
+              </button>
+            }
+          />
+          {(() => {
+            const news = homeNews();
+            const [lead, ...rest] = news;
+            return (
+              <div className="grid lg:grid-cols-[1.15fr_0.85fr] gap-4 sm:gap-5">
+                <button type="button" data-reveal onClick={onSeeAllPosts}
+                  className="group relative overflow-hidden rounded-3xl text-left min-h-[320px] sm:min-h-[380px] flex items-end"
+                  style={{ background: lead.media && lead.media.kind === "gradient" ? lead.media.g : INK }}>
+                  {lead.image && <img src={lead.image} alt="" loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />}
+                  <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(16,24,40,0.05) 20%, rgba(16,24,40,0.88) 100%)" }} />
+                  <div className="relative p-6 sm:p-8">
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-white" style={{ color: lead.color }}>
+                      <lead.icon className="w-3.5 h-3.5" /> {lead.tag}
+                    </span>
+                    <p className="text-[22px] sm:text-[28px] font-extrabold text-white leading-tight tracking-[-0.02em] mt-3 max-w-xl">{lead.title}</p>
+                    <p className="text-[14px] sm:text-[15px] text-white/80 mt-2 max-w-xl line-clamp-2">{lead.body}</p>
+                    <p className="text-[12.5px] text-white/60 mt-3">{lead.date}</p>
+                  </div>
+                </button>
+                <div className="flex flex-col gap-3">
+                  {rest.slice(0, 4).map((n, i) => (
+                    <button key={n.id} type="button" data-reveal onClick={onSeeAllPosts}
+                      className="group flex gap-3.5 p-3 rounded-2xl bg-white text-left transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg"
+                      style={{ border: `1px solid ${CARD_BORDER}`, transitionDelay: `${i * 70}ms` }}>
+                      <div className="w-24 sm:w-28 aspect-[4/3] rounded-xl overflow-hidden shrink-0 flex items-center justify-center" style={{ background: n.media && n.media.kind === "gradient" ? n.media.g : n.tint }}>
+                        {n.image ? <img src={n.image} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" /> : <n.icon className="w-6 h-6" style={{ color: n.color }} />}
+                      </div>
+                      <div className="min-w-0 flex-1 py-0.5">
+                        <span className="text-[10.5px] font-bold uppercase tracking-wider" style={{ color: n.color }}>{n.tag}</span>
+                        <p className="text-[14.5px] font-bold leading-snug line-clamp-2 mt-0.5" style={{ color: INK }}>{n.title}</p>
+                        <p className="text-[12px] mt-1" style={{ color: FAINT }}>{n.date}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+          <div data-reveal className="mt-6">
+            <AdBanner />
+          </div>
+          <button type="button" onClick={onSeeAllPosts} className="sm:hidden mt-4 w-full h-12 rounded-xl text-[14px] font-bold" style={{ color: BRAND, backgroundColor: BRAND_50 }}>
+            All updates
+          </button>
         </section>
 
-        {/* Jobs near you */}
+        {/* 3 · Posts feed */}
+        <section className="pt-16 sm:pt-20">
+          <LatestPostsCarousel onOpenCard={onOpenCard} onSeeMore={onSeeAllPosts} />
+        </section>
+
+        {/* 4 · Jobs near you */}
         {nearJobs.length > 0 && (
           <section className="pt-16 sm:pt-20">
             <SectionHeading
@@ -13277,118 +13677,13 @@ function HomeScreen({ onTabNav, onOpenCard, authed, city, counts = {}, nearJobs 
           </section>
         )}
 
-        {/* How it works */}
-        <section className="pt-16 sm:pt-20">
-          <div data-reveal className="rounded-3xl overflow-hidden grid lg:grid-cols-2 bg-white" style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: SOFT_SHADOW }}>
-            <div className="p-6 sm:p-10">
-              <p className="text-[12px] font-bold tracking-[0.12em] uppercase mb-2" style={{ color: BRAND }}>How it works</p>
-              <h2 className="text-[24px] sm:text-[30px] font-extrabold tracking-[-0.03em] leading-tight mb-5" style={{ color: INK }}>Get started in three simple steps</h2>
-              <div className="inline-flex p-1 rounded-xl mb-7" style={{ backgroundColor: CREAM, border: `1px solid ${CARD_BORDER}` }}>
-                {[["professionals", "For professionals"], ["facilities", "For facilities"]].map(([k, label]) => (
-                  <button key={k} type="button" onClick={() => setAudience(k)}
-                    className="h-10 px-4 rounded-lg text-[13.5px] font-bold transition-colors"
-                    style={{ backgroundColor: audience === k ? "#fff" : "transparent", color: audience === k ? BRAND : SUBTLE, boxShadow: audience === k ? "0 1px 3px rgba(16,24,40,0.1)" : "none" }}>
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <ol key={audience} className="space-y-5 fade-swap">
-                {HOW_IT_WORKS[audience].map((s, i) => {
-                  const Icon = s.icon;
-                  return (
-                    <li key={s.title} className="flex gap-4">
-                      <div className="relative shrink-0">
-                        <span className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: BRAND_50 }}>
-                          <Icon className="w-5 h-5" style={{ color: BRAND }} />
-                        </span>
-                        <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full text-[11px] font-extrabold text-white flex items-center justify-center" style={{ backgroundColor: BRAND }}>{i + 1}</span>
-                      </div>
-                      <div className="min-w-0 pt-0.5">
-                        <p className="text-[16px] font-bold" style={{ color: INK }}>{s.title}</p>
-                        <p className="text-[14px] mt-1 leading-relaxed" style={{ color: SUBTLE }}>{s.body}</p>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ol>
-              <button type="button" onClick={() => onTabNav(audience === "facilities" ? "post" : "find")}
-                className="mt-8 h-12 px-6 rounded-xl text-[15px] font-bold text-white inline-flex items-center gap-2" style={{ backgroundColor: BRAND }}>
-                {audience === "facilities" ? "Post a job free" : "Browse jobs"} <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="relative min-h-[260px] lg:min-h-0">
-              <img src={`${LANDING_IMG}/app-mobile.jpg`} alt="Pakistani doctor with a stethoscope" loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover" />
-              <div className="absolute inset-0" style={{ background: `linear-gradient(180deg, transparent 50%, ${BRAND_DK}CC 100%)` }} />
-              <div className="absolute left-5 right-5 bottom-5 sm:left-8 sm:bottom-8 text-white">
-                <p className="text-[20px] sm:text-[24px] font-extrabold tracking-[-0.02em]">Your career, in your pocket.</p>
-                <p className="text-[14px] mt-1 opacity-90">Apply, message and track applications from any device.</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Why PakMed */}
-        <section className="pt-16 sm:pt-20">
-          <div className="grid lg:grid-cols-2 gap-10 items-center">
-            <div data-reveal className="relative order-2 lg:order-1 reveal-left">
-              <img src={`${LANDING_IMG}/care.jpg`} alt="Female doctors at a clinic" loading="lazy" decoding="async" className="w-full aspect-[4/3] object-cover rounded-3xl" />
-              <div className="absolute -bottom-5 right-4 sm:right-8 bg-white rounded-2xl p-4 flex items-center gap-3 max-w-[260px]" style={{ boxShadow: "0 16px 40px -12px rgba(16,24,40,0.25)" }}>
-                <img src={`${LANDING_IMG}/doctor-portrait.jpg`} alt="" loading="lazy" className="w-11 h-11 rounded-full object-cover shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-[13.5px] font-bold truncate" style={{ color: INK }}>Same-day appointments</p>
-                  <p className="text-[12px]" style={{ color: SUBTLE }}>with verified specialists</p>
-                </div>
-              </div>
-            </div>
-            <div className="order-1 lg:order-2">
-              <SectionHeading eyebrow="Why PakMed" title="Built on trust, designed for Pakistan" sub="We verify every professional and moderate every listing, so you can focus on care — not paperwork." />
-              <div className="grid sm:grid-cols-2 gap-4">
-                {WHY_PAKMED.map((f, i) => {
-                  const Icon = f.icon;
-                  return (
-                    <div key={f.title} data-reveal className="rounded-2xl p-5 bg-white" style={{ border: `1px solid ${CARD_BORDER}`, transitionDelay: `${i * 80}ms` }}>
-                      <span className="w-10 h-10 rounded-xl flex items-center justify-center mb-3" style={{ backgroundColor: BRAND_50 }}>
-                        <Icon className="w-5 h-5" style={{ color: BRAND }} />
-                      </span>
-                      <p className="text-[15px] font-bold" style={{ color: INK }}>{f.title}</p>
-                      <p className="text-[13.5px] mt-1 leading-relaxed" style={{ color: SUBTLE }}>{f.body}</p>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Cities */}
-        <section className="pt-20">
-          <SectionHeading center eyebrow="Across Pakistan" title="Popular cities" sub="Explore jobs, doctors and hospitals in your city." />
-          <div data-reveal className="flex flex-wrap justify-center gap-2.5">
-            {POPULAR_CITIES.map((c) => (
-              <button key={c} type="button" onClick={() => onSearch && onSearch(c)}
-                className="inline-flex items-center gap-2 h-11 px-5 rounded-full text-[14px] font-semibold bg-white transition-all duration-200 hover:-translate-y-0.5 hover:border-[#0B57B7] hover:shadow-md"
-                style={{ color: INK_2, border: `1px solid ${CARD_BORDER}` }}>
-                <MapPin className="w-4 h-4" style={{ color: BRAND }} /> {c}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        {/* Testimonials */}
+        {/* 5 · Testimonials */}
         <section className="pt-16 sm:pt-20">
           <TestimonialsCarousel />
         </section>
 
-        {/* Latest */}
-        <section className="pt-16 sm:pt-20">
-          <LatestPostsCarousel onOpenCard={onOpenCard} onSeeMore={onSeeAllPosts} />
-          <div data-reveal className="mt-10">
-            <AdBanner />
-          </div>
-        </section>
-
-        {/* FAQ */}
-        <section className="pt-16 sm:pt-20">
+        {/* 6 · FAQ */}
+        <section className="pt-16 sm:pt-20 pb-16 sm:pb-20">
           <div className="grid lg:grid-cols-[0.8fr_1.2fr] gap-8 lg:gap-12">
             <div>
               <SectionHeading eyebrow="FAQ" title="Frequently asked questions" sub="Everything you need to know about using PakMed." />
@@ -13409,30 +13704,9 @@ function HomeScreen({ onTabNav, onOpenCard, authed, city, counts = {}, nearJobs 
             </div>
           </div>
         </section>
-
-        {/* CTA */}
-        <section className="py-16 sm:py-20">
-          <div data-reveal className="relative rounded-3xl overflow-hidden px-6 py-10 sm:px-12 sm:py-14 reveal-scale" style={{ background: `linear-gradient(120deg, ${BRAND_DK} 0%, ${BRAND} 60%, #2F7BDA 100%)` }}>
-            <div className="pointer-events-none absolute -right-20 -top-20 w-72 h-72 rounded-full float-slow" style={{ backgroundColor: "rgba(255,255,255,0.08)" }} />
-            <div className="pointer-events-none absolute right-24 -bottom-28 w-64 h-64 rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.06)" }} />
-            <div className="relative flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-              <div className="max-w-xl">
-                <h2 className="text-[26px] sm:text-[34px] font-extrabold tracking-[-0.03em] leading-tight text-white">Ready to join Pakistan's healthcare network?</h2>
-                <p className="text-[15px] sm:text-[16px] mt-2" style={{ color: "#D6E6FB" }}>Create your free profile today and get discovered by top hospitals and patients.</p>
-              </div>
-              <div className="flex flex-col sm:flex-row gap-3 shrink-0">
-                <button type="button" onClick={() => onTabNav("find")} className="h-12 px-6 rounded-xl text-[15px] font-bold bg-white" style={{ color: BRAND }}>
-                  I'm a professional
-                </button>
-                <button type="button" onClick={() => onTabNav("post")} className="h-12 px-6 rounded-xl text-[15px] font-bold text-white" style={{ border: "1.5px solid rgba(255,255,255,0.6)" }}>
-                  I'm hiring
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
       </div>
 
+      {/* 7 · Footer */}
       <SiteFooter onTabNav={onTabNav} onNavigate={onNavigate} onHome={onHome} />
     </div>
   );
@@ -13612,6 +13886,176 @@ function ProfileScreen({ username, onBack }) {
    ROOT APP — connects Auth -> Home -> Profile
    ========================================================= */
 /* =========================================================
+   DASHBOARD LAYOUT — shared by the admin panel and the user dashboard
+   Dark sidebar on the left (drag the edge to resize, or collapse to an
+   icon rail); slide-in drawer on mobile. Size is remembered per dashboard.
+   ========================================================= */
+const SIDEBAR_MIN = 208;
+const SIDEBAR_MAX = 380;
+const SIDEBAR_RAIL = 76;
+
+function useSidebarSize(storageKey, initial = 256) {
+  const [width, setWidth] = useState(initial);
+  const [collapsed, setCollapsed] = useState(false);
+  const [resizing, setResizing] = useState(false);
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(storageKey) || "null");
+      if (saved) {
+        if (saved.w) setWidth(Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_MAX, saved.w)));
+        setCollapsed(!!saved.c);
+      }
+    } catch (_) { /* storage unavailable — defaults are fine */ }
+  }, [storageKey]);
+  useEffect(() => {
+    try { localStorage.setItem(storageKey, JSON.stringify({ w: width, c: collapsed })); } catch (_) { /* ignore */ }
+  }, [storageKey, width, collapsed]);
+
+  const startResize = (e) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = collapsed ? SIDEBAR_RAIL : width;
+    setResizing(true);
+    const move = (ev) => {
+      const next = startW + ev.clientX - startX;
+      if (next < SIDEBAR_MIN - 50) { setCollapsed(true); return; }
+      setCollapsed(false);
+      setWidth(Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_MAX, next)));
+    };
+    const up = () => {
+      setResizing(false);
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  };
+  const nudge = (d) => { setCollapsed(false); setWidth((w) => Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_MAX, w + d))); };
+  return { width: collapsed ? SIDEBAR_RAIL : width, collapsed, setCollapsed, startResize, resizing, nudge };
+}
+
+const initialsFrom = (name = "") => name.replace(/^@|^Dr\.?\s*/gi, "").split(/[\s_]+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "U";
+
+function DashSidebar({ tag, groups, active, onSelect, user, footer = [], collapsed = false, onClose, ariaLabel }) {
+  return (
+    <div className="flex flex-col h-full min-h-0">
+      <div className={`h-16 flex items-center gap-2.5 shrink-0 ${collapsed ? "justify-center px-2" : "px-5"}`} style={{ borderBottom: "1px solid #2A2E36" }}>
+        <span className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: BRAND }}>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+        </span>
+        {!collapsed && (
+          <>
+            <span className="text-[17px] font-extrabold text-white tracking-[-0.02em]">PakMed</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full whitespace-nowrap" style={{ color: "#9CC3F5", backgroundColor: "#0B57B733" }}>{tag}</span>
+          </>
+        )}
+        {onClose && (
+          <button type="button" onClick={onClose} className="lg:hidden ml-auto w-9 h-9 rounded-lg flex items-center justify-center hover:bg-white/10" aria-label="Close menu">
+            <X className="w-5 h-5 text-white/70" />
+          </button>
+        )}
+      </div>
+
+      <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-3" aria-label={ariaLabel} style={{ scrollbarWidth: "thin" }}>
+        {groups.map((g) => (
+          <div key={g.label} className="mb-2">
+            {collapsed
+              ? <span className="block mx-auto my-2 w-6 h-px" style={{ backgroundColor: "#2A2E36" }} />
+              : <p className="text-[10px] font-semibold tracking-widest uppercase text-white/35 px-5 pt-1 pb-2">{g.label}</p>}
+            {g.items.map((n) => {
+              const on = active === n.key;
+              return (
+                <button key={n.key} type="button" onClick={() => onSelect(n.key)} title={collapsed ? n.label : undefined} aria-label={collapsed ? n.label : undefined}
+                  className={`relative w-full flex items-center gap-3 h-11 text-left transition-colors hover:bg-white/5 ${collapsed ? "justify-center px-0" : "px-5"}`}
+                  style={{ backgroundColor: on ? "rgba(255,255,255,0.08)" : undefined }}>
+                  {on && <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r" style={{ backgroundColor: "#4D94EA" }} />}
+                  <span className="relative shrink-0">
+                    <n.icon className="w-[18px] h-[18px]" style={{ color: on ? "#fff" : "rgba(255,255,255,0.6)" }} strokeWidth={1.9} />
+                    {collapsed && n.alert > 0 && <span className="absolute -top-1.5 -right-1.5 w-2.5 h-2.5 rounded-full" style={{ backgroundColor: RED, boxShadow: "0 0 0 2px #14161A" }} />}
+                  </span>
+                  {!collapsed && (
+                    <>
+                      <span className="flex-1 text-[14px] truncate" style={{ color: on ? "#fff" : "rgba(255,255,255,0.78)", fontWeight: on ? 700 : 500 }}>{n.label}</span>
+                      {n.alert > 0 && <span className="text-[10.5px] font-bold px-1.5 py-0.5 rounded-full text-white" style={{ backgroundColor: RED }}>{n.alert}</span>}
+                      {!n.alert && n.n !== undefined && <span className="text-[11.5px] font-semibold text-white/35">{n.n}</span>}
+                      {n.tag && <span className="text-[9.5px] font-bold px-1.5 py-0.5 rounded-full" style={{ color: n.tagOk ? "#7BE0A6" : "#FF9AA2", backgroundColor: n.tagOk ? "#7BE0A622" : "#FF9AA222" }}>{n.tag}</span>}
+                    </>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </nav>
+
+      <div className={`shrink-0 py-3 ${collapsed ? "px-2" : "px-4"}`} style={{ borderTop: "1px solid #2A2E36" }}>
+        {user && (
+          <div className={`flex items-center gap-3 mb-2 ${collapsed ? "justify-center" : ""}`} title={collapsed ? user.name : undefined}>
+            <span className="w-9 h-9 rounded-full flex items-center justify-center text-[12.5px] font-bold text-white shrink-0 overflow-hidden" style={{ backgroundColor: BRAND }}>
+              {user.photo ? <img src={user.photo} alt="" className="w-full h-full object-cover" /> : initialsFrom(user.name)}
+            </span>
+            {!collapsed && (
+              <div className="min-w-0">
+                <p className="text-[13.5px] font-semibold text-white truncate">{user.name}</p>
+                <p className="text-[11.5px] text-white/50 truncate">{user.sub}</p>
+              </div>
+            )}
+          </div>
+        )}
+        {footer.map((f) => (
+          <button key={f.label} type="button" onClick={f.run} title={collapsed ? f.label : undefined} aria-label={collapsed ? f.label : undefined}
+            className={`w-full h-10 rounded-lg flex items-center gap-2.5 text-[13.5px] font-semibold hover:bg-white/10 ${collapsed ? "justify-center px-0" : "px-3"}`}
+            style={{ color: f.danger ? "#FF9AA2" : "rgba(255,255,255,0.85)" }}>
+            <f.icon className="w-[18px] h-[18px] shrink-0" strokeWidth={1.9} /> {!collapsed && f.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DashLayout({ storageKey, sidebar, mobileOpen, setMobileOpen, children }) {
+  const size = useSidebarSize(storageKey);
+  return (
+    <div className="min-h-dvh flex w-full" style={{ fontFamily: FONT, backgroundColor: CREAM }}>
+      {/* desktop: resizable / collapsible column */}
+      <aside className="hidden lg:block shrink-0 sticky top-0 h-dvh z-40"
+        style={{ width: size.width, backgroundColor: "#14161A", transition: size.resizing ? "none" : "width 220ms cubic-bezier(.2,.7,.2,1)" }}>
+        {sidebar({ collapsed: size.collapsed })}
+        {/* collapse / expand handle on the sidebar edge */}
+        <button type="button" onClick={() => size.setCollapsed((c) => !c)}
+          aria-label={size.collapsed ? "Expand sidebar" : "Collapse sidebar"} title={size.collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className="absolute top-[22px] -right-3 z-20 w-6 h-6 rounded-full flex items-center justify-center bg-white transition-transform hover:scale-110"
+          style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: "0 2px 6px rgba(16,24,40,0.18)" }}>
+          {size.collapsed ? <ChevronRight className="w-3.5 h-3.5" style={{ color: INK_2 }} /> : <ChevronLeft className="w-3.5 h-3.5" style={{ color: INK_2 }} />}
+        </button>
+        <div role="separator" aria-orientation="vertical" aria-label="Resize sidebar" tabIndex={0}
+          onPointerDown={size.startResize}
+          onDoubleClick={() => size.setCollapsed((c) => !c)}
+          onKeyDown={(e) => { if (e.key === "ArrowLeft") size.nudge(-16); if (e.key === "ArrowRight") size.nudge(16); }}
+          title="Drag to resize · double-click to collapse"
+          className="group absolute top-0 -right-1.5 h-full w-3 cursor-col-resize z-10 flex justify-center outline-none">
+          <span className="w-[3px] h-full transition-colors group-hover:bg-[#4D94EA] group-focus-visible:bg-[#4D94EA]" style={{ backgroundColor: size.resizing ? "#4D94EA" : "transparent" }} />
+        </div>
+      </aside>
+
+      {/* mobile: slide-in drawer */}
+      <div className="lg:hidden fixed inset-0 z-50 transition-opacity duration-200" style={{ backgroundColor: "rgba(0,0,0,0.45)", opacity: mobileOpen ? 1 : 0, pointerEvents: mobileOpen ? "auto" : "none" }} onClick={() => setMobileOpen(false)} />
+      <aside className="lg:hidden fixed top-0 left-0 z-50 h-dvh w-[80%] max-w-[300px] transition-transform duration-200 ease-out"
+        style={{ backgroundColor: "#14161A", transform: mobileOpen ? "translateX(0)" : "translateX(-100%)" }}>
+        {sidebar({ collapsed: false, onClose: () => setMobileOpen(false) })}
+      </aside>
+
+      <div className="flex-1 min-w-0 flex flex-col">{children}</div>
+    </div>
+  );
+}
+
+/* =========================================================
    ADMIN PANEL
    Front-end only: every admin action lives in PakMedApp state
    (`admin`) and is applied to the public catalogue on render.
@@ -13628,7 +14072,7 @@ const ADMIN_MASTER = {
 const ADMIN_PUBLIC = { doctor: DOCTORS, job: SEED_JOBS, market: SEED_MARKET_ITEMS, hospital: SEED_FACILITIES };
 const ADMIN_KINDS = ["doctor", "job", "market", "hospital", "feed"];
 const byKind = (make) => Object.fromEntries(ADMIN_KINDS.map((k) => [k, make()]));
-const ADMIN_SYNC = { last: null };
+const ADMIN_SYNC = { last: null, key: "" };
 
 function adminAgo(ts) {
   const m = Math.max(0, Math.round((Date.now() - ts) / 60000));
@@ -13679,6 +14123,34 @@ const SEED_TICKETS = [
   },
 ];
 
+// sample reports so the moderation tools have something to act on in the demo
+function seedReports() {
+  const t = Date.now();
+  const job = ADMIN_MASTER.job.find((j) => j.id === "sj4");
+  const item = ADMIN_MASTER.market.find((m) => m.id === "mi1");
+  const doc = ADMIN_MASTER.doctor.find((d) => d.id === "d5") || ADMIN_MASTER.doctor[4];
+  return [
+    job && { id: "rep-s1", targetId: job.id, type: "job", title: job.jobTitle, subtitle: `${job.facilityName} · ${job.city}`, reason: "Asks for money or a registration fee", details: "They asked me to send PKR 5,000 on JazzCash before the interview.", status: "pending", at: t - 50 * 60000 },
+    job && { id: "rep-s2", targetId: job.id, type: "job", title: job.jobTitle, subtitle: `${job.facilityName} · ${job.city}`, reason: "Contact details don't work", details: "", status: "pending", at: t - 3 * 3600000 },
+    item && { id: "rep-s3", targetId: item.id, type: "listing", title: item.name, subtitle: `${item.seller} · ${item.city}`, reason: "Item is not as described", details: "Photos show a different model than what was delivered.", status: "pending", at: t - 9 * 3600000 },
+    doc && { id: "rep-s4", targetId: doc.id, type: "doctor", title: doc.name, subtitle: `${doc.specialty} · ${doc.city}`, reason: "PMDC number looks invalid", details: "The PMDC number on the profile doesn't show up on the PMDC website.", status: "pending", at: t - 26 * 3600000 },
+  ].filter(Boolean);
+}
+
+// sample incoming chats so replying and "Share my number" can be tried right away
+function seedThreads() {
+  const t = Date.now();
+  return [
+    { id: "th-s1", business: "Hina R.", product: "Patient enquiry — evening appointment", unread: true,
+      messages: [{ from: "them", text: "Assalam o Alaikum doctor, do you have an evening slot this week for my mother? She has follow-up reports to show.", at: t - 40 * 60000 }] },
+    { id: "th-s2", business: "Aga Care Hospital HR", product: "Medical Officer — Emergency", unread: true,
+      messages: [
+        { from: "them", text: "Thank you for your interest in the night-shift MO role.", at: t - 3 * 3600000 },
+        { from: "them", text: "Could you share a contact number so our HR team can schedule a quick call?", at: t - 3 * 3600000 + 60000 },
+      ] },
+  ];
+}
+
 function initialAdmin() {
   return {
     hidden: byKind(() => ({})),
@@ -13686,6 +14158,8 @@ function initialAdmin() {
     edits: byKind(() => ({})),
     added: byKind(() => []),
     blocked: {},          // userId -> { reason, at }
+    roles: { me: "admin" },   // userId -> "admin" | "staff"
+    removedUsers: {},     // userId -> true (account deleted, content gone)
     messages: [],         // admin -> user messages { id, to, toName, subject, text, at, read }
     tickets: SEED_TICKETS,
     log: [],
@@ -13708,7 +14182,7 @@ function adminRows(kind, list, admin) {
 
 function adminIsLive(kind, x, admin) {
   const owner = adminOwnerOf(kind, x);
-  return !admin.hidden[kind][x.id] && !(owner && admin.blocked[owner]);
+  return !admin.hidden[kind][x.id] && !(owner && (admin.blocked[owner] || admin.removedUsers[owner]));
 }
 
 const feedWithAge = (c) => (c.createdAt ? { ...c, time: feedAge(c.createdAt) } : c);
@@ -13719,11 +14193,14 @@ function replaceAll(target, next) {
 }
 
 // rebuild the module-level catalogue the public screens read from
-function syncPublicCatalog(admin) {
-  if (ADMIN_SYNC.last === admin) return;
+function syncPublicCatalog(admin, extraDoctors = []) {
+  const key = extraDoctors.length ? JSON.stringify(extraDoctors) : "";
+  if (ADMIN_SYNC.last === admin && ADMIN_SYNC.key === key) return;
   ADMIN_SYNC.last = admin;
+  ADMIN_SYNC.key = key;
   Object.entries(ADMIN_PUBLIC).forEach(([kind, target]) => {
-    replaceAll(target, adminRows(kind, [...admin.added[kind], ...ADMIN_MASTER[kind]], admin).filter((x) => adminIsLive(kind, x, admin)));
+    const extra = kind === "doctor" ? extraDoctors : [];
+    replaceAll(target, adminRows(kind, [...admin.added[kind], ...extra, ...ADMIN_MASTER[kind]], admin).filter((x) => adminIsLive(kind, x, admin)));
   });
   const feed = adminRows("feed", [...admin.added.feed, ...ADMIN_MASTER.feed], admin)
     .filter((x) => adminIsLive("feed", x, admin))
@@ -13736,7 +14213,7 @@ const photoSrc = (p) => (typeof p === "string" ? p : p && (p.src || p.url)) || n
 
 const ADMIN_SECTIONS = {
   doctor: {
-    label: "Doctors", single: "doctor", icon: Stethoscope, color: RED, tint: RED_TINT, site: "consult",
+    label: "Doctors", single: "doctor", icon: Stethoscope, color: RED, tint: RED_TINT, site: "consult", noEdit: true,
     title: (d) => d.name,
     sub: (d) => [d.specialty, [d.area, d.city].filter(Boolean).join(", ")].filter(Boolean).join(" · "),
     meta: (d) => (d.fee ? `PKR ${d.fee}` : ""),
@@ -13837,11 +14314,23 @@ const ADMIN_SECTIONS = {
 };
 
 const ADMIN_TEMPLATES = [
-  { label: "Update profile", subject: "Please update your profile", text: "Assalam o Alaikum, some details on your PakMed profile are missing or out of date. Please update your profile so patients and employers see the correct information." },
-  { label: "Verify PMDC", subject: "PMDC verification needed", text: "Please upload a clear copy of your PMDC / PNC registration so we can keep your verified badge active." },
-  { label: "Fix a listing", subject: "Your listing needs changes", text: "One of your listings needs a few changes before it can stay live (price, photos or description). Please review and update it." },
-  { label: "Policy warning", subject: "Community guidelines reminder", text: "We received reports about recent activity on your account. Please review PakMed's terms of use — repeated violations can lead to suspension." },
+  { label: "Update profile", icon: UserRound, color: BRAND, tint: BRAND_50, subject: "Please update your profile", text: "Assalam o Alaikum, some details on your PakMed profile are missing or out of date. Please update your profile so patients and employers see the correct information." },
+  { label: "Verify PMDC", icon: BadgeCheck, color: GREEN, tint: GREEN_TINT, subject: "PMDC verification needed", text: "Please upload a clear copy of your PMDC / PNC registration so we can keep your verified badge active." },
+  { label: "Fix a listing", icon: Store, color: VIOLET, tint: VIOLET_TINT, subject: "Your listing needs changes", text: "One of your listings needs a few changes before it can stay live (price, photos or description). Please review and update it." },
+  { label: "Policy warning", icon: ShieldAlert, color: RED, tint: RED_TINT, subject: "Community guidelines reminder", text: "We received reports about recent activity on your account. Please review PakMed's terms of use — repeated violations can lead to suspension." },
 ];
+
+// broadcast audiences; "group:staff" covers admins + staff (which includes the signed-in admin)
+const MESSAGE_GROUPS = [
+  { key: "group:doctor", label: "All doctors", role: "Doctor", icon: Stethoscope, color: RED, tint: RED_TINT },
+  { key: "group:employer", label: "All employers", role: "Employer", icon: Building2, color: TEAL, tint: TEAL_TINT },
+  { key: "group:seller", label: "All sellers", role: "Seller", icon: Store, color: VIOLET, tint: VIOLET_TINT },
+  { key: "group:seeker", label: "All job seekers", role: "Job seeker", icon: Briefcase, color: AMBER, tint: AMBER_TINT },
+  { key: "group:staff", label: "Staff & admins", role: null, icon: ShieldCheck, color: BRAND, tint: BRAND_50 },
+];
+
+// does an admin message reach the signed-in user (who is the platform admin in this prototype)?
+const messageReachesMe = (m) => m.to === "me" || m.to === "all" || m.to === "group:staff";
 
 const SUPPORT_QUICK_REPLIES = [
   "Thanks for reaching out — we're looking into this now and will update you shortly.",
@@ -13879,7 +14368,8 @@ function AdminModal({ title, sub, onClose, children, footer, wide }) {
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = prev; };
   }, []);
-  return (
+  // portal to <body>: an animated (transformed) ancestor would otherwise trap `fixed` inside it
+  return createPortal(
     <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center sm:p-4" style={{ fontFamily: FONT }}>
       <div className="absolute inset-0 bg-black/45" onClick={onClose} />
       <div className={`relative w-full ${wide ? "sm:max-w-2xl" : "sm:max-w-md"} bg-white rounded-t-3xl sm:rounded-3xl flex flex-col max-h-[92dvh]`}>
@@ -13895,7 +14385,8 @@ function AdminModal({ title, sub, onClose, children, footer, wide }) {
         <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">{children}</div>
         {footer && <div className="px-5 py-3.5 shrink-0 flex gap-2 justify-end" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -14039,24 +14530,100 @@ function AdminEditor({ kind, item, isNew, onSave, onClose }) {
   );
 }
 
-function AdminThumb({ kind, x }) {
-  const cfg = ADMIN_SECTIONS[kind];
-  let src = null;
-  let bg = cfg.tint;
-  if (kind === "feed" && x.media) {
-    if (x.media.kind === "image") src = x.media.src;
-    else bg = x.media.g;
-  }
-  if (kind === "market") src = (x.photos && x.photos.length && photoSrc(x.photos[x.coverIndex || 0])) || x.img || null;
-  if (kind === "hospital") src = facImage(x);
+const ADMIN_PAGE = 24;
+
+const adminNum = (v) => parseFloat(String(v || "").replace(/[^\d.]/g, "")) || 0;
+const adminSource = (x) => (x._src === "user" ? "User posts" : x._src === "admin" ? "Added by admin" : "Platform listings");
+
+// extra dropdown filters + numeric sort per section; options are built from the rows themselves
+const ADMIN_FILTERS = {
+  doctor: {
+    filters: [
+      { k: "city", all: "All cities", get: (d) => d.city },
+      { k: "specialty", all: "All specialties", get: (d) => d.specialty },
+      { k: "verified", all: "Any verification", get: (d) => (d.verified ? "Verified" : "Unverified") },
+      { k: "online", all: "Any consult type", get: (d) => (d.online ? "Online consults" : "In-clinic only") },
+      { k: "src", all: "All sources", get: adminSource },
+    ],
+    num: { label: "Fee", get: (d) => adminNum(d.fee) },
+  },
+  job: {
+    filters: [
+      { k: "city", all: "All cities", get: (j) => j.city },
+      { k: "title", all: "All job titles", get: (j) => j.jobTitle },
+      { k: "ftype", all: "All facility types", get: (j) => j.facilityTypeLabel },
+      { k: "unit", all: "All pay types", get: (j) => j.payUnitLabel },
+      { k: "src", all: "All sources", get: adminSource },
+    ],
+    num: { label: "Pay", get: (j) => adminNum(j.payAmount) },
+  },
+  market: {
+    filters: [
+      { k: "city", all: "All cities", get: (i) => i.city },
+      { k: "cat", all: "All categories", get: (i) => i.category },
+      { k: "cond", all: "Any condition", get: (i) => i.condition },
+      { k: "vs", all: "Any seller", get: (i) => (i.verifiedSeller ? "Verified seller" : "Unverified seller") },
+      { k: "src", all: "All sources", get: adminSource },
+    ],
+    num: { label: "Price", get: (i) => adminNum(i.price) },
+  },
+  hospital: {
+    filters: [
+      { k: "city", all: "All cities", get: (f) => f.city },
+      { k: "type", all: "All types", get: (f) => f.type },
+      { k: "verified", all: "Any verification", get: (f) => (f.verified ? "Verified" : "Unverified") },
+      { k: "hiring", all: "Hiring or not", get: (f) => (f.hiring > 0 ? "Hiring now" : "Not hiring") },
+      { k: "open", all: "Any hours", get: (f) => (/24/.test(f.hours || "") ? "Open 24 hours" : "Set hours") },
+    ],
+    num: { label: "Rating", get: (f) => Number(f.rating) || 0 },
+  },
+  feed: {
+    filters: [
+      { k: "cat", all: "All categories", get: (c) => c.category },
+      { k: "author", all: "All authors", get: (c) => c.author },
+      { k: "media", all: "Any media", get: (c) => (c.media && c.media.kind === "image" ? "With image" : "Colour background") },
+      { k: "src", all: "All sources", get: adminSource },
+    ],
+    num: { label: "Likes", get: (c) => Number(c.likes) || 0 },
+  },
+};
+
+const uniqueSorted = (list) => [...new Set(list.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b)));
+
+function AdminSelect({ value, all, options, onChange, label }) {
+  const on = !!value && all !== undefined;   // only real filters highlight; sort dropdowns stay neutral
   return (
-    <div className="w-12 h-12 rounded-xl overflow-hidden flex items-center justify-center shrink-0" style={{ background: bg }}>
-      {src ? <img src={src} alt="" className="w-full h-full object-cover" loading="lazy" /> : <cfg.icon className="w-5 h-5" style={{ color: kind === "feed" ? "#fff" : cfg.color }} />}
-    </div>
+    <label className="relative inline-flex items-center h-9 rounded-lg shrink-0 max-w-[220px]"
+      style={{ border: `1px solid ${on ? "#B9D3F2" : CARD_BORDER}`, backgroundColor: on ? BRAND_50 : "#fff", color: on ? BRAND : INK_2 }}>
+      <select value={value} onChange={(e) => onChange(e.target.value)} aria-label={label || all}
+        className="appearance-none bg-transparent outline-none h-full pl-3 pr-8 text-[12.5px] font-semibold cursor-pointer truncate max-w-full">
+        {all !== undefined && <option value="">{all}</option>}
+        {options.map((o) => {
+          const v = typeof o === "string" ? o : o.value;
+          return <option key={v} value={v}>{typeof o === "string" ? o : o.label}</option>;
+        })}
+      </select>
+      <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 pointer-events-none" />
+    </label>
   );
 }
 
-const ADMIN_PAGE = 25;
+function AdminFilterBar({ children, active, onClear, shown, total }) {
+  return (
+    <div className="flex items-center gap-2 flex-wrap mt-3">
+      <span className="inline-flex items-center gap-1.5 text-[12.5px] font-bold mr-1" style={{ color: SUBTLE }}>
+        <SlidersHorizontal className="w-4 h-4" /> Filters
+      </span>
+      {children}
+      {active > 0 && (
+        <button type="button" onClick={onClear} className="h-9 px-3 rounded-lg text-[12.5px] font-bold inline-flex items-center gap-1" style={{ color: RED }}>
+          <X className="w-3.5 h-3.5" /> Clear ({active})
+        </button>
+      )}
+      <span className="ml-auto text-[12.5px] font-semibold" style={{ color: SUBTLE }}>Showing {shown} of {total}</span>
+    </div>
+  );
+}
 
 function AdminCollection({ kind, rows, admin, onSave, onHide, onDelete, onFlag, onMessageOwner, onViewSite }) {
   const cfg = ADMIN_SECTIONS[kind];
@@ -14065,6 +14632,11 @@ function AdminCollection({ kind, rows, admin, onSave, onHide, onDelete, onFlag, 
   const [limit, setLimit] = useState(ADMIN_PAGE);
   const [editing, setEditing] = useState(null);   // { item, isNew }
   const [confirm, setConfirm] = useState(null);
+  const [sel, setSel] = useState({});             // dropdown filter values by key
+  const [sort, setSort] = useState("default");
+  const fx = ADMIN_FILTERS[kind];
+  const activeFilters = Object.values(sel).filter(Boolean).length;
+  const pick = (k, v) => { setSel((p) => ({ ...p, [k]: v })); setLimit(ADMIN_PAGE); };
 
   const statusOf = (x) => {
     if (admin.hidden[kind][x.id]) return "hidden";
@@ -14076,10 +14648,48 @@ function AdminCollection({ kind, rows, admin, onSave, onHide, onDelete, onFlag, 
   const withStatus = rows.map((x) => ({ x, status: statusOf(x) }));
   const counts = withStatus.reduce((acc, r) => ({ ...acc, [r.status]: (acc[r.status] || 0) + 1 }), {});
   const needle = q.trim().toLowerCase();
-  const shown = withStatus.filter(({ x, status }) =>
+  const matched = withStatus.filter(({ x, status }) =>
     (filter === "all" || status === filter) &&
-    (!needle || `${cfg.title(x)} ${cfg.sub(x)}`.toLowerCase().includes(needle))
+    (!needle || `${cfg.title(x)} ${cfg.sub(x)}`.toLowerCase().includes(needle)) &&
+    fx.filters.every((f) => !sel[f.k] || f.get(x) === sel[f.k])
   );
+  const byTitle = (a, b) => String(cfg.title(a.x) || "").localeCompare(String(cfg.title(b.x) || ""));
+  const shown = sort === "az" ? [...matched].sort(byTitle)
+    : sort === "za" ? [...matched].sort((a, b) => byTitle(b, a))
+    : sort === "high" ? [...matched].sort((a, b) => fx.num.get(b.x) - fx.num.get(a.x))
+    : sort === "low" ? [...matched].sort((a, b) => fx.num.get(a.x) - fx.num.get(b.x))
+    : matched;
+  const sortOptions = [
+    { value: "default", label: "Sort: Newest first" },
+    { value: "az", label: "Sort: Name A–Z" },
+    { value: "za", label: "Sort: Name Z–A" },
+    { value: "high", label: `Sort: ${fx.num.label} high → low` },
+    { value: "low", label: `Sort: ${fx.num.label} low → high` },
+  ];
+
+  const page = shown.slice(0, limit);
+  const actionButtons = (x, { icons = false } = {}) => {
+    const hidden = !!admin.hidden[kind][x.id];
+    const owner = adminOwnerOf(kind, x);
+    const flagOn = cfg.flag && !!x[cfg.flag.k];
+    return [
+      !cfg.noEdit && { key: "edit", icon: Pencil, label: "Edit", color: BRAND, run: () => setEditing({ item: x, isNew: false }) },
+      { key: "hide", icon: hidden ? Eye : EyeOff, label: hidden ? "Show" : "Hide", color: hidden ? GREEN : AMBER, run: () => onHide(x, !hidden) },
+      cfg.flag && { key: "flag", icon: BadgeCheck, label: flagOn ? "Unverify" : "Verify", color: flagOn ? SUBTLE : GREEN, run: () => onFlag(x, cfg.flag.k, !flagOn) },
+      kind === "doctor" && { key: "phone", icon: Phone, label: x.showPhone ? "Hide phone" : "Show phone", color: x.showPhone ? AMBER : TEAL, run: () => onFlag(x, "showPhone", !x.showPhone) },
+      owner && kind !== "feed" && { key: "msg", icon: Send, label: "Message", color: INK_2, run: () => onMessageOwner(owner, x) },
+      { key: "del", icon: Trash2, label: "Delete", color: RED, run: () => setConfirm(x) },
+    ].filter(Boolean).map((btn) => (icons ? (
+      <button key={btn.key} type="button" onClick={btn.run} title={btn.label} aria-label={btn.label}
+        className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-[#F5F7FA] bg-white" style={{ color: btn.color, border: `1px solid ${CARD_BORDER}` }}>
+        <btn.icon className="w-4 h-4" />
+      </button>
+    ) : (
+      <button key={btn.key} type="button" onClick={btn.run} className={ADMIN_BTN} style={{ color: btn.color, border: `1px solid ${CARD_BORDER}` }}>
+        <btn.icon className="w-3.5 h-3.5" /> {btn.label}
+      </button>
+    )));
+  };
 
   const filters = [["all", "All", rows.length], ["live", "Live", counts.live || 0], ["hidden", "Hidden", counts.hidden || 0], ["blocked", "Owner blocked", counts.blocked || 0]];
 
@@ -14115,58 +14725,220 @@ function AdminCollection({ kind, rows, admin, onSave, onHide, onDelete, onFlag, 
         })}
       </div>
 
-      <div className="mt-3 flex flex-col gap-2.5">
-        {shown.length === 0 && <AdminEmpty icon={cfg.icon} title={`No ${cfg.label.toLowerCase()} here`} sub={needle ? "Try a different search." : "Nothing matches this filter."} />}
-        {shown.slice(0, limit).map(({ x, status }) => {
-          const st = adminStatusStyle(status);
-          const owner = adminOwnerOf(kind, x);
-          const flagOn = cfg.flag && !!x[cfg.flag.k];
-          return (
-            <div key={x.id} className="rounded-2xl bg-white p-3.5" style={{ border: `1px solid ${CARD_BORDER}`, opacity: status === "live" ? 1 : 0.92 }}>
-              <div className="flex items-start gap-3">
-                <AdminThumb kind={kind} x={x} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <p className="text-[14.5px] font-bold leading-snug" style={{ color: INK }}>{cfg.title(x) || "Untitled"}</p>
-                    <AdminPill color={st.color} tint={st.tint}>{st.label}</AdminPill>
-                    {cfg.flag && <AdminPill color={flagOn ? GREEN : SUBTLE} tint={flagOn ? GREEN_TINT : "#F2F4F7"}>{flagOn ? cfg.flag.on : cfg.flag.off}</AdminPill>}
-                    {x._src === "admin" && <AdminPill color={BRAND} tint={BRAND_50}>Added by admin</AdminPill>}
-                    {x._src === "user" && <AdminPill color={VIOLET} tint={VIOLET_TINT}>User post</AdminPill>}
+      <AdminFilterBar active={activeFilters} onClear={() => setSel({})} shown={shown.length} total={rows.length}>
+        {fx.filters.map((f) => {
+          const options = uniqueSorted(rows.map(f.get));
+          return options.length > 1 || sel[f.k]
+            ? <AdminSelect key={f.k} value={sel[f.k] || ""} all={f.all} options={options} onChange={(v) => pick(f.k, v)} />
+            : null;
+        })}
+        <AdminSelect value={sort} options={sortOptions} onChange={setSort} label="Sort" />
+      </AdminFilterBar>
+
+      {shown.length === 0 && (
+        <div className="mt-3"><AdminEmpty icon={cfg.icon} title={`No ${cfg.label.toLowerCase()} here`} sub={needle || activeFilters ? "Try a different search or clear the filters." : "Nothing matches this filter."} /></div>
+      )}
+
+      {/* each section gets a layout that suits its content */}
+      {kind === "doctor" && page.length > 0 && (
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4">
+          {page.map(({ x, status }) => {
+            const st = adminStatusStyle(status);
+            return (
+              <div key={x.id} className="rounded-2xl bg-white overflow-hidden flex flex-col" style={{ border: `1px solid ${CARD_BORDER}`, opacity: status === "live" ? 1 : 0.75 }}>
+                <div className="h-16 relative" style={{ background: `linear-gradient(120deg, ${RED_TINT}, #FFF5F4)` }}>
+                  <span className="absolute top-3 right-3"><AdminPill color={st.color} tint={st.tint}>{st.label}</AdminPill></span>
+                </div>
+                <div className="relative px-5 pb-5 -mt-9 flex flex-col items-center text-center flex-1">
+                  <span className="w-[72px] h-[72px] rounded-full flex items-center justify-center text-[22px] font-extrabold text-white" style={{ backgroundColor: RED, border: "4px solid #fff" }}>
+                    {initialsOf(x.name || "")}
+                  </span>
+                  <p className="text-[15.5px] font-extrabold mt-2 flex items-center gap-1" style={{ color: INK }}>
+                    {x.name}{x.verified && <BadgeCheck className="w-4 h-4" style={{ color: GREEN }} />}
+                  </p>
+                  <p className="text-[13px] font-semibold" style={{ color: RED }}>{x.specialty}</p>
+                  <p className="text-[12px] mt-0.5" style={{ color: SUBTLE }}>{x.qual}</p>
+                  <p className="text-[12.5px] mt-1.5 inline-flex items-center gap-1" style={{ color: INK_2 }}>
+                    <MapPin className="w-3.5 h-3.5" /> {[x.area, x.city].filter(Boolean).join(", ")}
+                  </p>
+                  <div className="grid grid-cols-3 w-full mt-4 rounded-xl overflow-hidden" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                    {[["Fee", x.fee ? `${x.fee}` : "—"], ["Rating", x.rating ? `${x.rating}★` : "—"], ["Exp.", x.exp || "—"]].map(([k, v], i) => (
+                      <div key={k} className="py-2" style={{ borderLeft: i ? `1px solid ${CARD_BORDER}` : "none" }}>
+                        <p className="text-[14px] font-extrabold" style={{ color: INK }}>{v}</p>
+                        <p className="text-[11px] font-semibold" style={{ color: FAINT }}>{k}</p>
+                      </div>
+                    ))}
                   </div>
-                  <p className="text-[12.5px] mt-0.5 truncate" style={{ color: SUBTLE }}>{cfg.sub(x)}</p>
-                  {cfg.meta(x) && <p className="text-[12.5px] font-semibold mt-0.5" style={{ color: INK_2 }}>{cfg.meta(x)}</p>}
+                  <div className="flex items-center gap-1.5 mt-2 flex-wrap justify-center">
+                    {x.online && <AdminPill color={TEAL} tint={TEAL_TINT}>Online consults</AdminPill>}
+                    <AdminPill color={x.showPhone ? GREEN : SUBTLE} tint={x.showPhone ? GREEN_TINT : "#F2F4F7"}>{x.showPhone ? "Phone visible" : "Phone hidden"}</AdminPill>
+                    {x._src === "user" && <AdminPill color={VIOLET} tint={VIOLET_TINT}>Website user</AdminPill>}
+                    {x._src === "admin" && <AdminPill color={BRAND} tint={BRAND_50}>Added by admin</AdminPill>}
+                  </div>
+                  <div className="flex items-center justify-center gap-1.5 mt-auto pt-4 w-full flex-wrap">{actionButtons(x)}</div>
                 </div>
               </div>
-              <div className="flex flex-wrap gap-1.5 mt-3 pt-3" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
-                <button type="button" onClick={() => setEditing({ item: x, isNew: false })} className={ADMIN_BTN} style={{ color: BRAND, border: `1px solid ${CARD_BORDER}` }}>
-                  <Pencil className="w-3.5 h-3.5" /> Edit
-                </button>
-                <button type="button" onClick={() => onHide(x, !admin.hidden[kind][x.id])} className={ADMIN_BTN} style={{ color: admin.hidden[kind][x.id] ? GREEN : AMBER, border: `1px solid ${CARD_BORDER}` }}>
-                  {admin.hidden[kind][x.id] ? <><Eye className="w-3.5 h-3.5" /> Show</> : <><EyeOff className="w-3.5 h-3.5" /> Hide</>}
-                </button>
-                {cfg.flag && (
-                  <button type="button" onClick={() => onFlag(x, cfg.flag.k, !flagOn)} className={ADMIN_BTN} style={{ color: flagOn ? SUBTLE : GREEN, border: `1px solid ${CARD_BORDER}` }}>
-                    <BadgeCheck className="w-3.5 h-3.5" /> {flagOn ? "Remove verification" : "Verify"}
-                  </button>
-                )}
-                {owner && kind !== "feed" && (
-                  <button type="button" onClick={() => onMessageOwner(owner, x)} className={ADMIN_BTN} style={{ color: INK_2, border: `1px solid ${CARD_BORDER}` }}>
-                    <Send className="w-3.5 h-3.5" /> Message owner
-                  </button>
-                )}
-                <button type="button" onClick={() => setConfirm(x)} className={`${ADMIN_BTN} sm:ml-auto`} style={{ color: RED, border: `1px solid ${CARD_BORDER}` }}>
-                  <Trash2 className="w-3.5 h-3.5" /> Delete
-                </button>
+            );
+          })}
+        </div>
+      )}
+
+      {kind === "job" && page.length > 0 && (
+        <div className="mt-4 rounded-2xl bg-white overflow-hidden" style={{ border: `1px solid ${CARD_BORDER}` }}>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1050px] text-left border-collapse">
+              <thead>
+                <tr style={{ backgroundColor: CREAM }}>
+                  {["Job", "Location", "Pay", "Shift & start", "Applicants", "Status", "Actions"].map((h, i) => (
+                    <th key={h} className={`px-5 py-3.5 text-[11.5px] font-bold uppercase tracking-wider whitespace-nowrap ${i === 6 ? "text-right" : ""}`} style={{ color: SUBTLE, borderBottom: `1px solid ${CARD_BORDER}` }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {page.map(({ x, status }) => {
+                  const st = adminStatusStyle(status);
+                  return (
+                    <tr key={x.id} style={{ borderTop: `1px solid ${CARD_BORDER}`, backgroundColor: status === "live" ? "#fff" : "#FBFBFC" }}>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <span className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: BRAND_50 }}>
+                            <Briefcase className="w-[18px] h-[18px]" style={{ color: BRAND }} />
+                          </span>
+                          <div className="min-w-0">
+                            <p className="text-[14px] font-bold flex items-center gap-1.5" style={{ color: INK }}>
+                              {x.jobTitle}{x.urgent && <AdminPill color={RED} tint={RED_TINT}>Urgent</AdminPill>}
+                            </p>
+                            <p className="text-[12.5px] truncate max-w-[260px]" style={{ color: SUBTLE }}>{x.facilityName} · {x.facilityTypeLabel}</p>
+                            {x._src && <p className="text-[11px] font-semibold mt-0.5" style={{ color: x._src === "user" ? VIOLET : BRAND }}>{adminSource(x)}</p>}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 text-[13px] whitespace-nowrap" style={{ color: INK_2 }}>{x.city}<span className="block text-[12px]" style={{ color: FAINT }}>{x.area}</span></td>
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        <p className="text-[14px] font-extrabold" style={{ color: GREEN }}>{x.payAmount ? `PKR ${x.payAmount}` : "—"}</p>
+                        <p className="text-[12px]" style={{ color: FAINT }}>{x.payUnitLabel}</p>
+                      </td>
+                      <td className="px-5 py-4 text-[13px]" style={{ color: INK_2 }}>
+                        {(x.shifts || []).join(", ") || "—"}
+                        <span className="block text-[12px]" style={{ color: FAINT }}>Starts {x.startDate || "—"}</span>
+                      </td>
+                      <td className="px-5 py-4">
+                        <span className="inline-flex items-center gap-1.5 text-[13.5px] font-bold" style={{ color: INK }}><Users className="w-4 h-4" style={{ color: FAINT }} /> {x.applicants || 0}</span>
+                      </td>
+                      <td className="px-5 py-4"><AdminPill color={st.color} tint={st.tint}>{st.label}</AdminPill></td>
+                      <td className="px-5 py-4"><div className="flex items-center justify-end gap-1.5">{actionButtons(x, { icons: true })}</div></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {kind === "market" && page.length > 0 && (
+        <div className="mt-4 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+          {page.map(({ x, status }) => {
+            const st = adminStatusStyle(status);
+            const img = (x.photos && x.photos.length && photoSrc(x.photos[x.coverIndex || 0])) || x.img;
+            return (
+              <div key={x.id} className="rounded-2xl bg-white overflow-hidden flex flex-col group" style={{ border: `1px solid ${CARD_BORDER}`, opacity: status === "live" ? 1 : 0.75 }}>
+                <div className="relative aspect-square overflow-hidden" style={{ backgroundColor: VIOLET_TINT }}>
+                  {img ? <img src={img} alt="" loading="lazy" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                    : <div className="w-full h-full flex items-center justify-center"><Store className="w-10 h-10" style={{ color: VIOLET }} /></div>}
+                  <span className="absolute top-2.5 left-2.5"><AdminPill color={st.color} tint={st.tint}>{st.label}</AdminPill></span>
+                  {x.condition && <span className="absolute bottom-2.5 left-2.5 text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-white/95" style={{ color: INK_2 }}>{x.condition}</span>}
+                </div>
+                <div className="p-3.5 flex flex-col flex-1">
+                  <p className="text-[17px] font-extrabold" style={{ color: VIOLET }}>{x.price ? `PKR ${x.price}` : "Price on request"}</p>
+                  <p className="text-[13.5px] font-bold leading-snug line-clamp-2 mt-0.5" style={{ color: INK }}>{x.name}</p>
+                  <p className="text-[12px] mt-1 truncate flex items-center gap-1" style={{ color: SUBTLE }}>
+                    {x.verifiedSeller && <BadgeCheck className="w-3.5 h-3.5 shrink-0" style={{ color: GREEN }} />}{x.seller}
+                  </p>
+                  <p className="text-[12px] truncate" style={{ color: FAINT }}>{[x.city, x.category].filter(Boolean).join(" · ")}</p>
+                  <div className="flex items-center gap-1.5 mt-auto pt-3 flex-wrap">{actionButtons(x, { icons: true })}</div>
+                </div>
               </div>
-            </div>
-          );
-        })}
-        {shown.length > limit && (
-          <button type="button" onClick={() => setLimit((n) => n + ADMIN_PAGE)} className="h-11 rounded-xl text-[13.5px] font-bold bg-white" style={{ color: BRAND, border: `1px solid ${CARD_BORDER}` }}>
-            Show more ({shown.length - limit} left)
-          </button>
-        )}
-      </div>
+            );
+          })}
+        </div>
+      )}
+
+      {kind === "hospital" && page.length > 0 && (
+        <div className="mt-4 grid grid-cols-1 xl:grid-cols-2 gap-4">
+          {page.map(({ x, status }) => {
+            const st = adminStatusStyle(status);
+            return (
+              <div key={x.id} className="rounded-2xl bg-white overflow-hidden flex flex-col sm:flex-row" style={{ border: `1px solid ${CARD_BORDER}`, opacity: status === "live" ? 1 : 0.75 }}>
+                <div className="relative sm:w-56 h-40 sm:h-auto shrink-0" style={{ backgroundColor: TEAL_TINT }}>
+                  <img src={facImage(x)} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
+                  <span className="absolute top-2.5 left-2.5"><AdminPill color={st.color} tint={st.tint}>{st.label}</AdminPill></span>
+                  {x.hiring > 0 && <span className="absolute bottom-2.5 left-2.5 text-[10.5px] font-bold px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: GREEN }}>Hiring · {x.hiring}</span>}
+                </div>
+                <div className="p-4 flex-1 min-w-0 flex flex-col">
+                  <div className="flex items-start gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[15.5px] font-extrabold flex items-center gap-1" style={{ color: INK }}>
+                        {x.name}{x.verified && <BadgeCheck className="w-4 h-4 shrink-0" style={{ color: GREEN }} />}
+                      </p>
+                      <p className="text-[12.5px] font-semibold" style={{ color: TEAL }}>{x.type}</p>
+                    </div>
+                    {x.rating ? <span className="text-[13px] font-bold shrink-0 inline-flex items-center gap-1" style={{ color: INK }}><Star className="w-3.5 h-3.5" fill={STAR} stroke={STAR} /> {x.rating}</span> : null}
+                  </div>
+                  <div className="mt-2 space-y-1 text-[12.5px]" style={{ color: INK_2 }}>
+                    <p className="flex items-center gap-1.5 truncate"><MapPin className="w-3.5 h-3.5 shrink-0" style={{ color: FAINT }} />{[x.address || x.area, x.city].filter(Boolean).join(", ")}</p>
+                    {x.phone && <p className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 shrink-0" style={{ color: FAINT }} />{x.phone}</p>}
+                    {x.hours && <p className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 shrink-0" style={{ color: FAINT }} />{x.hours}</p>}
+                  </div>
+                  {(x.services || []).length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2.5">
+                      {x.services.slice(0, 4).map((s) => <span key={s} className="text-[11px] font-semibold px-2 py-0.5 rounded-md" style={{ color: TEAL, backgroundColor: TEAL_TINT }}>{s}</span>)}
+                      {x.services.length > 4 && <span className="text-[11px] font-semibold px-1.5 py-0.5" style={{ color: FAINT }}>+{x.services.length - 4}</span>}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-1.5 mt-auto pt-3 flex-wrap">{actionButtons(x)}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {kind === "feed" && page.length > 0 && (
+        <div className="mt-4 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+          {page.map(({ x, status }) => {
+            const st = adminStatusStyle(status);
+            const m = x.media || {};
+            return (
+              <div key={x.id} className="rounded-2xl overflow-hidden bg-white flex flex-col" style={{ border: `1px solid ${CARD_BORDER}`, opacity: status === "live" ? 1 : 0.75 }}>
+                <div className="relative aspect-[4/5] overflow-hidden" style={{ background: m.kind === "gradient" ? m.g : "#111" }}>
+                  {m.kind === "image" && <img src={m.src} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />}
+                  <div className="absolute inset-0" style={{ background: "linear-gradient(180deg,rgba(0,0,0,.35) 0%,rgba(0,0,0,0) 30%,rgba(0,0,0,0) 45%,rgba(0,0,0,.82) 100%)" }} />
+                  <span className="absolute top-2.5 left-2.5"><AdminPill color={st.color} tint={st.tint}>{st.label}</AdminPill></span>
+                  {x.eyebrow && <span className="absolute top-2.5 right-2.5 max-w-[55%] truncate text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-white/90" style={{ color: AMBER }}>{x.eyebrow}</span>}
+                  <div className="absolute left-0 right-0 bottom-0 p-3">
+                    <p className="text-[10.5px] font-bold uppercase tracking-wider text-white/70">{x.category}</p>
+                    <p className="text-[14.5px] font-extrabold leading-snug text-white line-clamp-2">{x.title}</p>
+                    <p className="text-[11.5px] text-white/75 mt-1 truncate">{x.author} · {x.time} ago</p>
+                  </div>
+                </div>
+                <div className="px-3 py-2.5 flex items-center gap-3 text-[12.5px] font-semibold" style={{ color: SUBTLE, borderBottom: `1px solid ${CARD_BORDER}` }}>
+                  <span className="inline-flex items-center gap-1"><Heart className="w-3.5 h-3.5" /> {x.likes || 0}</span>
+                  <span className="inline-flex items-center gap-1"><MessageCircle className="w-3.5 h-3.5" /> {(x.comments || []).length}</span>
+                  {x._src === "admin" && <span className="ml-auto text-[11px] font-bold" style={{ color: BRAND }}>By admin</span>}
+                </div>
+                <div className="px-3 py-2.5 flex items-center gap-1.5 flex-wrap">{actionButtons(x, { icons: true })}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {shown.length > limit && (
+        <button type="button" onClick={() => setLimit((n) => n + ADMIN_PAGE)} className="w-full mt-4 h-11 rounded-xl text-[13.5px] font-bold bg-white" style={{ color: BRAND, border: `1px solid ${CARD_BORDER}` }}>
+          Show more ({shown.length - limit} left)
+        </button>
+      )}
 
       {editing && <AdminEditor kind={kind} item={editing.item} isNew={editing.isNew} onSave={(d) => onSave(d, editing.isNew)} onClose={() => setEditing(null)} />}
       {confirm && (
@@ -14190,17 +14962,71 @@ const USER_ROLE_STYLE = {
   "Job seeker": { color: AMBER, tint: AMBER_TINT },
 };
 
-function AdminUsers({ users, admin, onBlock, onUnblock, onMessage }) {
+const ACCESS_STYLE = {
+  admin: { label: "Admin", color: "#fff", tint: BRAND },
+  staff: { label: "Staff", color: "#fff", tint: TEAL },
+};
+
+function AdminUsers({ users, admin, onBlock, onUnblock, onMessage, onSetRole, onDelete }) {
   const [q, setQ] = useState("");
   const [role, setRole] = useState("All");
   const [limit, setLimit] = useState(ADMIN_PAGE);
-  const [confirm, setConfirm] = useState(null);
+  const [confirm, setConfirm] = useState(null);   // { type: "block" | "delete" | "admin" | "staff", user }
   const needle = q.trim().toLowerCase();
-  const roles = ["All", "Doctor", "Employer", "Seller", "Job seeker", "Blocked"];
-  const shown = users.filter((u) =>
-    (role === "All" || (role === "Blocked" ? !!admin.blocked[u.id] : u.role === role)) &&
-    (!needle || `${u.name} ${u.city} ${u.contact}`.toLowerCase().includes(needle))
+  const roles = ["All", "Admins", "Staff", "Doctor", "Employer", "Seller", "Job seeker", "Blocked"];
+  const matchRole = (u, r) => {
+    if (r === "All") return true;
+    if (r === "Blocked") return !!admin.blocked[u.id];
+    if (r === "Admins") return admin.roles[u.id] === "admin";
+    if (r === "Staff") return admin.roles[u.id] === "staff";
+    return u.role === r;
+  };
+  const [city, setCity] = useState("");
+  const [activity, setActivity] = useState("");
+  const [sort, setSort] = useState("default");
+  const accessRank = (u) => (u.id === "me" ? 0 : admin.roles[u.id] === "admin" ? 1 : admin.roles[u.id] === "staff" ? 2 : 3);
+  const matched = users.filter((u) =>
+    matchRole(u, role) &&
+    (!needle || `${u.name} ${u.city} ${u.contact}`.toLowerCase().includes(needle)) &&
+    (!city || u.city === city) &&
+    (!activity || (activity === "active" ? u.items > 0 : u.items === 0))
   );
+  const shown = sort === "az" ? [...matched].sort((a, b) => a.name.localeCompare(b.name))
+    : sort === "za" ? [...matched].sort((a, b) => b.name.localeCompare(a.name))
+    : sort === "most" ? [...matched].sort((a, b) => b.items - a.items)
+    : sort === "least" ? [...matched].sort((a, b) => a.items - b.items)
+    : [...matched].sort((a, b) => accessRank(a) - accessRank(b));
+  const activeFilters = [city, activity].filter(Boolean).length;
+
+  const confirmCopy = (c) => {
+    const u = c.user;
+    if (c.type === "block") return {
+      title: `Block ${u.name}?`,
+      body: u.id === "me"
+        ? "This is your own account. You'll see a suspension banner and won't be able to post, apply or message until you unblock it here."
+        : `Their ${u.items} item${u.items === 1 ? "" : "s"} will disappear from the site and they won't be able to use PakMed until unblocked.`,
+      label: "Block user", tone: RED, reason: true, run: (reason) => onBlock(u, reason),
+    };
+    if (c.type === "delete") return {
+      title: `Delete ${u.name}?`,
+      body: `Their account and all ${u.items} item${u.items === 1 ? "" : "s"} they posted will be removed from PakMed. This can't be undone.`,
+      label: "Delete user", tone: RED, reason: true, run: (reason) => onDelete(u, reason),
+    };
+    const current = admin.roles[u.id];
+    if (current === c.type) return {
+      title: `Remove ${c.type} access from ${u.name}?`,
+      body: `${u.name} will go back to being a regular user and lose access to the admin panel.`,
+      label: `Remove ${c.type}`, tone: AMBER, run: () => onSetRole(u, null),
+    };
+    return {
+      title: `Make ${u.name} ${c.type === "admin" ? "an admin" : "staff"}?`,
+      body: c.type === "admin"
+        ? "Admins have full control: they can manage users, roles, content, support and messages."
+        : "Staff can help run PakMed — reply to support, review reports and manage listings — but can't change roles.",
+      label: c.type === "admin" ? "Make admin" : "Make staff", tone: BRAND, run: () => onSetRole(u, c.type),
+    };
+  };
+  const cc = confirm && confirmCopy(confirm);
 
   return (
     <div>
@@ -14208,11 +15034,12 @@ function AdminUsers({ users, admin, onBlock, onUnblock, onMessage }) {
         <Search className="w-4 h-4 shrink-0" style={{ color: FAINT }} />
         <input value={q} onChange={(e) => { setQ(e.target.value); setLimit(ADMIN_PAGE); }} placeholder="Search users by name, city or contact…"
           className="flex-1 min-w-0 bg-transparent outline-none text-[14px]" style={{ color: INK }} />
+        {q && <button type="button" onClick={() => setQ("")} aria-label="Clear"><X className="w-4 h-4" style={{ color: SUBTLE }} /></button>}
       </label>
       <div className="flex gap-1.5 overflow-x-auto mt-3 pb-1" style={{ scrollbarWidth: "none" }}>
         {roles.map((r) => {
           const on = role === r;
-          const n = r === "All" ? users.length : r === "Blocked" ? users.filter((u) => admin.blocked[u.id]).length : users.filter((u) => u.role === r).length;
+          const n = users.filter((u) => matchRole(u, r)).length;
           return (
             <button key={r} type="button" onClick={() => { setRole(r); setLimit(ADMIN_PAGE); }}
               className="h-8 px-3 rounded-full text-[12.5px] whitespace-nowrap shrink-0"
@@ -14222,64 +15049,139 @@ function AdminUsers({ users, admin, onBlock, onUnblock, onMessage }) {
           );
         })}
       </div>
-      <p className="text-[12px] mt-2" style={{ color: SUBTLE }}>Blocking a user hides everything they've posted and stops them from taking actions on PakMed.</p>
+      <AdminFilterBar active={activeFilters} onClear={() => { setCity(""); setActivity(""); }} shown={shown.length} total={users.length}>
+        <AdminSelect value={city} all="All cities" options={uniqueSorted(users.map((u) => u.city))} onChange={(v) => { setCity(v); setLimit(ADMIN_PAGE); }} />
+        <AdminSelect value={activity} all="Any activity" options={[{ value: "active", label: "Has posts on site" }, { value: "none", label: "No posts yet" }]} onChange={(v) => { setActivity(v); setLimit(ADMIN_PAGE); }} />
+        <AdminSelect value={sort} label="Sort" onChange={setSort} options={[
+          { value: "default", label: "Sort: Admins & staff first" },
+          { value: "az", label: "Sort: Name A–Z" },
+          { value: "za", label: "Sort: Name Z–A" },
+          { value: "most", label: "Sort: Most posts" },
+          { value: "least", label: "Sort: Fewest posts" },
+        ]} />
+      </AdminFilterBar>
+      <p className="text-[12px] mt-2" style={{ color: SUBTLE }}>Blocking hides a user's posts until you unblock them. Deleting removes the account and everything they posted.</p>
 
-      <div className="mt-3 flex flex-col gap-2">
-        {shown.length === 0 && <AdminEmpty icon={Users} title="No users found" />}
-        {shown.slice(0, limit).map((u) => {
-          const blocked = admin.blocked[u.id];
-          const rs = USER_ROLE_STYLE[u.role] || USER_ROLE_STYLE.You;
-          return (
-            <div key={u.id} className="rounded-2xl bg-white p-3.5 flex flex-col sm:flex-row sm:items-center gap-3" style={{ border: `1px solid ${blocked ? RED + "55" : CARD_BORDER}` }}>
-              <div className="flex items-center gap-3 flex-1 min-w-0">
-                <span className="w-10 h-10 rounded-full flex items-center justify-center text-[13px] font-bold shrink-0" style={{ backgroundColor: rs.tint, color: rs.color }}>
-                  {initialsOf(u.name)}
-                </span>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <p className="text-[14.5px] font-bold truncate" style={{ color: INK }}>{u.name}</p>
-                    <AdminPill color={rs.color} tint={rs.tint}>{u.role}</AdminPill>
-                    {blocked && <AdminPill color={RED} tint={RED_TINT}>Blocked</AdminPill>}
-                  </div>
-                  <p className="text-[12.5px] truncate" style={{ color: SUBTLE }}>
-                    {[u.city, u.contact, `${u.items} item${u.items === 1 ? "" : "s"} on site`].filter(Boolean).join(" · ")}
-                  </p>
-                  {blocked && blocked.reason && <p className="text-[12px] mt-0.5" style={{ color: RED }}>Reason: {blocked.reason}</p>}
-                </div>
-              </div>
-              <div className="flex gap-1.5 shrink-0">
-                <button type="button" onClick={() => onMessage(u)} className={ADMIN_BTN} style={{ color: BRAND, border: `1px solid ${CARD_BORDER}` }}>
-                  <Send className="w-3.5 h-3.5" /> Message
-                </button>
-                {blocked ? (
-                  <button type="button" onClick={() => onUnblock(u)} className={ADMIN_BTN} style={{ color: GREEN, border: `1px solid ${CARD_BORDER}` }}>
-                    <UserCheck className="w-3.5 h-3.5" /> Unblock
-                  </button>
-                ) : (
-                  <button type="button" onClick={() => setConfirm(u)} className={ADMIN_BTN} style={{ color: RED, border: `1px solid ${CARD_BORDER}` }}>
-                    <Ban className="w-3.5 h-3.5" /> Block
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
+      <div className="mt-4 rounded-2xl bg-white overflow-hidden" style={{ border: `1px solid ${CARD_BORDER}` }}>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[1000px] text-left border-collapse">
+            <thead>
+              <tr style={{ backgroundColor: CREAM }}>
+                {["User", "Type", "Access", "City", "Posts", "Status", "Actions"].map((h, i) => (
+                  <th key={h} className={`px-5 py-3.5 text-[11.5px] font-bold uppercase tracking-wider whitespace-nowrap ${i === 6 ? "text-right" : ""}`} style={{ color: SUBTLE, borderBottom: `1px solid ${CARD_BORDER}` }}>
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {shown.length === 0 && (
+                <tr><td colSpan={7} className="p-6"><AdminEmpty icon={Users} title="No users found" sub="Try a different search or clear the filters." /></td></tr>
+              )}
+              {shown.slice(0, limit).map((u) => {
+                const blocked = admin.blocked[u.id];
+                const access = admin.roles[u.id];
+                const isMe = u.id === "me";
+                const rs = USER_ROLE_STYLE[u.role] || USER_ROLE_STYLE.You;
+                const ac = access ? ACCESS_STYLE[access] : null;
+                return (
+                  <tr key={u.id}
+                    style={{
+                      borderTop: `1px solid ${CARD_BORDER}`,
+                      backgroundColor: blocked ? "#FFF8F7" : access === "admin" ? "#F4F8FE" : access === "staff" ? "#F2FAFA" : "#fff",
+                      boxShadow: ac ? `inset 4px 0 0 ${ac.tint}` : blocked ? `inset 4px 0 0 ${RED}` : "none",
+                    }}>
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="w-10 h-10 rounded-full flex items-center justify-center text-[13px] font-bold shrink-0" style={{ backgroundColor: ac ? ac.tint : rs.tint, color: ac ? "#fff" : rs.color }}>
+                          {u.name.replace(/^@|^Dr\.?\s*/gi, "").split(/[\s_]+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase()}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-[14px] font-bold truncate max-w-[240px]" style={{ color: INK }}>
+                            {u.name}{isMe && <span className="ml-1.5 text-[11px] font-semibold" style={{ color: FAINT }}>(you)</span>}
+                          </p>
+                          <p className="text-[12.5px] truncate max-w-[240px]" style={{ color: SUBTLE }}>{u.contact || "—"}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-4"><AdminPill color={rs.color} tint={rs.tint}>{u.role}</AdminPill></td>
+                    <td className="px-5 py-4">
+                      {isMe ? (
+                        <span className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12.5px] font-bold text-white" style={{ backgroundColor: BRAND }}>
+                          <ShieldCheck className="w-3.5 h-3.5" /> Admin
+                        </span>
+                      ) : (
+                        <label className="relative inline-flex items-center h-8 rounded-lg"
+                          style={{ backgroundColor: ac ? ac.tint : "#fff", color: ac ? "#fff" : INK_2, border: `1px solid ${ac ? ac.tint : CARD_BORDER}` }}>
+                          {access === "admin" ? <ShieldCheck className="w-3.5 h-3.5 absolute left-2.5 pointer-events-none" />
+                            : access === "staff" ? <Users className="w-3.5 h-3.5 absolute left-2.5 pointer-events-none" />
+                            : <UserRound className="w-3.5 h-3.5 absolute left-2.5 pointer-events-none" />}
+                          <select value={access || "user"} aria-label={`Access for ${u.name}`}
+                            onChange={(e) => {
+                              const next = e.target.value;
+                              if (next === (access || "user")) return;
+                              setConfirm({ type: next === "user" ? access : next, user: u });
+                            }}
+                            className="appearance-none bg-transparent outline-none h-full pl-8 pr-8 text-[12.5px] font-bold cursor-pointer">
+                            <option value="user" style={{ color: INK }}>User</option>
+                            <option value="staff" style={{ color: INK }}>Staff</option>
+                            <option value="admin" style={{ color: INK }}>Admin</option>
+                          </select>
+                          <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 pointer-events-none" />
+                        </label>
+                      )}
+                    </td>
+                    <td className="px-5 py-4 text-[13.5px] whitespace-nowrap" style={{ color: u.city ? INK_2 : FAINT }}>{u.city || "—"}</td>
+                    <td className="px-5 py-4 text-[13.5px] font-semibold" style={{ color: INK_2 }}>{u.items}</td>
+                    <td className="px-5 py-4">
+                      <span className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold whitespace-nowrap" style={{ color: blocked ? RED : GREEN }}>
+                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: blocked ? RED : GREEN }} />
+                        {blocked ? "Blocked" : "Active"}
+                      </span>
+                      {blocked && blocked.reason && <p className="text-[11.5px] mt-0.5 truncate max-w-[160px]" style={{ color: RED }} title={blocked.reason}>{blocked.reason}</p>}
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="flex items-center justify-end gap-2">
+                        <button type="button" onClick={() => onMessage(u)} className={ADMIN_BTN} style={{ color: BRAND, border: `1px solid ${CARD_BORDER}`, backgroundColor: "#fff" }}>
+                          <Send className="w-3.5 h-3.5" /> Message
+                        </button>
+                        {blocked ? (
+                          <button type="button" onClick={() => onUnblock(u)} className={ADMIN_BTN} style={{ color: GREEN, border: `1px solid ${CARD_BORDER}`, backgroundColor: "#fff" }}>
+                            <UserCheck className="w-3.5 h-3.5" /> Unblock
+                          </button>
+                        ) : (
+                          <button type="button" onClick={() => setConfirm({ type: "block", user: u })} className={ADMIN_BTN} style={{ color: RED, border: `1px solid ${CARD_BORDER}`, backgroundColor: "#fff" }}>
+                            <Ban className="w-3.5 h-3.5" /> Block
+                          </button>
+                        )}
+                        <button type="button" disabled={isMe} onClick={() => setConfirm({ type: "delete", user: u })}
+                          className={`${ADMIN_BTN} disabled:opacity-35 disabled:cursor-not-allowed`} title={isMe ? "You can't delete your own account" : undefined}
+                          style={{ color: RED, border: `1px solid ${CARD_BORDER}`, backgroundColor: "#fff" }}>
+                          <Trash2 className="w-3.5 h-3.5" /> Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
         {shown.length > limit && (
-          <button type="button" onClick={() => setLimit((n) => n + ADMIN_PAGE)} className="h-11 rounded-xl text-[13.5px] font-bold bg-white" style={{ color: BRAND, border: `1px solid ${CARD_BORDER}` }}>
+          <button type="button" onClick={() => setLimit((n) => n + ADMIN_PAGE)} className="w-full h-12 text-[13.5px] font-bold hover:bg-[#FAFBFC]" style={{ color: BRAND, borderTop: `1px solid ${CARD_BORDER}` }}>
             Show more ({shown.length - limit} left)
           </button>
         )}
       </div>
 
-      {confirm && (
+      {cc && (
         <AdminConfirm
-          title={`Block ${confirm.name}?`}
-          body={confirm.id === "me"
-            ? "This is your own account. You'll see a suspension banner and won't be able to post, apply or message until you unblock it here."
-            : `Their ${confirm.items} item${confirm.items === 1 ? "" : "s"} will disappear from the site and they won't be able to use PakMed until unblocked.`}
-          confirmLabel="Block user"
-          withReason
-          onConfirm={(reason) => onBlock(confirm, reason)}
+          title={cc.title}
+          body={cc.body}
+          confirmLabel={cc.label}
+          tone={cc.tone}
+          withReason={cc.reason}
+          onConfirm={cc.run}
           onClose={() => setConfirm(null)}
         />
       )}
@@ -14291,8 +15193,19 @@ function AdminSupport({ tickets, admin, onReply, onStatus, onBlock }) {
   const [filter, setFilter] = useState("open");
   const [openId, setOpenId] = useState(null);
   const [draft, setDraft] = useState("");
-  const sorted = [...tickets].sort((a, b) => lastAt(b) - lastAt(a));
-  const shown = filter === "all" ? sorted : sorted.filter((t) => t.status === filter);
+  const [q, setQ] = useState("");
+  const [topic, setTopic] = useState("");
+  const [who, setWho] = useState("");
+  const [sort, setSort] = useState("newest");
+  const kindOf = (t) => (t.userId === "me" ? "Website users" : { doctor: "Doctors", employer: "Employers", seller: "Sellers", seeker: "Job seekers" }[t.userId.split(":")[0]] || "Other");
+  const needle = q.trim().toLowerCase();
+  const sorted = [...tickets].sort((a, b) => (sort === "oldest" ? lastAt(a) - lastAt(b) : lastAt(b) - lastAt(a)));
+  const shown = sorted.filter((t) =>
+    (filter === "all" || (filter === "unread" ? t.unreadAdmin : t.status === filter)) &&
+    (!topic || t.category === topic) &&
+    (!who || kindOf(t) === who) &&
+    (!needle || `${t.subject} ${t.name} ${t.messages.map((m) => m.text).join(" ")}`.toLowerCase().includes(needle))
+  );
   const open = tickets.find((t) => t.id === openId) || null;
 
   const send = () => {
@@ -14302,13 +15215,28 @@ function AdminSupport({ tickets, admin, onReply, onStatus, onBlock }) {
     setDraft("");
   };
 
+  const activeFilters = [topic, who].filter(Boolean).length;
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-3">
+    <div>
+    <div className={open ? "hidden lg:block mb-3" : "mb-3"}>
+      <label className="flex items-center gap-2 h-11 px-3.5 rounded-xl" style={{ backgroundColor: "#fff", border: `1px solid ${CARD_BORDER}` }}>
+        <Search className="w-4 h-4 shrink-0" style={{ color: FAINT }} />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search tickets by subject, name or message…"
+          className="flex-1 min-w-0 bg-transparent outline-none text-[14px]" style={{ color: INK }} />
+        {q && <button type="button" onClick={() => setQ("")} aria-label="Clear"><X className="w-4 h-4" style={{ color: SUBTLE }} /></button>}
+      </label>
+      <AdminFilterBar active={activeFilters} onClear={() => { setTopic(""); setWho(""); }} shown={shown.length} total={tickets.length}>
+        <AdminSelect value={topic} all="All topics" options={uniqueSorted(tickets.map((t) => t.category))} onChange={setTopic} />
+        <AdminSelect value={who} all="All user types" options={uniqueSorted(tickets.map(kindOf))} onChange={setWho} />
+        <AdminSelect value={sort} label="Sort" onChange={setSort} options={[{ value: "newest", label: "Sort: Latest activity" }, { value: "oldest", label: "Sort: Oldest first" }]} />
+      </AdminFilterBar>
+    </div>
+    <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-3">
       <div className={open ? "hidden lg:block" : ""}>
-        <div className="flex gap-1.5 mb-3">
-          {[["open", "Open"], ["resolved", "Resolved"], ["all", "All"]].map(([k, label]) => {
+        <div className="flex gap-1.5 mb-3 flex-wrap">
+          {[["open", "Open"], ["unread", "Unread"], ["resolved", "Resolved"], ["all", "All"]].map(([k, label]) => {
             const on = filter === k;
-            const n = k === "all" ? tickets.length : tickets.filter((t) => t.status === k).length;
+            const n = k === "all" ? tickets.length : k === "unread" ? tickets.filter((t) => t.unreadAdmin).length : tickets.filter((t) => t.status === k).length;
             return (
               <button key={k} type="button" onClick={() => setFilter(k)} className="h-8 px-3 rounded-full text-[12.5px]"
                 style={{ fontWeight: on ? 700 : 600, color: on ? "#fff" : INK_2, backgroundColor: on ? BRAND : "#fff", border: `1px solid ${on ? BRAND : CARD_BORDER}` }}>
@@ -14399,106 +15327,428 @@ function AdminSupport({ tickets, admin, onReply, onStatus, onBlock }) {
         )}
       </div>
     </div>
+    </div>
   );
 }
 
 const lastAt = (t) => t.messages[t.messages.length - 1].at;
 
-function AdminMessages({ users, messages, preset, onSend }) {
-  const [to, setTo] = useState(preset ? preset.to : "all");
+const msgInitials = (name = "") => name.replace(/^@|^Dr\.?\s*/gi, "").split(/[\s_]+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?";
+
+function AdminMessages({ users, admin, messages, preset, onSend }) {
+  const presetUser = preset && preset.to && users.find((u) => u.id === preset.to);
+  const [mode, setMode] = useState(presetUser ? "one" : preset && preset.to && preset.to.startsWith("group:") ? "group" : "all");
+  const [group, setGroup] = useState(preset && preset.to && preset.to.startsWith("group:") ? preset.to : MESSAGE_GROUPS[0].key);
+  const [userId, setUserId] = useState(presetUser ? presetUser.id : "");
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerQ, setPickerQ] = useState("");
   const [subject, setSubject] = useState(preset ? preset.subject : "");
   const [text, setText] = useState(preset ? preset.text : "");
-  const [sent, setSent] = useState("");
+  const [priority, setPriority] = useState("normal");
+  const [alsoEmail, setAlsoEmail] = useState(!!(preset && preset.email));
+  const [flash, setFlash] = useState("");
+  const [tab, setTab] = useState("all");
+  const [q, setQ] = useState("");
+  const [openId, setOpenId] = useState(null);
+  const pickerRef = useRef(null);
+  useClickOutside(pickerRef, () => setPickerOpen(false), pickerOpen);
+
   const byId = Object.fromEntries(users.map((u) => [u.id, u]));
-  const sortedUsers = [...users].sort((a, b) => (a.id === "me" ? -1 : b.id === "me" ? 1 : a.name.localeCompare(b.name)));
+  const groupDef = MESSAGE_GROUPS.find((g) => g.key === group) || MESSAGE_GROUPS[0];
+  const groupCount = (g) => (g.role ? users.filter((u) => u.role === g.role).length : users.filter((u) => u.id === "me" || admin.roles[u.id]).length);
+  const recipient = byId[userId];
+  const to = mode === "all" ? "all" : mode === "group" ? group : userId;
+  const toName = mode === "all" ? "Everyone" : mode === "group" ? groupDef.label : recipient ? recipient.name : "";
+  const reach = mode === "all" ? users.length : mode === "group" ? groupCount(groupDef) : recipient ? 1 : 0;
+  const ready = !!to && reach > 0 && subject.trim() && text.trim();
+
+  const needleP = pickerQ.trim().toLowerCase();
+  const pickList = users
+    .filter((u) => !needleP || `${u.name} ${u.role} ${u.city || ""}`.toLowerCase().includes(needleP))
+    .sort((a, b) => (a.id === "me" ? -1 : b.id === "me" ? 1 : a.name.localeCompare(b.name)))
+    .slice(0, 50);
 
   const send = () => {
-    if (!subject.trim() || !text.trim()) return;
-    const toName = to === "all" ? "All users" : (byId[to] ? byId[to].name : to);
-    onSend({ to, toName, subject: subject.trim(), text: text.trim() });
-    setSent(toName);
+    if (!ready) return;
+    onSend({ to, toName, subject: subject.trim(), text: text.trim(), priority, reach, email: alsoEmail });
+    setFlash(`Sent to ${toName}${reach > 1 ? ` · ${reach} people` : ""}${alsoEmail ? " · email queued" : ""}`);
+    setAlsoEmail(false);
     setSubject("");
     setText("");
+    setPriority("normal");
+    setTimeout(() => setFlash(""), 3500);
+  };
+
+  // ---- history ----
+  const kindOf = (m) => (m.to === "all" ? "announcement" : m.to.startsWith("group:") ? "group" : "direct");
+  const needle = q.trim().toLowerCase();
+  const history = messages.filter((m) => (tab === "all" || kindOf(m) === tab) && (!needle || `${m.subject} ${m.text} ${m.toName}`.toLowerCase().includes(needle)));
+  const counts = messages.reduce((acc, m) => ({ ...acc, [kindOf(m)]: (acc[kindOf(m)] || 0) + 1 }), {});
+  const seenRate = (() => {
+    const mine = messages.filter(messageReachesMe);
+    return mine.length ? Math.round((mine.filter((m) => m.read).length / mine.length) * 100) : null;
+  })();
+  const totalReach = messages.reduce((n, m) => n + (m.reach || 1), 0);
+
+  const field = { border: `1px solid ${CARD_BORDER}`, color: INK };
+  const segBtn = (key, label, Icon) => {
+    const on = mode === key;
+    return (
+      <button key={key} type="button" onClick={() => setMode(key)}
+        className="flex-1 h-10 rounded-lg text-[13.5px] font-bold inline-flex items-center justify-center gap-2 transition-all"
+        style={{ color: on ? BRAND : SUBTLE, backgroundColor: on ? "#fff" : "transparent", boxShadow: on ? "0 1px 3px rgba(16,24,40,0.12)" : "none" }}>
+        <Icon className="w-4 h-4" /> {label}
+      </button>
+    );
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <div className="rounded-2xl bg-white p-4" style={{ border: `1px solid ${CARD_BORDER}` }}>
-        <p className="text-[15px] font-extrabold" style={{ color: INK }}>New message</p>
-        <p className="text-[12.5px] mt-0.5" style={{ color: SUBTLE }}>Shows in the user's Messages and as a notice when they're signed in.</p>
-        <label className="block mt-4">
-          <span className="text-[12.5px] font-bold" style={{ color: INK_2 }}>To</span>
-          <select value={to} onChange={(e) => setTo(e.target.value)} className={`${ADMIN_INPUT} h-11 mt-1.5`} style={{ border: `1px solid ${CARD_BORDER}`, color: INK }}>
-            <option value="all">📢 All users (announcement)</option>
-            {sortedUsers.map((u) => <option key={u.id} value={u.id}>{u.name} — {u.role}</option>)}
-          </select>
-        </label>
-        <div className="flex gap-1.5 flex-wrap mt-3">
-          {ADMIN_TEMPLATES.map((t) => (
-            <button key={t.label} type="button" onClick={() => { setSubject(t.subject); setText(t.text); }} className="h-8 px-3 rounded-full text-[12px] font-semibold"
-              style={{ color: BRAND, backgroundColor: BRAND_50, border: "1px solid #B9D3F2" }}>
-              {t.label}
-            </button>
-          ))}
-        </div>
-        <label className="block mt-3">
-          <span className="text-[12.5px] font-bold" style={{ color: INK_2 }}>Subject</span>
-          <input value={subject} onChange={(e) => setSubject(e.target.value)} className={`${ADMIN_INPUT} h-11 mt-1.5`} style={{ border: `1px solid ${CARD_BORDER}`, color: INK }} />
-        </label>
-        <label className="block mt-3">
-          <span className="text-[12.5px] font-bold" style={{ color: INK_2 }}>Message</span>
-          <textarea value={text} onChange={(e) => setText(e.target.value)} rows={5} className={`${ADMIN_INPUT} py-2.5 mt-1.5 resize-y`} style={{ border: `1px solid ${CARD_BORDER}`, color: INK }} />
-        </label>
-        <button type="button" onClick={send} disabled={!subject.trim() || !text.trim()}
-          className="mt-4 w-full h-11 rounded-xl text-[14px] font-bold text-white inline-flex items-center justify-center gap-2 disabled:opacity-50" style={{ backgroundColor: BRAND }}>
-          <Send className="w-4 h-4" /> Send message
-        </button>
-        {sent && <p className="text-[13px] font-semibold mt-2.5 text-center" style={{ color: GREEN }}>Sent to {sent}.</p>}
+    <div className="space-y-4">
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {[
+          { label: "Messages sent", value: messages.length, icon: Send, color: BRAND, tint: BRAND_50 },
+          { label: "Announcements", value: counts.announcement || 0, icon: Megaphone, color: AMBER, tint: AMBER_TINT },
+          { label: "People reached", value: totalReach, icon: Users, color: TEAL, tint: TEAL_TINT },
+          { label: "Seen rate", value: seenRate === null ? "—" : `${seenRate}%`, icon: CheckCheck, color: GREEN, tint: GREEN_TINT },
+        ].map((s) => (
+          <div key={s.label} className="rounded-2xl bg-white p-4 flex items-center gap-3.5" style={{ border: `1px solid ${CARD_BORDER}` }}>
+            <span className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: s.tint }}>
+              <s.icon className="w-5 h-5" style={{ color: s.color }} />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[22px] font-extrabold leading-none" style={{ color: INK }}>{s.value}</p>
+              <p className="text-[12.5px] font-semibold mt-1" style={{ color: SUBTLE }}>{s.label}</p>
+            </div>
+          </div>
+        ))}
       </div>
 
-      <div>
-        <p className="text-[15px] font-extrabold mb-2.5" style={{ color: INK }}>Sent messages</p>
-        {messages.length === 0 ? (
-          <AdminEmpty icon={Send} title="Nothing sent yet" sub="Messages you send to users will be listed here." />
-        ) : (
-          <div className="flex flex-col gap-2">
-            {messages.map((m) => (
-              <div key={m.id} className="rounded-2xl bg-white p-3.5" style={{ border: `1px solid ${CARD_BORDER}` }}>
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <p className="text-[13.5px] font-bold flex-1 min-w-0 truncate" style={{ color: INK }}>{m.subject}</p>
-                  <span className="text-[11.5px]" style={{ color: FAINT }}>{adminAgo(m.at)}</span>
-                </div>
-                <p className="text-[12px] mt-0.5" style={{ color: SUBTLE }}>To {m.toName}{(m.to === "me" || m.to === "all") ? (m.read ? " · Seen" : " · Not seen yet") : ""}</p>
-                <p className="text-[12.5px] mt-1.5 line-clamp-3" style={{ color: INK_2 }}>{m.text}</p>
-              </div>
-            ))}
+      <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] gap-4 items-start">
+        {/* ---------------- composer ---------------- */}
+        <div className="rounded-2xl bg-white overflow-hidden" style={{ border: `1px solid ${CARD_BORDER}` }}>
+          <div className="px-5 py-4 flex items-center gap-3" style={{ borderBottom: `1px solid ${CARD_BORDER}` }}>
+            <span className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: BRAND }}>
+              <Pencil className="w-[18px] h-[18px] text-white" />
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-[16px] font-extrabold" style={{ color: INK }}>Compose message</p>
+              <p className="text-[12.5px]" style={{ color: SUBTLE }}>Delivered to the user's inbox and shown as a notice when they sign in</p>
+            </div>
           </div>
-        )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="p-5 space-y-5 min-w-0">
+              {/* audience */}
+              <section>
+                <p className="text-[12px] font-bold uppercase tracking-wider mb-2" style={{ color: SUBTLE }}>1 · Audience</p>
+                <div className="flex gap-1 p-1 rounded-xl" style={{ backgroundColor: "#F2F4F7" }}>
+                  {segBtn("all", "Everyone", Globe)}
+                  {segBtn("group", "User group", Users)}
+                  {segBtn("one", "One user", UserRound)}
+                </div>
+
+                {mode === "all" && (
+                  <div className="mt-3 rounded-xl p-3.5 flex items-center gap-3" style={{ backgroundColor: AMBER_TINT }}>
+                    <Megaphone className="w-5 h-5 shrink-0" style={{ color: AMBER }} />
+                    <p className="text-[13px]" style={{ color: INK_2 }}>Announcement to <b>all {users.length} users</b> on PakMed.</p>
+                  </div>
+                )}
+
+                {mode === "group" && (
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+                    {MESSAGE_GROUPS.map((g) => {
+                      const on = g.key === group;
+                      return (
+                        <button key={g.key} type="button" onClick={() => setGroup(g.key)}
+                          className="rounded-xl p-3 flex items-center gap-2.5 text-left transition-colors"
+                          style={{ border: `1.5px solid ${on ? BRAND : CARD_BORDER}`, backgroundColor: on ? BRAND_50 : "#fff" }}>
+                          <span className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: g.tint }}>
+                            <g.icon className="w-4 h-4" style={{ color: g.color }} />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-[13.5px] font-bold truncate" style={{ color: INK }}>{g.label}</span>
+                            <span className="block text-[12px]" style={{ color: SUBTLE }}>{groupCount(g)} people</span>
+                          </span>
+                          {on && <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: BRAND }} />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {mode === "one" && (
+                  <div className="mt-3 relative" ref={pickerRef}>
+                    <button type="button" onClick={() => setPickerOpen((v) => !v)}
+                      className="w-full h-14 rounded-xl px-3 flex items-center gap-3 text-left bg-white"
+                      style={{ border: `1.5px solid ${pickerOpen ? BRAND : CARD_BORDER}` }}>
+                      {recipient ? (
+                        <>
+                          <span className="w-9 h-9 rounded-full flex items-center justify-center text-[12px] font-bold shrink-0" style={{ backgroundColor: (USER_ROLE_STYLE[recipient.role] || USER_ROLE_STYLE.You).tint, color: (USER_ROLE_STYLE[recipient.role] || USER_ROLE_STYLE.You).color }}>{msgInitials(recipient.name)}</span>
+                          <span className="flex-1 min-w-0">
+                            <span className="block text-[14px] font-bold truncate" style={{ color: INK }}>{recipient.name}</span>
+                            <span className="block text-[12px] truncate" style={{ color: SUBTLE }}>{[recipient.role, recipient.city, recipient.contact].filter(Boolean).join(" · ")}</span>
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: "#F2F4F7" }}><Search className="w-4 h-4" style={{ color: FAINT }} /></span>
+                          <span className="flex-1 text-[14px]" style={{ color: FAINT }}>Choose a recipient…</span>
+                        </>
+                      )}
+                      <ChevronDown className="w-4 h-4 shrink-0" style={{ color: SUBTLE, transform: pickerOpen ? "rotate(180deg)" : "none" }} />
+                    </button>
+                    {pickerOpen && (
+                      <div className="dropdown-pop absolute left-0 right-0 top-[calc(100%+6px)] z-30 rounded-2xl bg-white overflow-hidden" style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: "0 20px 40px -14px rgba(16,24,40,0.28)" }}>
+                        <div className="p-2" style={{ borderBottom: `1px solid ${CARD_BORDER}` }}>
+                          <input autoFocus value={pickerQ} onChange={(e) => setPickerQ(e.target.value)} placeholder="Search by name, type or city…"
+                            className={`${ADMIN_INPUT} h-10`} style={field} />
+                        </div>
+                        <ul className="max-h-72 overflow-y-auto p-1.5">
+                          {pickList.length === 0 && <li className="px-3 py-4 text-[13px] text-center" style={{ color: SUBTLE }}>No users match “{pickerQ}”.</li>}
+                          {pickList.map((u) => {
+                            const rs = USER_ROLE_STYLE[u.role] || USER_ROLE_STYLE.You;
+                            const on = u.id === userId;
+                            return (
+                              <li key={u.id}>
+                                <button type="button" onClick={() => { setUserId(u.id); setPickerOpen(false); setPickerQ(""); }}
+                                  className="w-full flex items-center gap-3 px-2.5 py-2 rounded-xl text-left hover:bg-[#F5F7FA]" style={{ backgroundColor: on ? BRAND_50 : undefined }}>
+                                  <span className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0" style={{ backgroundColor: rs.tint, color: rs.color }}>{msgInitials(u.name)}</span>
+                                  <span className="flex-1 min-w-0">
+                                    <span className="block text-[13.5px] font-semibold truncate" style={{ color: INK }}>{u.name}{u.id === "me" ? " (you)" : ""}</span>
+                                    <span className="block text-[11.5px] truncate" style={{ color: SUBTLE }}>{[u.role, u.city].filter(Boolean).join(" · ")}</span>
+                                  </span>
+                                  {admin.roles[u.id] && <AdminPill color="#fff" tint={ACCESS_STYLE[admin.roles[u.id]].tint}>{ACCESS_STYLE[admin.roles[u.id]].label}</AdminPill>}
+                                  {on && <Check className="w-4 h-4 shrink-0" style={{ color: BRAND }} />}
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </section>
+
+              {/* templates */}
+              <section>
+                <p className="text-[12px] font-bold uppercase tracking-wider mb-2" style={{ color: SUBTLE }}>2 · Start from a template <span className="normal-case font-semibold tracking-normal" style={{ color: FAINT }}>(optional)</span></p>
+                <div className="grid grid-cols-2 xl:grid-cols-4 gap-2">
+                  {ADMIN_TEMPLATES.map((t) => {
+                    const on = subject === t.subject;
+                    return (
+                      <button key={t.label} type="button" onClick={() => { setSubject(t.subject); setText(t.text); }}
+                        className="rounded-xl p-3 text-left transition-colors hover:bg-[#FAFBFC]"
+                        style={{ border: `1.5px solid ${on ? t.color : CARD_BORDER}`, backgroundColor: on ? t.tint : "#fff" }}>
+                        <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: t.tint }}>
+                          <t.icon className="w-4 h-4" style={{ color: t.color }} />
+                        </span>
+                        <span className="block text-[13px] font-bold mt-2" style={{ color: INK }}>{t.label}</span>
+                        <span className="block text-[11.5px] mt-0.5 line-clamp-1" style={{ color: SUBTLE }}>{t.subject}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+
+              {/* content */}
+              <section>
+                <p className="text-[12px] font-bold uppercase tracking-wider mb-2" style={{ color: SUBTLE }}>3 · Message</p>
+                <input value={subject} onChange={(e) => setSubject(e.target.value.slice(0, 90))} placeholder="Subject"
+                  className={`${ADMIN_INPUT} h-12 text-[15px] font-semibold`} style={field} />
+                <div className="relative mt-2">
+                  <textarea value={text} onChange={(e) => setText(e.target.value.slice(0, 1000))} rows={7} placeholder="Write your message…"
+                    className={`${ADMIN_INPUT} py-3 resize-y leading-relaxed`} style={field} />
+                  <span className="absolute right-3 bottom-2.5 text-[11.5px] font-semibold" style={{ color: FAINT }}>{text.length}/1000</span>
+                </div>
+                <div className="flex items-center gap-2 mt-3 flex-wrap">
+                  <span className="text-[12.5px] font-bold" style={{ color: INK_2 }}>Priority</span>
+                  {[["normal", "Normal", BRAND, BRAND_50], ["important", "Important", RED, RED_TINT]].map(([k, label, c, t]) => {
+                    const on = priority === k;
+                    return (
+                      <button key={k} type="button" onClick={() => setPriority(k)} className="h-8 px-3 rounded-full text-[12.5px] font-bold inline-flex items-center gap-1.5"
+                        style={{ color: on ? c : SUBTLE, backgroundColor: on ? t : "#fff", border: `1px solid ${on ? c : CARD_BORDER}` }}>
+                        {k === "important" ? <CircleAlert className="w-3.5 h-3.5" /> : <Info className="w-3.5 h-3.5" />} {label}
+                      </button>
+                    );
+                  })}
+                  <span className="w-px h-5 mx-1" style={{ backgroundColor: CARD_BORDER }} />
+                  <button type="button" onClick={() => setAlsoEmail((v) => !v)} aria-pressed={alsoEmail}
+                    className="h-8 px-3 rounded-full text-[12.5px] font-bold inline-flex items-center gap-1.5"
+                    style={{ color: alsoEmail ? TEAL : SUBTLE, backgroundColor: alsoEmail ? TEAL_TINT : "#fff", border: `1px solid ${alsoEmail ? TEAL : CARD_BORDER}` }}>
+                    <Mail className="w-3.5 h-3.5" /> Also send by email {alsoEmail && <Check className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </section>
+            </div>
+
+            {/* live preview */}
+            <aside className="p-5 lg:border-l" style={{ borderColor: CARD_BORDER, backgroundColor: "#FAFBFC" }}>
+              <p className="text-[12px] font-bold uppercase tracking-wider mb-3 flex items-center gap-1.5" style={{ color: SUBTLE }}><Eye className="w-3.5 h-3.5" /> Preview</p>
+              <p className="text-[11.5px] font-semibold mb-1.5" style={{ color: FAINT }}>Notice bar on the website</p>
+              <div className="rounded-xl px-3 py-2.5 flex items-center gap-2" style={{ backgroundColor: priority === "important" ? RED_TINT : BRAND_50, border: `1px solid ${priority === "important" ? "#F5C2BE" : "#B9D3F2"}` }}>
+                <Megaphone className="w-4 h-4 shrink-0" style={{ color: priority === "important" ? RED : BRAND }} />
+                <p className="text-[12px] truncate flex-1" style={{ color: INK }}><b>PakMed Admin: {subject || "Subject"}</b></p>
+                <span className="text-[10.5px] font-bold px-2 py-1 rounded-md text-white shrink-0" style={{ backgroundColor: priority === "important" ? RED : BRAND }}>View</span>
+              </div>
+              <p className="text-[11.5px] font-semibold mt-4 mb-1.5" style={{ color: FAINT }}>In the user's Messages</p>
+              <div className="rounded-xl p-3.5 bg-white" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                <div className="flex items-center gap-2">
+                  <span className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: BRAND }}><Megaphone className="w-4 h-4 text-white" /></span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[12.5px] font-bold flex items-center gap-1" style={{ color: INK }}>PakMed Admin <CheckCircle2 className="w-3 h-3" style={{ color: BRAND }} /></p>
+                    <p className="text-[11px]" style={{ color: FAINT }}>just now</p>
+                  </div>
+                  {priority === "important" && <AdminPill color={RED} tint={RED_TINT}>Important</AdminPill>}
+                </div>
+                <p className="text-[13px] font-bold mt-2.5" style={{ color: subject ? INK : FAINT }}>{subject || "Your subject appears here"}</p>
+                <p className="text-[12.5px] mt-1 whitespace-pre-wrap leading-relaxed line-clamp-[8]" style={{ color: text ? INK_2 : FAINT }}>{text || "Your message appears here as you type."}</p>
+              </div>
+              <div className="mt-4 rounded-xl p-3 flex items-center gap-2.5" style={{ backgroundColor: "#fff", border: `1px solid ${CARD_BORDER}` }}>
+                <Users className="w-4 h-4 shrink-0" style={{ color: BRAND }} />
+                <p className="text-[12.5px]" style={{ color: INK_2 }}>
+                  {reach ? <>Will reach <b>{reach}</b> {reach === 1 ? "person" : "people"}{toName ? <> · {toName}</> : null}</> : "Choose who should receive this"}
+                </p>
+              </div>
+            </aside>
+          </div>
+
+          <div className="px-5 py-3.5 flex items-center gap-2 flex-wrap" style={{ borderTop: `1px solid ${CARD_BORDER}`, backgroundColor: "#FCFCFD" }}>
+            {flash ? (
+              <p className="text-[13px] font-bold inline-flex items-center gap-1.5" style={{ color: GREEN }}><CheckCircle2 className="w-4 h-4" /> {flash}</p>
+            ) : (
+              <p className="text-[12.5px]" style={{ color: SUBTLE }}>{ready ? "Ready to send." : "Pick an audience, then add a subject and message."}</p>
+            )}
+            <div className="ml-auto flex gap-2">
+              <button type="button" onClick={() => { setSubject(""); setText(""); setPriority("normal"); }} disabled={!subject && !text}
+                className="h-10 px-4 rounded-xl text-[13.5px] font-bold disabled:opacity-40" style={{ color: INK_2, border: `1px solid ${CARD_BORDER}`, backgroundColor: "#fff" }}>
+                Clear
+              </button>
+              <button type="button" onClick={send} disabled={!ready}
+                className="h-10 px-5 rounded-xl text-[13.5px] font-bold text-white inline-flex items-center gap-2 transition-opacity disabled:opacity-45"
+                style={{ backgroundColor: priority === "important" ? RED : BRAND }}>
+                <Send className="w-4 h-4" /> Send{reach > 1 ? ` to ${reach}` : ""}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* ---------------- history ---------------- */}
+        <div className="rounded-2xl bg-white overflow-hidden" style={{ border: `1px solid ${CARD_BORDER}` }}>
+          <div className="px-5 py-4" style={{ borderBottom: `1px solid ${CARD_BORDER}` }}>
+            <div className="flex items-center gap-2">
+              <History className="w-[18px] h-[18px]" style={{ color: BRAND }} />
+              <p className="text-[16px] font-extrabold flex-1" style={{ color: INK }}>Sent messages</p>
+              <span className="text-[12.5px] font-semibold" style={{ color: SUBTLE }}>{messages.length} total</span>
+            </div>
+            <label className="mt-3 flex items-center gap-2 h-10 px-3 rounded-xl" style={{ backgroundColor: CREAM, border: `1px solid ${CARD_BORDER}` }}>
+              <Search className="w-4 h-4 shrink-0" style={{ color: FAINT }} />
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search sent messages…" className="flex-1 min-w-0 bg-transparent outline-none text-[13.5px]" style={{ color: INK }} />
+            </label>
+            <div className="flex gap-1.5 mt-3 flex-wrap">
+              {[["all", "All", messages.length], ["announcement", "Announcements", counts.announcement || 0], ["group", "Groups", counts.group || 0], ["direct", "Direct", counts.direct || 0]].map(([k, label, n]) => {
+                const on = tab === k;
+                return (
+                  <button key={k} type="button" onClick={() => setTab(k)} className="h-8 px-3 rounded-full text-[12.5px]"
+                    style={{ fontWeight: on ? 700 : 600, color: on ? "#fff" : INK_2, backgroundColor: on ? BRAND : "#fff", border: `1px solid ${on ? BRAND : CARD_BORDER}` }}>
+                    {label} · {n}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {history.length === 0 ? (
+            <div className="px-6 py-14 text-center">
+              <span className="w-14 h-14 rounded-2xl mx-auto flex items-center justify-center" style={{ backgroundColor: BRAND_50 }}>
+                <Send className="w-6 h-6" style={{ color: BRAND }} />
+              </span>
+              <p className="text-[15px] font-bold mt-3" style={{ color: INK }}>{messages.length ? "No messages match" : "No messages sent yet"}</p>
+              <p className="text-[13px] mt-1 max-w-xs mx-auto" style={{ color: SUBTLE }}>{messages.length ? "Try another search or tab." : "Compose a message on the left — it will be tracked here with its delivery status."}</p>
+            </div>
+          ) : (
+            <ul className="max-h-[640px] overflow-y-auto">
+              {history.map((m) => {
+                const k = kindOf(m);
+                const g = MESSAGE_GROUPS.find((x) => x.key === m.to);
+                const u = byId[m.to];
+                const isOpen = openId === m.id;
+                const tracked = messageReachesMe(m);
+                const icon = k === "announcement" ? { I: Megaphone, c: AMBER, t: AMBER_TINT } : g ? { I: g.icon, c: g.color, t: g.tint } : null;
+                return (
+                  <li key={m.id} style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+                    <button type="button" onClick={() => setOpenId(isOpen ? null : m.id)} className="w-full text-left px-5 py-3.5 flex items-start gap-3 hover:bg-[#FAFBFC]">
+                      {icon ? (
+                        <span className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: icon.t }}><icon.I className="w-[18px] h-[18px]" style={{ color: icon.c }} /></span>
+                      ) : (
+                        <span className="w-10 h-10 rounded-full flex items-center justify-center text-[12px] font-bold shrink-0" style={{ backgroundColor: u ? (USER_ROLE_STYLE[u.role] || USER_ROLE_STYLE.You).tint : "#F2F4F7", color: u ? (USER_ROLE_STYLE[u.role] || USER_ROLE_STYLE.You).color : SUBTLE }}>{msgInitials(m.toName)}</span>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-[13.5px] font-bold truncate flex-1" style={{ color: INK }}>{m.subject}</p>
+                          <span className="text-[11.5px] shrink-0" style={{ color: FAINT }}>{adminAgo(m.at)}</span>
+                        </div>
+                        <p className="text-[12px] truncate" style={{ color: SUBTLE }}>To {m.toName}{m.reach > 1 ? ` · ${m.reach} people` : ""}</p>
+                        <p className={`text-[12.5px] mt-1 ${isOpen ? "whitespace-pre-wrap" : "line-clamp-1"}`} style={{ color: INK_2 }}>{m.text}</p>
+                        <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                          <AdminPill color={k === "announcement" ? AMBER : k === "group" ? TEAL : BRAND} tint={k === "announcement" ? AMBER_TINT : k === "group" ? TEAL_TINT : BRAND_50}>
+                            {k === "announcement" ? "Announcement" : k === "group" ? "Group" : "Direct"}
+                          </AdminPill>
+                          {m.priority === "important" && <AdminPill color={RED} tint={RED_TINT}>Important</AdminPill>}
+                          {m.email && <AdminPill color={TEAL} tint={TEAL_TINT}>✉ Emailed</AdminPill>}
+                          {tracked
+                            ? <AdminPill color={m.read ? GREEN : SUBTLE} tint={m.read ? GREEN_TINT : "#F2F4F7"}>{m.read ? "✓✓ Seen" : "✓ Delivered"}</AdminPill>
+                            : <AdminPill color={SUBTLE} tint="#F2F4F7">✓ Delivered</AdminPill>}
+                        </div>
+                      </div>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
       </div>
+
     </div>
   );
 }
 
-const REPORT_KIND = { job: "job", listing: "market", service: "market", doctor: "doctor", post: "feed" };
+const REPORT_KIND = { job: "job", listing: "market", service: "market", doctor: "doctor", post: "feed", facility: "hospital" };
 
-function AdminReports({ reports, onSetStatus }) {
+function AdminReports({ reports, admin, ownerOf, onSetStatus, onSuspend, onUnsuspend, onEmail }) {
   const [filter, setFilter] = useState("pending");
+  const [q, setQ] = useState("");
+  const [type, setType] = useState("");
+  const [suspendFor, setSuspendFor] = useState(null);   // { owner, g }
   const grouped = Object.values(
     reports.reduce((acc, r) => {
       const k = r.targetId;
-      if (!acc[k]) acc[k] = { ...r, count: 0, reasons: [], ids: [] };
+      if (!acc[k]) acc[k] = { ...r, count: 0, entries: [], ids: [], lastAt: 0 };
       acc[k].count += 1;
-      acc[k].reasons.push(r.details ? `${r.reason} — ${r.details}` : r.reason);
+      acc[k].entries.push({ reason: r.reason, details: r.details, at: r.at });
       acc[k].ids.push(r.id);
+      acc[k].lastAt = Math.max(acc[k].lastAt, r.at || 0);
       if (r.status !== "pending") acc[k].status = r.status;
       return acc;
     }, {})
-  ).sort((a, b) => b.count - a.count);
-  const shown = filter === "all" ? grouped : grouped.filter((g) => g.status === filter);
+  ).sort((a, b) => b.count - a.count || b.lastAt - a.lastAt);
+  const needle = q.trim().toLowerCase();
+  const shown = grouped.filter((g) =>
+    (filter === "all" || g.status === filter) &&
+    (!type || g.type === type) &&
+    (!needle || `${g.title} ${g.subtitle || ""} ${g.entries.map((e) => `${e.reason} ${e.details || ""}`).join(" ")}`.toLowerCase().includes(needle))
+  );
 
   return (
     <div>
-      <div className="flex gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+      <label className="flex items-center gap-2 h-11 px-3.5 rounded-xl" style={{ backgroundColor: "#fff", border: `1px solid ${CARD_BORDER}` }}>
+        <Search className="w-4 h-4 shrink-0" style={{ color: FAINT }} />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search reports by title, reason or details…"
+          className="flex-1 min-w-0 bg-transparent outline-none text-[14px]" style={{ color: INK }} />
+      </label>
+      <div className="flex gap-1.5 overflow-x-auto pt-3 pb-1" style={{ scrollbarWidth: "none" }}>
         {[["pending", "Pending"], ["reviewing", "Reviewing"], ["removed", "Removed"], ["dismissed", "Dismissed"], ["all", "All"]].map(([k, label]) => {
           const on = filter === k;
           const n = k === "all" ? grouped.length : grouped.filter((g) => g.status === k).length;
@@ -14510,23 +15760,50 @@ function AdminReports({ reports, onSetStatus }) {
           );
         })}
       </div>
-      <div className="mt-3 flex flex-col gap-2.5">
-        {shown.length === 0 && <AdminEmpty icon={ShieldCheck} title="Nothing to review" sub="Content users flag with the report button appears here." />}
+      <AdminFilterBar active={type ? 1 : 0} onClear={() => setType("")} shown={shown.length} total={grouped.length}>
+        <AdminSelect value={type} all="All content types" onChange={setType}
+          options={uniqueSorted(grouped.map((g) => g.type)).map((t) => ({ value: t, label: (REPORT_TYPE_LABEL[t] || t).replace(/^./, (c) => c.toUpperCase()) }))} />
+      </AdminFilterBar>
+
+      <div className="mt-3 grid grid-cols-1 xl:grid-cols-2 gap-3">
+        {shown.length === 0 && <div className="col-span-full"><AdminEmpty icon={ShieldCheck} title="Nothing to review" sub="Content people flag with the report button — posts, jobs, listings, doctor and hospital profiles — appears here." /></div>}
         {shown.map((g) => {
           const st = REPORT_STATUS[g.status] || REPORT_STATUS.pending;
+          const owner = ownerOf(g);
+          const suspended = owner && admin.blocked[owner.id];
           return (
-            <div key={g.targetId} className="rounded-2xl bg-white p-3.5" style={{ border: `1px solid ${g.count >= 3 ? RED + "55" : CARD_BORDER}` }}>
+            <div key={g.targetId} className="rounded-2xl bg-white p-4 flex flex-col" style={{ border: `1px solid ${g.count >= 3 ? RED + "55" : CARD_BORDER}` }}>
               <div className="flex items-center gap-1.5 flex-wrap">
                 <AdminPill color={st.color} tint={st.tint}>{st.label}</AdminPill>
                 <AdminPill color={SUBTLE} tint="#F2F4F7">{REPORT_TYPE_LABEL[g.type] || g.type}</AdminPill>
                 {g.count > 1 && <AdminPill color={RED} tint={RED_TINT}>{g.count} reports</AdminPill>}
+                {g.lastAt > 0 && <span className="ml-auto text-[11.5px]" style={{ color: FAINT }}>{adminAgo(g.lastAt)}</span>}
               </div>
-              <p className="text-[14.5px] font-bold mt-1.5" style={{ color: INK }}>{g.title}</p>
+              <p className="text-[15px] font-extrabold mt-2" style={{ color: INK }}>{g.title}</p>
               {g.subtitle && <p className="text-[12.5px]" style={{ color: SUBTLE }}>{g.subtitle}</p>}
-              <ul className="mt-1.5">
-                {g.reasons.map((r, i) => <li key={i} className="text-[12.5px]" style={{ color: INK_2 }}>• {r}</li>)}
-              </ul>
-              <div className="flex flex-wrap gap-1.5 mt-3 pt-3" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+
+              <div className="mt-3 rounded-xl p-3 space-y-2.5" style={{ backgroundColor: "#FAFBFC", border: `1px solid ${CARD_BORDER}` }}>
+                <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: SUBTLE }}>Why it was flagged</p>
+                {g.entries.map((e, i) => (
+                  <div key={i} className="flex gap-2.5">
+                    <Flag className="w-3.5 h-3.5 mt-0.5 shrink-0" style={{ color: RED }} />
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-semibold" style={{ color: INK }}>{e.reason}</p>
+                      {e.details && <p className="text-[12.5px] mt-0.5 whitespace-pre-wrap" style={{ color: INK_2 }}>“{e.details}”</p>}
+                      <p className="text-[11px] mt-0.5" style={{ color: FAINT }}>Anonymous reporter{e.at ? ` · ${adminAgo(e.at)}` : ""}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-3 flex items-center gap-2.5 rounded-xl px-3 py-2.5" style={{ backgroundColor: suspended ? RED_TINT : CREAM }}>
+                <UserRound className="w-4 h-4 shrink-0" style={{ color: suspended ? RED : SUBTLE }} />
+                <p className="text-[12.5px] flex-1 min-w-0 truncate" style={{ color: INK_2 }}>
+                  {owner ? <>Posted by <b style={{ color: INK }}>{owner.name}</b>{suspended ? " · account suspended" : ""}</> : "Owner not linked to an account"}
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-1.5 mt-auto pt-3">
                 <button type="button" onClick={() => onSetStatus(g, "reviewing")} className={ADMIN_BTN} style={{ color: BRAND, border: `1px solid ${CARD_BORDER}` }}>
                   <Clock className="w-3.5 h-3.5" /> Reviewing
                 </button>
@@ -14536,16 +15813,379 @@ function AdminReports({ reports, onSetStatus }) {
                 <button type="button" onClick={() => onSetStatus(g, "dismissed")} className={ADMIN_BTN} style={{ color: GREEN, border: `1px solid ${CARD_BORDER}` }}>
                   <Check className="w-3.5 h-3.5" /> Dismiss
                 </button>
+                {owner && (
+                  <>
+                    <button type="button" onClick={() => onEmail(owner, g)} className={ADMIN_BTN} style={{ color: INK_2, border: `1px solid ${CARD_BORDER}` }}>
+                      <Mail className="w-3.5 h-3.5" /> Email owner
+                    </button>
+                    {suspended ? (
+                      <button type="button" onClick={() => onUnsuspend(owner)} className={ADMIN_BTN} style={{ color: GREEN, border: `1px solid ${CARD_BORDER}` }}>
+                        <UserCheck className="w-3.5 h-3.5" /> Unsuspend
+                      </button>
+                    ) : (
+                      <button type="button" onClick={() => setSuspendFor({ owner, g })} className={ADMIN_BTN} style={{ color: "#fff", backgroundColor: RED }}>
+                        <Ban className="w-3.5 h-3.5" /> Suspend account
+                      </button>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           );
         })}
       </div>
+
+      {suspendFor && (
+        <AdminConfirm
+          title={`Suspend ${suspendFor.owner.name}?`}
+          body={`Everything they've posted will be hidden and they won't be able to post, apply or message until you unsuspend them. Reported: “${suspendFor.g.title}”.`}
+          confirmLabel="Suspend account"
+          withReason
+          onConfirm={(reason) => onSuspend(suspendFor.owner, reason || `Reported ${REPORT_TYPE_LABEL[suspendFor.g.type] || "content"}: ${suspendFor.g.entries[0].reason}`)}
+          onClose={() => setSuspendFor(null)}
+        />
+      )}
     </div>
   );
 }
 
-function AdminOverview({ stats, log, tickets, onGo, onNewPost }) {
+/* ---------- admin overview charts (plain SVG/HTML, animated on first view) ---------- */
+// categorical slots from the validated reference palette (light); text never wears these colors
+const VIZ = { s1: "#2a78d6", s2: "#eb6834", s3: "#1baf7a", s4: "#eda100", grid: "#EEF0F3", axis: "#98A2B3" };
+
+function useInView(ref) {
+  const [seen, setSeen] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || seen) return undefined;
+    if (typeof IntersectionObserver === "undefined") { setSeen(true); return undefined; }
+    const io = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) { setSeen(true); io.disconnect(); } }, { threshold: 0.25 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [ref, seen]);
+  return seen;
+}
+
+function CountUp({ value, duration = 900 }) {
+  const [shown, setShown] = useState(typeof value === "number" ? 0 : value);
+  useEffect(() => {
+    if (typeof value !== "number") { setShown(value); return undefined; }
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) { setShown(value); return undefined; }
+    let raf;
+    const start = performance.now();
+    const tick = (now) => {
+      const p = Math.min(1, (now - start) / duration);
+      setShown(Math.round(value * (1 - Math.pow(1 - p, 3))));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value, duration]);
+  return <>{shown}</>;
+}
+
+const niceMax = (v) => {
+  if (v <= 0) return 4;
+  const p = Math.pow(10, Math.floor(Math.log10(v)));
+  const n = v / p;
+  return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * p;
+};
+
+function ChartCard({ title, sub, legend, children, table, note }) {
+  const [showTable, setShowTable] = useState(false);
+  return (
+    <div className="rounded-2xl bg-white p-4 sm:p-5 flex flex-col" style={{ border: `1px solid ${CARD_BORDER}` }}>
+      <div className="flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <p className="text-[15px] font-extrabold" style={{ color: INK }}>{title}</p>
+          {sub && <p className="text-[12.5px] mt-0.5" style={{ color: SUBTLE }}>{sub}</p>}
+        </div>
+        {table && (
+          <button type="button" onClick={() => setShowTable((v) => !v)} className="h-8 px-2.5 rounded-lg text-[12px] font-bold shrink-0"
+            style={{ color: showTable ? BRAND : SUBTLE, backgroundColor: showTable ? BRAND_50 : "#F2F4F7" }} aria-pressed={showTable}>
+            {showTable ? "Chart" : "Table"}
+          </button>
+        )}
+      </div>
+      {legend && !showTable && <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-3">{legend}</div>}
+      <div className="mt-3 flex-1">
+        {showTable && table ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12.5px] border-collapse">
+              <thead><tr>{table.head.map((h) => <th key={h} className="text-left font-bold py-1.5 pr-3" style={{ color: SUBTLE, borderBottom: `1px solid ${CARD_BORDER}` }}>{h}</th>)}</tr></thead>
+              <tbody>{table.rows.map((r, i) => <tr key={i}>{r.map((c, j) => <td key={j} className="py-1.5 pr-3" style={{ color: INK_2, borderBottom: `1px solid ${CARD_BORDER}` }}>{c}</td>)}</tr>)}</tbody>
+            </table>
+          </div>
+        ) : children}
+      </div>
+      {note && <p className="text-[11.5px] mt-3" style={{ color: FAINT }}>{note}</p>}
+    </div>
+  );
+}
+
+const LegendItem = ({ color, label, value, line }) => (
+  <span className="inline-flex items-center gap-1.5 text-[12.5px]" style={{ color: INK_2 }}>
+    {line ? <span className="w-4 h-[3px] rounded-full" style={{ backgroundColor: color }} /> : <span className="w-2.5 h-2.5 rounded-[3px]" style={{ backgroundColor: color }} />}
+    <span className="font-semibold">{label}</span>{value !== undefined && <span style={{ color: SUBTLE }}>{value}</span>}
+  </span>
+);
+
+function LineChart({ labels, series, height = 250 }) {
+  const ref = useRef(null);
+  const on = useInView(ref);
+  const [hover, setHover] = useState(null);
+  const W = 680, H = height, L = 38, R = 70, T = 14, B = 30;
+  const n = labels.length;
+  const max = niceMax(Math.max(...series.flatMap((s) => s.data)));
+  const x = (i) => L + (i * (W - L - R)) / (n - 1);
+  const y = (v) => T + (1 - v / max) * (H - T - B);
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(max * f));
+  const onMove = (e) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const px = ((e.clientX - r.left) / r.width) * W;
+    setHover(Math.max(0, Math.min(n - 1, Math.round(((px - L) / (W - L - R)) * (n - 1)))));
+  };
+  // end labels: nudge apart when the two last values sit close together
+  const ends = series.map((s) => ({ s, yy: y(s.data[n - 1]) })).sort((a, b) => a.yy - b.yy);
+  for (let i = 1; i < ends.length; i++) if (ends[i].yy - ends[i - 1].yy < 16) ends[i].yy = ends[i - 1].yy + 16;
+
+  return (
+    <div ref={ref} className="relative">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto block" role="img" aria-label={`Line chart: ${series.map((s) => s.label).join(", ")} over ${n} weeks`}
+        onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+        {ticks.map((t) => (
+          <g key={t}>
+            <line x1={L} x2={W - R} y1={y(t)} y2={y(t)} stroke={VIZ.grid} strokeWidth="1" />
+            <text x={L - 8} y={y(t) + 4} textAnchor="end" fontSize="11" fill={VIZ.axis}>{t}</text>
+          </g>
+        ))}
+        {labels.map((lb, i) => (i % 2 === 0 || i === n - 1) && (
+          <text key={lb} x={x(i)} y={H - 8} textAnchor="middle" fontSize="11" fill={VIZ.axis}>{lb}</text>
+        ))}
+        {on && series.map((s, si) => {
+          const d = s.data.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+          return (
+            <g key={s.label}>
+              {si === 0 && <path d={`${d} L${x(n - 1)},${y(0)} L${x(0)},${y(0)} Z`} fill={s.color} className="viz-fade" style={{ fillOpacity: 0.08 }} />}
+              <path d={d} fill="none" stroke={s.color} strokeWidth="2.25" strokeLinejoin="round" strokeLinecap="round" pathLength="1" className="viz-draw" style={{ animationDelay: `${si * 180}ms` }} />
+              <circle cx={x(n - 1)} cy={y(s.data[n - 1])} r="4.5" fill={s.color} stroke="#fff" strokeWidth="2" className="viz-fade" />
+            </g>
+          );
+        })}
+        {on && ends.map(({ s, yy }) => (
+          <text key={s.label} x={W - R + 10} y={yy + 4} fontSize="12" fontWeight="700" fill={INK_2} className="viz-fade">
+            {s.data[n - 1]} <tspan fontWeight="500" fill={SUBTLE}>{s.short || s.label}</tspan>
+          </text>
+        ))}
+        {hover !== null && (
+          <g pointerEvents="none">
+            <line x1={x(hover)} x2={x(hover)} y1={T} y2={H - B} stroke={VIZ.axis} strokeWidth="1" strokeDasharray="3 3" />
+            {series.map((s) => <circle key={s.label} cx={x(hover)} cy={y(s.data[hover])} r="5" fill={s.color} stroke="#fff" strokeWidth="2" />)}
+          </g>
+        )}
+        <rect x={L} y={T} width={W - L - R} height={H - T - B} fill="transparent" />
+      </svg>
+      {hover !== null && (
+        <div className="absolute top-1 pointer-events-none rounded-xl bg-white px-3 py-2 text-[12px] whitespace-nowrap"
+          style={{ left: `${(x(hover) / W) * 100}%`, transform: `translateX(${hover > n / 2 ? "calc(-100% - 12px)" : "12px"})`, border: `1px solid ${CARD_BORDER}`, boxShadow: "0 10px 24px -10px rgba(16,24,40,0.3)" }}>
+          <p className="font-bold mb-1" style={{ color: INK }}>{labels[hover]}</p>
+          {series.map((s) => (
+            <p key={s.label} className="flex items-center gap-1.5" style={{ color: INK_2 }}>
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} /> {s.label}: <b>{s.data[hover]}</b>
+            </p>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// rounded data-end, square on the baseline
+const barPath = (x, y, w, h, r = 4) => {
+  const rr = Math.min(r, w / 2, h);
+  return `M${x},${y + h} L${x},${y + rr} Q${x},${y} ${x + rr},${y} L${x + w - rr},${y} Q${x + w},${y} ${x + w},${y + rr} L${x + w},${y + h} Z`;
+};
+
+function BarChart({ labels, data, color = VIZ.s1, unit = "", height = 230 }) {
+  const ref = useRef(null);
+  const on = useInView(ref);
+  const [hover, setHover] = useState(null);
+  const W = 520, H = height, L = 34, R = 8, T = 22, B = 28;
+  const n = data.length;
+  const max = niceMax(Math.max(...data));
+  const band = (W - L - R) / n;
+  const bw = Math.min(36, band * 0.56);
+  const y = (v) => T + (1 - v / max) * (H - T - B);
+  const ticks = [0, 0.5, 1].map((f) => Math.round(max * f));
+  const peak = data.indexOf(Math.max(...data));
+  return (
+    <div ref={ref} className="relative">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto block" role="img" aria-label={`Bar chart, ${n} bars`}>
+        {ticks.map((t) => (
+          <g key={t}>
+            <line x1={L} x2={W - R} y1={y(t)} y2={y(t)} stroke={VIZ.grid} />
+            <text x={L - 8} y={y(t) + 4} textAnchor="end" fontSize="11" fill={VIZ.axis}>{t}</text>
+          </g>
+        ))}
+        {data.map((v, i) => {
+          const bx = L + i * band + (band - bw) / 2;
+          const by = y(v);
+          return (
+            <g key={labels[i]} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
+              <rect x={L + i * band} y={T} width={band} height={H - T - B} fill="transparent" />
+              {on && <path d={barPath(bx, by, bw, y(0) - by)} fill={color} opacity={hover === null || hover === i ? 1 : 0.45}
+                className="viz-grow-y" style={{ animationDelay: `${i * 70}ms`, transition: "opacity 150ms" }} />}
+              {on && i === peak && <text x={bx + bw / 2} y={by - 7} textAnchor="middle" fontSize="11.5" fontWeight="700" fill={INK_2} className="viz-fade">{v}{unit}</text>}
+              <text x={bx + bw / 2} y={H - 9} textAnchor="middle" fontSize="11" fill={hover === i ? INK : VIZ.axis} fontWeight={hover === i ? 700 : 400}>{labels[i]}</text>
+            </g>
+          );
+        })}
+      </svg>
+      {hover !== null && (
+        <div className="absolute pointer-events-none rounded-xl bg-white px-3 py-2 text-[12px] whitespace-nowrap"
+          style={{ left: `${((L + hover * band + band / 2) / W) * 100}%`, top: 0, transform: "translateX(-50%)", border: `1px solid ${CARD_BORDER}`, boxShadow: "0 10px 24px -10px rgba(16,24,40,0.3)" }}>
+          <span className="font-bold" style={{ color: INK }}>{labels[hover]}</span> <span style={{ color: INK_2 }}>· {data[hover]}{unit}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HBarList({ rows, color = VIZ.s1 }) {
+  const ref = useRef(null);
+  const on = useInView(ref);
+  const max = Math.max(1, ...rows.map((r) => r.value));
+  return (
+    <div ref={ref} className="space-y-3">
+      {rows.map((r, i) => (
+        <button key={r.label} type="button" onClick={r.onClick} className="w-full text-left group" title={`${r.label}: ${r.value}`}>
+          <div className="flex items-center justify-between text-[12.5px] mb-1">
+            <span className="font-semibold inline-flex items-center gap-1.5" style={{ color: INK_2 }}><r.icon className="w-3.5 h-3.5" style={{ color: SUBTLE }} /> {r.label}</span>
+            <span className="font-bold tabular-nums" style={{ color: INK }}>{on ? <CountUp value={r.value} /> : 0}</span>
+          </div>
+          <div className="h-2.5 rounded-full overflow-hidden" style={{ backgroundColor: "#F2F4F7" }}>
+            <div className="h-full rounded-full transition-[width] duration-1000 ease-out group-hover:brightness-110"
+              style={{ width: on ? `${(r.value / max) * 100}%` : "0%", backgroundColor: color, transitionDelay: `${i * 90}ms` }} />
+          </div>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function StackedBar({ parts }) {
+  const ref = useRef(null);
+  const on = useInView(ref);
+  const [hover, setHover] = useState(null);
+  const total = parts.reduce((n, p) => n + p.value, 0) || 1;
+  return (
+    <div ref={ref}>
+      <div className="flex h-9 rounded-lg overflow-hidden gap-[2px]" style={{ backgroundColor: "#fff" }}>
+        {parts.map((p, i) => (
+          <div key={p.label} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}
+            className="h-full transition-[width,opacity] duration-1000 ease-out first:rounded-l-lg last:rounded-r-lg"
+            style={{ width: on ? `${(p.value / total) * 100}%` : "0%", backgroundColor: p.color, opacity: hover === null || hover === i ? 1 : 0.45, transitionDelay: `${i * 120}ms` }}
+            title={`${p.label}: ${p.value} (${Math.round((p.value / total) * 100)}%)`} />
+        ))}
+      </div>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 mt-4">
+        {parts.map((p, i) => (
+          <div key={p.label} className="flex items-center gap-2 text-[12.5px] rounded-lg px-1.5 py-1 -mx-1.5 transition-colors"
+            style={{ backgroundColor: hover === i ? "#F5F7FA" : "transparent" }} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
+            <span className="w-2.5 h-2.5 rounded-[3px] shrink-0" style={{ backgroundColor: p.color }} />
+            <span className="font-semibold flex-1 truncate" style={{ color: INK_2 }}>{p.label}</span>
+            <span className="font-bold tabular-nums" style={{ color: INK }}>{p.value}</span>
+            <span className="w-9 text-right tabular-nums" style={{ color: SUBTLE }}>{Math.round((p.value / total) * 100)}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// smooth, deterministic demo trend that ends exactly at today's real total
+function trendTo(total, weeks, seed) {
+  return Array.from({ length: weeks }, (_, i) => {
+    if (i === weeks - 1) return total;
+    const base = total * Math.pow((i + 1) / weeks, 1.35);
+    const wobble = Math.sin((i + seed) * 1.7) * total * 0.025;
+    return Math.max(0, Math.round(base + wobble));
+  }).map((v, i, a) => (i ? Math.max(v, a[i - 1]) : v));
+}
+
+function AdminCharts({ chart, onGo }) {
+  const weeks = 12;
+  const labels = Array.from({ length: weeks }, (_, i) => (i === weeks - 1 ? "This wk" : `W${i + 1}`));
+  const usersTrend = trendTo(chart.users, weeks, 1);
+  const contentTrend = trendTo(chart.liveContent, weeks, 4);
+  const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  // weekday-shaped demo split of the real applicant total (busier midweek, quiet weekend)
+  const shape = [0.95, 1.2, 1.1, 1.35, 1.25, 0.65, 0.5];
+  const apps = shape.map((f) => Math.round((chart.applicants / 7) * f));
+  const content = [
+    { label: "Jobs", value: chart.live.job, icon: Briefcase, onClick: () => onGo("job") },
+    { label: "Doctors", value: chart.live.doctor, icon: Stethoscope, onClick: () => onGo("doctor") },
+    { label: "Hospitals", value: chart.live.hospital, icon: Building2, onClick: () => onGo("hospital") },
+    { label: "Buy / Sell listings", value: chart.live.market, icon: Store, onClick: () => onGo("market") },
+    { label: "Feed posts", value: chart.live.feed, icon: Newspaper, onClick: () => onGo("feed") },
+  ].sort((a, b) => b.value - a.value);
+  const userParts = [
+    { label: "Employers", value: chart.roles.Employer || 0, color: VIZ.s1 },
+    { label: "Doctors", value: chart.roles.Doctor || 0, color: VIZ.s2 },
+    { label: "Sellers", value: chart.roles.Seller || 0, color: VIZ.s3 },
+    { label: "Job seekers", value: chart.roles["Job seeker"] || 0, color: VIZ.s4 },
+  ];
+  const demoNote = "Trend is demo data ending at today's real totals — it becomes live once analytics is connected.";
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 pt-2">
+        <Activity className="w-5 h-5" style={{ color: BRAND }} />
+        <p className="text-[17px] font-extrabold" style={{ color: INK }}>Website progress</p>
+      </div>
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] gap-4">
+        <ChartCard
+          title="Platform growth"
+          sub="Registered users and live content, last 12 weeks"
+          legend={<><LegendItem line color={VIZ.s1} label="Users" value={chart.users} /><LegendItem line color={VIZ.s2} label="Live content" value={chart.liveContent} /></>}
+          table={{ head: ["Week", "Users", "Live content"], rows: labels.map((l, i) => [l, usersTrend[i], contentTrend[i]]) }}
+          note={demoNote}
+        >
+          <LineChart labels={labels} series={[
+            { label: "Users", short: "users", color: VIZ.s1, data: usersTrend },
+            { label: "Live content", short: "items", color: VIZ.s2, data: contentTrend },
+          ]} />
+        </ChartCard>
+        <ChartCard
+          title="Job applications this week"
+          sub={`${apps.reduce((a, b) => a + b, 0)} applications across all jobs`}
+          table={{ head: ["Day", "Applications"], rows: days.map((d, i) => [d, apps[i]]) }}
+          note={demoNote}
+        >
+          <BarChart labels={days} data={apps} height={290} />
+        </ChartCard>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <ChartCard
+          title="Live content by section"
+          sub="What visitors can see on the website right now"
+          table={{ head: ["Section", "Live"], rows: content.map((c) => [c.label, c.value]) }}
+        >
+          <HBarList rows={content} />
+        </ChartCard>
+        <ChartCard
+          title="Users by type"
+          sub={`${userParts.reduce((n, p) => n + p.value, 0)} accounts that post on PakMed`}
+          table={{ head: ["Type", "Users", "Share"], rows: userParts.map((p) => [p.label, p.value, `${Math.round((p.value / Math.max(1, userParts.reduce((n, q) => n + q.value, 0))) * 100)}%`]) }}
+        >
+          <StackedBar parts={userParts} />
+        </ChartCard>
+      </div>
+    </div>
+  );
+}
+
+function AdminOverview({ stats, log, tickets, onGo, onNewPost, chart }) {
   const open = tickets.filter((t) => t.status === "open").sort((a, b) => lastAt(b) - lastAt(a)).slice(0, 4);
   return (
     <div className="space-y-4">
@@ -14606,23 +16246,27 @@ function AdminOverview({ stats, log, tickets, onGo, onNewPost }) {
           )}
         </div>
       </div>
+
+      {chart && <AdminCharts chart={chart} onGo={onGo} />}
     </div>
   );
 }
 
 function AdminPanelScreen({
   admin, setAdmin, postedJobs, listings, seller, reports, setReports,
-  me, onViewSite, onBack, onMenu,
+  me, selfDoctor, onViewSite, onExit, onSignOut,
 }) {
   const [section, setSection] = useState("overview");
   const [preset, setPreset] = useState(null);       // prefilled compose for Messages
   const [newPostOpen, setNewPostOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);    // mobile sidebar
+  const go = (key) => { setSection(key); setNavOpen(false); window.scrollTo({ top: 0, behavior: "instant" }); };
 
   // ---- rows the admin sees (everything except deleted, with edits applied) ----
   const tag = (src) => (x) => ({ ...x, _src: src });
   const mine = (x) => ({ ...x, _owner: "me", _src: "user" });
   const rows = {
-    doctor: adminRows("doctor", [...admin.added.doctor.map(tag("admin")), ...ADMIN_MASTER.doctor], admin),
+    doctor: adminRows("doctor", [...admin.added.doctor.map(tag("admin")), ...(selfDoctor ? [{ ...selfDoctor, _src: "user" }] : []), ...ADMIN_MASTER.doctor], admin),
     job: adminRows("job", [...admin.added.job.map(tag("admin")), ...postedJobs.map(mine), ...ADMIN_MASTER.job], admin),
     market: adminRows("market", [
       ...admin.added.market.map(tag("admin")),
@@ -14632,6 +16276,8 @@ function AdminPanelScreen({
     hospital: adminRows("hospital", [...admin.added.hospital.map(tag("admin")), ...ADMIN_MASTER.hospital], admin),
     feed: adminRows("feed", [...admin.added.feed.map(tag("admin")), ...ADMIN_MASTER.feed], admin).map(feedWithAge),
   };
+  // content of deleted accounts is gone for good
+  Object.keys(rows).forEach((kind) => { rows[kind] = rows[kind].filter((x) => !admin.removedUsers[adminOwnerOf(kind, x)]); });
 
   // ---- users, derived from who owns content on the site ----
   const userMap = { me: { id: "me", name: me.name, role: "You", city: me.city, contact: me.phone ? `+92 ${me.phone}` : `@${me.username}`, items: 0 } };
@@ -14646,7 +16292,7 @@ function AdminPanelScreen({
   rows.job.forEach((j) => addUser(adminOwnerOf("job", j), { name: j.facilityName, role: "Employer", city: j.city, contact: j.contactNumber }));
   rows.market.forEach((i) => addUser(adminOwnerOf("market", i), { name: i.seller, role: "Seller", city: i.city, contact: i.phone }));
   SEED_CANDIDATES.forEach((c) => { userMap[`seeker:${c.id}`] = { id: `seeker:${c.id}`, name: c.name, role: "Job seeker", city: c.city, contact: c.pmdc, items: 0 }; });
-  const users = Object.values(userMap);
+  const users = Object.values(userMap).filter((u) => !admin.removedUsers[u.id]);
   const nameOf = (id) => (userMap[id] ? userMap[id].name : id);
 
   // ---- state helpers ----
@@ -14681,7 +16327,9 @@ function AdminPanelScreen({
 
   const setFlag = (kind, x, key, val) => {
     const cfg = ADMIN_SECTIONS[kind];
-    const text = `${val ? "Verified" : "Removed verification from"} ${cfg.single} “${cfg.title(x)}”`;
+    const text = key === "showPhone"
+      ? `${val ? "Showed" : "Hid"} phone number for ${cfg.single} “${cfg.title(x)}”`
+      : `${val ? "Verified" : "Removed verification from"} ${cfg.single} “${cfg.title(x)}”`;
     if (isAdded(kind, x.id)) {
       update((a) => ({ ...a, added: { ...a.added, [kind]: a.added[kind].map((y) => (y.id === x.id ? { ...y, [key]: val } : y)) } }), text);
     } else {
@@ -14708,11 +16356,23 @@ function AdminPanelScreen({
     delete b[u.id];
     return { ...a, blocked: b };
   }, `Unblocked ${u.name}`);
+  const setRole = (u, role) => update((a) => {
+    const r = { ...a.roles };
+    if (role) r[u.id] = role; else delete r[u.id];
+    return { ...a, roles: r };
+  }, role ? `Made ${u.name} ${role === "admin" ? "an admin" : "staff"}` : `Removed ${admin.roles[u.id] || "staff"} access from ${u.name}`);
+  const deleteUser = (u, reason) => update((a) => {
+    const b = { ...a.blocked };
+    const r = { ...a.roles };
+    delete b[u.id];
+    delete r[u.id];
+    return { ...a, blocked: b, roles: r, removedUsers: { ...a.removedUsers, [u.id]: true } };
+  }, `Deleted user ${u.name}${reason ? ` — ${reason}` : ""}`);
 
   const sendMessage = (m) => update((a) => ({ ...a, messages: [{ ...m, id: `am-${Date.now()}`, at: Date.now(), read: false }, ...a.messages] }), `Messaged ${m.toName}: “${m.subject}”`);
 
-  const compose = (to, subject = "", text = "") => {
-    setPreset({ key: Date.now(), to, subject, text });
+  const compose = (to, subject = "", text = "", opts = {}) => {
+    setPreset({ key: Date.now(), to, subject, text, ...opts });
     setSection("messages");
   };
   const messageOwner = (kind, owner, x) => {
@@ -14726,6 +16386,22 @@ function AdminPanelScreen({
   }), `Replied to ticket “${t.subject}”`);
   const setTicketStatus = (t, status) => update((a) => ({ ...a, tickets: a.tickets.map((x) => (x.id === t.id ? { ...x, status, unreadAdmin: false } : x)) }), `${status === "resolved" ? "Resolved" : "Reopened"} ticket “${t.subject}”`);
   const toggleTicketBlock = (t) => (admin.blocked[t.userId] ? unblockUser({ id: t.userId, name: t.name }) : blockUser({ id: t.userId, name: t.name }, `Support ticket: ${t.subject}`));
+
+  const ownerOfReport = (g) => {
+    const kind = REPORT_KIND[g.type];
+    const item = kind && rows[kind].find((x) => x.id === g.targetId);
+    const id = item && adminOwnerOf(kind, item);
+    return id ? { id, name: nameOf(id) } : null;
+  };
+  const emailReportOwner = (owner, g) => compose(owner.id, "Your content on PakMed was reported",
+    `Assalam o Alaikum ${owner.name},
+
+Your ${REPORT_TYPE_LABEL[g.type] || "content"} “${g.title}” was reported by other users for: ${[...new Set(g.entries.map((e) => e.reason))].join("; ")}.
+
+Please review it and update or remove it within 48 hours. Repeated reports can lead to your account being suspended.
+
+— PakMed Trust & Safety`,
+    { email: true });
 
   const setReportStatus = (g, status) => {
     setReports((prev) => prev.map((r) => (g.ids.includes(r.id) ? { ...r, status } : r)));
@@ -14755,6 +16431,15 @@ function AdminPanelScreen({
   ];
   const current = nav.find((n) => n.key === section) || nav[0];
 
+  const live = { doctor: liveCount("doctor"), job: liveCount("job"), market: liveCount("market"), hospital: liveCount("hospital"), feed: liveCount("feed") };
+  const chart = {
+    users: users.length,
+    live,
+    liveContent: Object.values(live).reduce((n, v) => n + v, 0),
+    roles: users.reduce((acc, u) => ({ ...acc, [u.role]: (acc[u.role] || 0) + 1 }), {}),
+    applicants: rows.job.reduce((n, j) => n + (j.applicants || 0), 0),
+  };
+
   const stats = [
     { label: "Users", value: users.length, icon: Users, color: BRAND, tint: BRAND_50, go: "users", note: blockedCount ? `${blockedCount} blocked` : "", noteColor: RED },
     { label: "Doctors live", value: liveCount("doctor"), icon: Stethoscope, color: RED, tint: RED_TINT, go: "doctor", note: `${rows.doctor.length} total` },
@@ -14766,46 +16451,58 @@ function AdminPanelScreen({
     { label: "Pending reports", value: pendingReports, icon: Flag, color: pendingReports ? RED : GREEN, tint: pendingReports ? RED_TINT : GREEN_TINT, go: "reports" },
   ];
 
+  const SECTION_SUB = {
+    overview: "A snapshot of everything on PakMed",
+    users: "Message, promote, block or delete accounts",
+    doctor: "Doctor profiles listed on Find a Doctor",
+    job: "Job posts on Find a Job",
+    market: "Equipment listings on Buy / Sell",
+    hospital: "Facilities on Find Hospital",
+    feed: "Posts on Our Feeds",
+    support: "Requests sent from Help & Support",
+    messages: "Send updates to one user or everyone",
+    reports: "Content flagged by users",
+  };
+
+  const accessLabel = admin.roles.me === "staff" ? "Staff" : "Admin";
+  const sidebar = ({ collapsed, onClose }) => (
+    <DashSidebar
+      tag={accessLabel}
+      ariaLabel="Admin sections"
+      groups={[{ label: "Manage", items: nav }]}
+      active={section}
+      onSelect={go}
+      user={{ name: me.name, sub: `@${me.username} · ${accessLabel}` }}
+      footer={[
+        { label: "Back to website", icon: Globe, run: onExit },
+        { label: "Sign out", icon: LogOut, run: onSignOut, danger: true },
+      ]}
+      collapsed={collapsed}
+      onClose={onClose}
+    />
+  );
+
   return (
-    <div className="flex flex-col h-full min-h-0" style={{ fontFamily: FONT }}>
-      <ScreenHeader
-        title="Admin panel"
-        subtitle="Manage everything on PakMed"
-        onBack={onBack}
-        onMenu={onMenu}
-        right={<span className="hidden sm:inline-flex"><AdminPill color={BRAND} tint={BRAND_50}>Admin</AdminPill></span>}
-      />
-      <div className="flex-1 min-h-0 lg:flex" style={{ backgroundColor: CREAM }}>
-        {/* section nav: horizontal on mobile, sidebar on desktop */}
-        <nav className="shrink-0 lg:w-56 bg-white lg:border-r" style={{ borderColor: CARD_BORDER, borderBottom: `1px solid ${CARD_BORDER}` }} aria-label="Admin sections">
-          <div className="flex lg:flex-col gap-1 overflow-x-auto px-3 py-2.5 lg:py-4" style={{ scrollbarWidth: "none" }}>
-            {nav.map((n) => {
-              const on = section === n.key;
-              return (
-                <button key={n.key} type="button" onClick={() => setSection(n.key)}
-                  className="h-10 px-3 rounded-xl flex items-center gap-2.5 text-[13.5px] whitespace-nowrap shrink-0 lg:w-full transition-colors"
-                  style={{ fontWeight: on ? 700 : 600, color: on ? BRAND : INK_2, backgroundColor: on ? BRAND_50 : "transparent" }}>
-                  <n.icon className="w-[18px] h-[18px] shrink-0" />
-                  <span className="lg:flex-1 text-left">{n.label}</span>
-                  {n.alert > 0 && <span className="text-[10.5px] font-bold px-1.5 py-0.5 rounded-full text-white" style={{ backgroundColor: RED }}>{n.alert}</span>}
-                  {!n.alert && n.n !== undefined && <span className="hidden lg:inline text-[11.5px] font-semibold" style={{ color: FAINT }}>{n.n}</span>}
-                </button>
-              );
-            })}
+    <DashLayout storageKey="pakmed.sidebar.admin" sidebar={sidebar} mobileOpen={navOpen} setMobileOpen={setNavOpen}>
+        <header className="sticky top-0 z-30 h-16 px-4 sm:px-6 flex items-center gap-3 bg-white" style={{ borderBottom: `1px solid ${CARD_BORDER}` }}>
+          <button type="button" onClick={() => setNavOpen(true)} className="lg:hidden w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ border: `1px solid ${CARD_BORDER}` }} aria-label="Open admin menu">
+            <Menu className="w-5 h-5" style={{ color: INK }} />
+          </button>
+          <div className="min-w-0 flex-1">
+            <p className="text-[18px] font-extrabold tracking-[-0.01em] leading-tight truncate" style={{ color: INK }}>{current.label}</p>
+            <p className="text-[12.5px] truncate" style={{ color: SUBTLE }}>{SECTION_SUB[current.key]}</p>
           </div>
-        </nav>
+          <button type="button" onClick={onExit} className="hidden sm:inline-flex h-10 px-3.5 rounded-xl text-[13.5px] font-bold items-center gap-1.5 shrink-0" style={{ color: INK_2, border: `1px solid ${CARD_BORDER}` }}>
+            <Globe className="w-4 h-4" /> View website
+          </button>
+        </header>
 
-        <div className="flex-1 min-w-0 px-4 sm:px-6 py-5">
-          <div className="flex items-center gap-2 mb-4">
-            <current.icon className="w-5 h-5" style={{ color: BRAND }} />
-            <p className="text-[18px] font-extrabold tracking-[-0.01em]" style={{ color: INK }}>{current.label}</p>
-          </div>
-
+        <main className="flex-1 px-4 sm:px-6 py-5 w-full">
           {section === "overview" && (
-            <AdminOverview stats={stats} log={admin.log} tickets={admin.tickets} onGo={setSection} onNewPost={() => setNewPostOpen(true)} />
+            <AdminOverview stats={stats} log={admin.log} tickets={admin.tickets} onGo={go} onNewPost={() => setNewPostOpen(true)} chart={chart} />
           )}
           {section === "users" && (
-            <AdminUsers users={users} admin={admin} onBlock={blockUser} onUnblock={unblockUser} onMessage={(u) => compose(u.id)} />
+            <AdminUsers users={users} admin={admin} onBlock={blockUser} onUnblock={unblockUser} onMessage={(u) => compose(u.id)} onSetRole={setRole} onDelete={deleteUser} />
           )}
           {ADMIN_SECTIONS[section] && (
             <AdminCollection
@@ -14825,19 +16522,21 @@ function AdminPanelScreen({
             <AdminSupport tickets={admin.tickets} admin={admin} onReply={replyTicket} onStatus={setTicketStatus} onBlock={toggleTicketBlock} />
           )}
           {section === "messages" && (
-            <AdminMessages key={preset ? preset.key : "compose"} users={users} messages={admin.messages} preset={preset} onSend={sendMessage} />
+            <AdminMessages key={preset ? preset.key : "compose"} users={users} admin={admin} messages={admin.messages} preset={preset} onSend={sendMessage} />
           )}
-          {section === "reports" && <AdminReports reports={reports} onSetStatus={setReportStatus} />}
+          {section === "reports" && (
+            <AdminReports reports={reports} admin={admin} ownerOf={ownerOfReport} onSetStatus={setReportStatus}
+              onSuspend={(o, reason) => blockUser(o, reason)} onUnsuspend={unblockUser} onEmail={emailReportOwner} />
+          )}
           {section === "users" && blockedCount > 0 && (
             <p className="text-[12px] mt-4" style={{ color: SUBTLE }}>Blocked: {Object.keys(admin.blocked).map(nameOf).join(", ")}</p>
           )}
-        </div>
-      </div>
+        </main>
 
       {newPostOpen && (
         <AdminEditor kind="feed" item={ADMIN_SECTIONS.feed.blank()} isNew onSave={(d) => saveItem("feed", d, true)} onClose={() => setNewPostOpen(false)} />
       )}
-    </div>
+    </DashLayout>
   );
 }
 
@@ -14974,6 +16673,53 @@ function AdminNoticeBar({ tone = "info", icon: Icon = Megaphone, title, text, ac
   );
 }
 
+
+// account pages that open inside the signed-in user's dashboard
+const USER_DASH_TABS = ["profile", "profiles", "profileEdit", "profileDetail", "cv", "myjobs", "saved", "messages", "physicianPanel", "employerPanel", "seller", "applicants", "settings", "help", "moderation"];
+const USER_DASH_ACTIVE = { profileEdit: "profiles", applicants: "employerPanel", moderation: "profile" };
+
+function UserDashboard({ tab, groups, user, onSelect, onExit, onSignOut, onBack, mobileOpen, setMobileOpen, children }) {
+  const active = USER_DASH_ACTIVE[tab] || tab;
+  const current = groups.flatMap((g) => g.items).find((i) => i.key === active);
+  const sidebar = ({ collapsed, onClose }) => (
+    <DashSidebar
+      tag="Dashboard"
+      ariaLabel="Dashboard sections"
+      groups={groups}
+      active={active}
+      onSelect={(k) => { setMobileOpen(false); onSelect(k); }}
+      user={user}
+      footer={[
+        { label: "Back to website", icon: Globe, run: onExit },
+        { label: "Sign out", icon: LogOut, run: onSignOut, danger: true },
+      ]}
+      collapsed={collapsed}
+      onClose={onClose}
+    />
+  );
+  return (
+    <DashLayout storageKey="pakmed.sidebar.user" sidebar={sidebar} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen}>
+      <div className="lg:hidden sticky top-0 z-30 h-14 px-4 flex items-center gap-3 bg-white" style={{ borderBottom: `1px solid ${CARD_BORDER}` }}>
+        <button type="button" onClick={() => setMobileOpen(true)} className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ border: `1px solid ${CARD_BORDER}` }} aria-label="Open dashboard menu">
+          <Menu className="w-5 h-5" style={{ color: INK }} />
+        </button>
+        {onBack && (
+          <button type="button" onClick={onBack} className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ border: `1px solid ${CARD_BORDER}` }} aria-label="Back">
+            <ChevronLeft className="w-5 h-5" style={{ color: INK }} />
+          </button>
+        )}
+        <p className="flex-1 min-w-0 text-[15px] font-extrabold truncate" style={{ color: INK }}>{current ? current.label : "Dashboard"}</p>
+        <button type="button" onClick={onExit} className="h-9 px-3 rounded-lg text-[12.5px] font-bold inline-flex items-center gap-1.5 shrink-0" style={{ color: INK_2, border: `1px solid ${CARD_BORDER}` }}>
+          <Globe className="w-4 h-4" /> Website
+        </button>
+      </div>
+      <InDashboard.Provider value={true}>
+        <div className="flex-1 flex flex-col min-w-0 sm:px-2">{children}</div>
+      </InDashboard.Provider>
+    </DashLayout>
+  );
+}
+
 export default function PakMedApp() {
   const [authed, setAuthed] = useState(false);
   const [signInFor, setSignInFor] = useState(null);   // { reason, run }
@@ -14985,7 +16731,6 @@ export default function PakMedApp() {
   authedRef.current = authed;
   // admin panel state — applied to the public catalogue below, so admin changes show site-wide
   const [admin, setAdmin] = useState(initialAdmin);
-  syncPublicCatalog(admin);
   const suspended = !!admin.blocked.me;
   const suspendedRef = useRef(suspended);
   suspendedRef.current = suspended;
@@ -15003,7 +16748,7 @@ export default function PakMedApp() {
   };
   const [history, setHistory] = useState(["home"]);
   const [username, setUsername] = useState("dr_awais_khan");
-  const [threads, setThreads] = useState([]);
+  const [threads, setThreads] = useState(seedThreads);
   const [postedJobs, setPostedJobs] = useState([]);
 
   const [cvDoc, setCvDoc] = useState({
@@ -15110,20 +16855,21 @@ export default function PakMedApp() {
     setPostedJobs((prev) => prev.map((j) => (j.id === job.id ? { ...j, applicants: (j.applicants || 0) + 1 } : j)));
   };
 
+  // the apply form already collected the CV — the only requirement — so no extra profile step
   const requestApply = (job) => {
     if (!authedRef.current) return requireAuth("apply for this job", () => requestApply(job));
-    if (canFindJob) return applyToJob(job);
-    const cv = cvDoc.cv || {};
-    setQuickAsk({
-      type: pctDoctor >= pctGeneral ? "doctor" : "general", label: "apply for this job", run: () => applyToJob(job),
-      seed: { fullName: cv.fullName, jobTitle: cv.title, city: cv.city, phone: cv.phone, pmdc: cv.pmdc },
-    });
+    applyToJob(job);
   };
+  const uploadCV = (f) => {
+    const kb = f.size / 1024;
+    setCvDoc((p) => ({ ...p, uploaded: { name: f.name, size: kb > 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${Math.round(kb)} KB` } }));
+  };
+  const cvContext = { cvDoc, uploadCV, openBuilder: () => requireAuth("create your CV", () => navigate("cv")) };
 
   const setApplicantStatus = (id, status) =>
     setApplicants((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)));
 
-  const [reports, setReports] = useState([]);
+  const [reports, setReports] = useState(seedReports);
   const [reportTarget, setReportTarget] = useState(null);
   const reportedIds = new Set(reports.map((r) => r.targetId));
   const submitReport = ({ reason, details }) => {
@@ -15150,12 +16896,28 @@ export default function PakMedApp() {
   };
   const live = (t) => savedProfiles[t] || EMPTY_PROFILES[t];
 
+  // the signed-in doctor appears in Find a Doctor once they switch on "Listed on the directory"
+  const selfDoctor = (() => {
+    const d = savedProfiles.doctor;
+    if (!d || !d.listOnDirectory || !d.fullName) return null;
+    const pr = (d.practices || [])[0] || {};
+    return {
+      id: "me-doctor", name: d.fullName, specialty: d.specialty || "General Physician",
+      qual: (d.education || []).map((e) => e.degree).filter(Boolean).join(", ") || "MBBS",
+      city: pr.city || d.city || "", area: pr.address || d.area || "", clinic: pr.place || d.clinic || "",
+      fee: pr.fee || d.fee || "", rating: 5, reviews: 0, exp: "", verified: false, online: false,
+      phone: d.phone || "", showPhone: !!d.showContact,
+      slots: pr.days && pr.days.length ? `${pr.days[0]} ${pr.from || ""}`.trim() : "Contact to book", _owner: "me",
+    };
+  })();
+  syncPublicCatalog(admin, selfDoctor ? [selfDoctor] : []);
+  const adminHidMyPhone = !!(admin.edits.doctor["me-doctor"] && admin.edits.doctor["me-doctor"].showPhone === false);
+
   const pctGeneral  = savedProfiles.general  ? profileCompletion("general", savedProfiles.general)   : 0;
   const pctDoctor   = savedProfiles.doctor   ? profileCompletion("doctor", savedProfiles.doctor)     : 0;
   const pctEmployer = savedProfiles.employer ? profileCompletion("employer", savedProfiles.employer) : 0;
   const pctSeller   = savedProfiles.seller   ? profileCompletion("seller", savedProfiles.seller)     : 0;
   const canPostJob = pctEmployer >= GATE_THRESHOLD;
-  const canFindJob = pctDoctor >= GATE_THRESHOLD || pctGeneral >= GATE_THRESHOLD;
   const canSell    = pctSeller >= GATE_THRESHOLD;
 
   const [seller, setSeller] = useState({
@@ -15172,7 +16934,7 @@ export default function PakMedApp() {
   const pubListings = adminRows("market", listings.map((l) => ({ ...l, _owner: "me" })), admin).filter((l) => adminIsLive("market", l, admin));
 
   // admin <-> this user: direct messages, announcements and support tickets
-  const myAdminMessages = admin.messages.filter((m) => m.to === "me" || m.to === "all");
+  const myAdminMessages = admin.messages.filter(messageReachesMe);
   const unreadAdmin = myAdminMessages.filter((m) => !m.read);
   const myTickets = admin.tickets.filter((t) => t.userId === "me");
   const supportUnread = myTickets.filter((t) => t.unreadUser);
@@ -15201,7 +16963,7 @@ export default function PakMedApp() {
   useEffect(() => {
     if (!authed) return;
     if (tab === "messages" && unreadAdmin.length) {
-      setAdmin((a) => ({ ...a, messages: a.messages.map((m) => ((m.to === "me" || m.to === "all") && !m.read ? { ...m, read: true } : m)) }));
+      setAdmin((a) => ({ ...a, messages: a.messages.map((m) => (messageReachesMe(m) && !m.read ? { ...m, read: true } : m)) }));
     }
     if (tab === "help" && supportUnread.length) {
       setAdmin((a) => ({ ...a, tickets: a.tickets.map((t) => (t.userId === "me" && t.unreadUser ? { ...t, unreadUser: false } : t)) }));
@@ -15222,10 +16984,20 @@ export default function PakMedApp() {
     navigate({ find: "findjob", consult: "consult", market: "market", hospital: "hospital", feeds: "updates" }[k] || "home");
   };
 
-  const addThread = (t) => setThreads((prev) => [{ ...t }, ...prev]);
+  // one conversation per contact + subject; new messages append to it
+  const addThread = (t) => setThreads((prev) => {
+    const msg = { from: "me", text: t.text, at: Date.now() };
+    const hit = prev.find((x) => x.business === t.business && x.product === t.product);
+    if (hit) return prev.map((x) => (x === hit ? { ...x, messages: [...x.messages, msg] } : x));
+    return [{ id: `th-${Date.now()}`, business: t.business, product: t.product, messages: [msg] }, ...prev];
+  });
+  const sendInThread = (id, m) => setThreads((prev) => prev.map((x) => (x.id === id ? { ...x, unread: false, messages: [...x.messages, { ...m, at: Date.now() }] } : x)));
+  const markThreadRead = (id) => setThreads((prev) => prev.map((x) => (x.id === id ? { ...x, unread: false } : x)));
 
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const openMenu = () => setDrawerOpen(true);
+  const [dashNavOpen, setDashNavOpen] = useState(false);
+  const dashMode = authed && !signInFor && !showIntent && USER_DASH_TABS.includes(tab);
+  const openMenu = () => (dashMode ? setDashNavOpen(true) : setDrawerOpen(true));
   const backProps = canGoBack ? { onBack: goBack } : {};
   const navProps = { ...backProps, onMenu: openMenu };
 
@@ -15248,12 +17020,37 @@ export default function PakMedApp() {
     navigate(key);
   };
   const showChrome = !signInFor && !showIntent;
+  const hasCvDoc = !!(cvDoc.uploaded || cvDoc.savedInApp);
+  const dashGroups = [
+    { label: "Overview", items: [{ key: "profile", label: "My dashboard", icon: LayoutDashboard }] },
+    { label: "Account", items: [
+      { key: "profiles", label: "Profiles", icon: UserRound },
+      { key: "cv", label: "CV / Resume", icon: FileText, tag: hasCvDoc ? "Added" : "Add", tagOk: hasCvDoc },
+      { key: "profileDetail", label: "Verification", icon: ShieldCheck },
+    ] },
+    { label: "Activity", items: [
+      { key: "myjobs", label: "My jobs", icon: Briefcase },
+      { key: "saved", label: "Saved", icon: Bookmark },
+      { key: "messages", label: "Messages", icon: MessageSquareText, alert: threads.filter((t) => t.unread).length + unreadAdmin.length },
+    ] },
+    ...((pctDoctor >= GATE_THRESHOLD || canPostJob || canSell) ? [{ label: "Your panels", items: [
+      ...(pctDoctor >= GATE_THRESHOLD ? [{ key: "physicianPanel", label: "Physician panel", icon: Stethoscope }] : []),
+      ...(canPostJob ? [{ key: "employerPanel", label: "Employer panel", icon: Building2 }] : []),
+      ...(canSell ? [{ key: "seller", label: "Business panel", icon: Store }] : []),
+    ] }] : []),
+    { label: "Help", items: [
+      { key: "help", label: "Help & support", icon: HelpCircle, alert: supportUnread.length },
+      { key: "settings", label: "Settings", icon: Settings },
+      { key: "admin", label: "Admin panel", icon: Shield },
+    ] },
+  ];
 
   return (
     <div className={`${signInFor ? "min-h-screen lg:h-dvh lg:max-h-dvh lg:overflow-hidden" : "min-h-screen"} flex flex-col`} style={{ background: PAGE_BG, fontFamily: FONT }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap');`}</style>
       <HomeNav.Provider value={tab !== "home" && !signInFor && !showIntent ? goHome : null}>
       <AuthGate.Provider value={{ authed, require: requireAuth }}>
+      <CvContext.Provider value={cvContext}>
         {signInFor ? (
           <AuthShell
             reason={signInFor.reason}
@@ -15308,9 +17105,25 @@ export default function PakMedApp() {
               />
             </div>
           </div>
+        ) : tab === "admin" && authed ? (
+          // the admin panel is its own full-screen app: dark sidebar + content, no site header/footer
+          <AdminPanelScreen
+            admin={admin}
+            setAdmin={setAdmin}
+            postedJobs={postedJobs}
+            listings={listings}
+            seller={seller}
+            reports={reports}
+            setReports={setReports}
+            me={{ name: profiles.general.fullName || `@${username}`, username, city: profiles.general.city, phone: profiles.general.phone || verifiedPhone }}
+            selfDoctor={selfDoctor}
+            onViewSite={(section) => { setSectionQ(""); setFocusPost(null); navigate(section); }}
+            onExit={goHome}
+            onSignOut={() => { setAuthed(false); authedRef.current = false; setHistory(["home"]); }}
+          />
         ) : (
           <>
-            {showChrome && (
+            {showChrome && !dashMode && (
               <SiteHeader
                 activeTab={tab}
                 onHome={goHome}
@@ -15329,6 +17142,19 @@ export default function PakMedApp() {
                 username={username}
                 userEmail={profiles.general.email}
                 userPhone={profiles.general.phone || verifiedPhone}
+                search={(
+                  <SiteSearch
+                    city={profiles.general.city}
+                    onGo={({ section, q }) => {
+                      if (section === "postjob") return tabNav("post");
+                      setFocusPost(null);
+                      setSectionQ(q || "");
+                      navigate(section);
+                    }}
+                    onSearchAll={(q) => { setSearchQ(q); navigate("search"); }}
+                    onCityChange={(c) => updateProfile("general", (g) => ({ ...g, city: c || "" }))}
+                  />
+                )}
               />
             )}
             {showChrome && authed && suspended && (
@@ -15352,6 +17178,7 @@ export default function PakMedApp() {
               }
               return null;
             })()}
+            {(() => { const page = (
             <div
               className={`flex-1 flex flex-col w-full min-w-0 ${
                 tab === "home" || tab === "findjob" || tab === "consult" || tab === "market" || tab === "hospital" || tab === "postjob"
@@ -15422,6 +17249,8 @@ export default function PakMedApp() {
                   onOpenHiring={(fac) => { setSectionQ(fac ? fac.name : ""); navigate("findjob"); }}
                   isSaved={isSaved}
                   onToggleSave={toggleSave}
+                  onReport={setReportTarget}
+                  reportedIds={reportedIds}
                   guestDefaults={{ name: profiles.general.fullName || "", phone: profiles.general.phone || verifiedPhone || "" }}
                   onMessage={(payload) => addThread(payload)}
                   {...navProps}
@@ -15441,6 +17270,8 @@ export default function PakMedApp() {
               {tab === "updates" && (
                 <UpdatesScreen
                   key={"u" + (focusPost || "")}
+                  onReport={setReportTarget}
+                  reportedIds={reportedIds}
                   focusId={focusPost}
                   onOpenCard={(i) => { setFeedStart(i); navigate("feed"); }}
                   {...navProps}
@@ -15448,6 +17279,7 @@ export default function PakMedApp() {
               )}
               {tab === "physicianPanel" && (
                 <PhysicianPanelScreen
+                  adminHidPhone={adminHidMyPhone}
                   profile={profiles.doctor}
                   onChange={(u) => updateLive("doctor", u)}
                   {...navProps}
@@ -15550,21 +17382,11 @@ export default function PakMedApp() {
                   {...navProps}
                 />
               )}
-              {tab === "messages" && <MessagesScreen threads={threads} adminMessages={authed ? myAdminMessages : []} {...navProps} />}
-              {tab === "admin" && (authed ? (
-                <AdminPanelScreen
-                  admin={admin}
-                  setAdmin={setAdmin}
-                  postedJobs={postedJobs}
-                  listings={listings}
-                  seller={seller}
-                  reports={reports}
-                  setReports={setReports}
-                  me={{ name: profiles.general.fullName || `@${username}`, username, city: profiles.general.city, phone: profiles.general.phone || verifiedPhone }}
-                  onViewSite={(section) => { setSectionQ(""); setFocusPost(null); navigate(section); }}
-                  {...navProps}
-                />
-              ) : (
+              {tab === "messages" && (
+                <MessagesScreen threads={threads} adminMessages={authed ? myAdminMessages : []} onSend={sendInThread} onRead={markThreadRead}
+                  myPhone={profiles.doctor.phone || profiles.general.phone || verifiedPhone || (cvDoc.cv && cvDoc.cv.phone) || ""} myName={profiles.general.fullName || profiles.doctor.fullName || "You"} {...navProps} />
+              )}
+              {tab === "admin" && !authed && (
                 <div className="flex flex-col h-full min-h-0" style={{ fontFamily: FONT }}>
                   <ScreenHeader title="Admin panel" {...navProps} />
                   <div className="flex-1 flex flex-col items-center justify-center text-center px-6 py-16">
@@ -15573,7 +17395,7 @@ export default function PakMedApp() {
                     <button type="button" onClick={() => setSignInFor({ reason: "open the admin panel", run: () => navigate("admin") })} className="mt-5 h-11 px-6 rounded-xl text-[14.5px] font-bold text-white" style={{ backgroundColor: BRAND }}>Sign in</button>
                   </div>
                 </div>
-              ))}
+              )}
               {tab === "profile" && (
                 <AccountScreen
                   authed={authed}
@@ -15584,6 +17406,8 @@ export default function PakMedApp() {
                   pctGeneral={pctGeneral}
                   pctDoctor={pctDoctor}
                   cvReady={cvDoc.uploaded || cvDoc.savedInApp}
+                  cvDoc={cvDoc}
+                  onUploadCV={uploadCV}
                   verifiedPhone={verifiedPhone}
                   profilesLive={["general", "doctor", "employer", "seller"].filter((k) => savedProfiles[k] && profileCompletion(k, savedProfiles[k]) >= GATE_THRESHOLD).length}
                   savedJobs={[...postedJobs, ...SEED_JOBS].filter((j) => jobSocial[j.id] && jobSocial[j.id].favourite)}
@@ -15682,7 +17506,23 @@ export default function PakMedApp() {
                 />
               )}
             </div>
-            {tab !== "home" && tab !== "feed" && (
+            );
+            return dashMode ? (
+              <UserDashboard
+                tab={tab}
+                groups={dashGroups}
+                user={{ name: profiles.general.fullName || `@${username}`, sub: `@${username}`, photo: profiles.general.photo }}
+                onSelect={(k) => navigate(k)}
+                onExit={goHome}
+                onBack={USER_DASH_ACTIVE[tab] && canGoBack ? goBack : null}
+                onSignOut={() => { setAuthed(false); authedRef.current = false; setHistory(["home"]); }}
+                mobileOpen={dashNavOpen}
+                setMobileOpen={setDashNavOpen}
+              >
+                {page}
+              </UserDashboard>
+            ) : page; })()}
+            {!dashMode && tab !== "home" && tab !== "feed" && (
               <SiteFooter onTabNav={tabNav} onNavigate={headerNavigate} onHome={goHome} />
             )}
             {quickAsk && (
@@ -15728,15 +17568,16 @@ export default function PakMedApp() {
               onNavigate={handleDrawerNav}
               username={username}
               cvDoc={cvDoc}
-              unreadCount={threads.length + (authed ? unreadAdmin.length : 0)}
+              unreadCount={threads.filter((t) => t.unread).length + (authed ? unreadAdmin.length : 0)}
               pendingReports={reports.filter((r) => r.status === "pending").length}
               panels={{ doctor: pctDoctor >= GATE_THRESHOLD, employer: canPostJob, seller: canSell }}
               isAdmin={authed}
               adminBadge={admin.tickets.filter((t) => t.status === "open").length}
             />
-            {showChrome && <PakMedChatbot onNavigate={headerNavigate} />}
+            {showChrome && !dashMode && <PakMedChatbot onNavigate={headerNavigate} />}
           </>
         )}
+      </CvContext.Provider>
       </AuthGate.Provider>
       </HomeNav.Provider>
     </div>

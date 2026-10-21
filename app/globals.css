@@ -238,6 +238,10 @@ html {
 .page-enter { animation: pm-fade-up 0.5s var(--ease-out-soft) both; }
 @media (prefers-reduced-motion: reduce) { .page-enter { animation: none !important; } }
 
+/* hero category tiles: staggered entrance; `backwards` releases transform so hover lift still works */
+.cat-pop { animation: pm-fade-up 0.55s var(--ease-out-soft) backwards; }
+@media (prefers-reduced-motion: reduce) { .cat-pop { animation: none !important; } }
+
 /* ---------- Happenings ---------- */
 @keyframes pm-progress { from { width: 0%; } to { width: 100%; } }
 .ad-progress { width: 0%; animation: pm-progress linear forwards; }
@@ -264,3 +268,19 @@ select { accent-color: #0B57B7; }
 @keyframes pm-post-focus { 0%, 100% { transform: none; } 30% { transform: scale(1.015); } }
 .post-focus { animation: pm-post-focus 0.9s var(--ease-out-soft) 0.35s both; }
 @media (prefers-reduced-motion: reduce) { .post-focus { animation: none; } }
+
+/* ---------- admin charts ---------- */
+.viz-draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: viz-draw 1.4s cubic-bezier(.3,.7,.2,1) forwards; }
+@keyframes viz-draw { to { stroke-dashoffset: 0; } }
+.viz-fade { opacity: 0; animation: viz-fade 0.6s ease-out 0.9s forwards; }
+@keyframes viz-fade { to { opacity: 1; } }
+.viz-grow-y { transform-box: fill-box; transform-origin: bottom; transform: scaleY(0); animation: viz-grow-y 0.75s cubic-bezier(.2,.7,.2,1) forwards; }
+@keyframes viz-grow-y { to { transform: scaleY(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .viz-draw, .viz-fade, .viz-grow-y { animation: none !important; stroke-dashoffset: 0; opacity: 1; transform: none; }
+}
+
+/* hero: decorative photos drift gently */
+@keyframes hero-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+.hero-float { animation: hero-float 6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .hero-float { animation: none !important; } }
