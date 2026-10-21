@@ -1783,6 +1783,8 @@ function SellerPanelScreen({ onBack, onMenu, seller, setSeller, listings, setLis
   const [replyDraft, setReplyDraft] = useState("");
   const [toast, setToast] = useState("");
   const [photoErr, setPhotoErr] = useState("");
+  const [listFilter, setListFilter] = useState("all");
+  const [confirmDel, setConfirmDel] = useState(null);
   const logoRef = useRef(null);
   const galRef = useRef(null);
   const camRef = useRef(null);
@@ -2113,155 +2115,206 @@ function SellerPanelScreen({ onBack, onMenu, seller, setSeller, listings, setLis
   }
 
   /* ---------------- DASHBOARD ---------------- */
+  const LISTING_STATUS = {
+    live: { label: "Live", color: GREEN, tint: GREEN_TINT },
+    hidden: { label: "Hidden", color: AMBER, tint: AMBER_TINT },
+    sold: { label: "Sold", color: SUBTLE, tint: "#F2F4F7" },
+  };
+  const statusCount = (s) => listings.filter((l) => l.status === s).length;
+  const totalViews = listings.reduce((n, l) => n + (l.views || 0), 0);
+  const shownListings = listFilter === "all" ? listings : listings.filter((l) => l.status === listFilter);
+  const setStatus = (id, status) => setListings((prev) => prev.map((x) => (x.id === id ? { ...x, status } : x)));
+  const addListing = () => { setEditing({ ...EMPTY_LISTING }); setView("editor"); };
+  const ActionBtn = ({ icon: I, label, onClick, tone = INK_2, bg = "#fff" }) => (
+    <button type="button" onClick={onClick}
+      className="h-9 px-3 rounded-lg text-[12.5px] font-semibold inline-flex items-center gap-1.5 transition-colors hover:brightness-95"
+      style={{ color: tone, backgroundColor: bg, border: `1px solid ${CARD_BORDER}` }}>
+      <I className="w-3.5 h-3.5" /> {label}
+    </button>
+  );
+
   return (
-    <div className="flex flex-col h-full min-h-0">
+    <div className="flex flex-col h-full min-h-0" style={{ fontFamily: FONT }}>
       <ScreenHeader title={canSell ? "Business Panel" : "Sell on PakMed"} subtitle={canSell ? seller.business : "Personal seller"} onBack={onBack} onMenu={onMenu} />
-      <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-4">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-5 space-y-4" style={{ backgroundColor: CREAM }}>
         {toast && (
-          <div className="rounded-xl p-3 mb-3 flex items-start gap-2" style={{ backgroundColor: GREEN_TINT }}>
-            <Check className="w-4 h-4 mt-0.5 shrink-0" style={{ color: GREEN }} />
-            <p className="text-[12.5px]" style={{ color: GREEN }}>{toast}</p>
+          <div className="rounded-xl px-4 py-3 flex items-center gap-2" style={{ backgroundColor: GREEN_TINT, border: "1px solid #C7E8D9" }}>
+            <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: GREEN }} />
+            <p className="text-[13px] font-semibold" style={{ color: GREEN }}>{toast}</p>
           </div>
         )}
 
-        {/* personal sellers: show the monthly allowance instead of a business card */}
-        {!canSell && (
-          <div className="rounded-2xl bg-white p-4 mb-3" style={{ border: `1px solid ${CARD_BORDER}` }}>
-            <div className="flex items-center justify-between">
-              <p className="text-[14.5px] font-bold" style={{ color: INK }}>Free listings this month</p>
-              <p className="text-[14.5px] font-extrabold" style={{ color: freeLeft ? GREEN : RED }}>{freeLeft} of {FREE_LISTINGS_PER_MONTH} left</p>
+        {/* plan / business card + primary action */}
+        <div className="rounded-2xl bg-white p-5 flex flex-col lg:flex-row lg:items-center gap-5" style={{ border: `1px solid ${CARD_BORDER}` }}>
+          {canSell ? (
+            <button type="button" onClick={() => setView("profile")} className="flex items-center gap-4 flex-1 min-w-0 text-left group">
+              <span className="w-14 h-14 rounded-2xl overflow-hidden shrink-0 flex items-center justify-center" style={{ backgroundColor: VIOLET_TINT }}>
+                {seller.logo ? <img src={seller.logo} alt="" className="w-full h-full object-cover" /> : <Store className="w-6 h-6" style={{ color: VIOLET }} />}
+              </span>
+              <span className="min-w-0">
+                <span className="flex items-center gap-2">
+                  <span className="text-[17px] font-extrabold truncate" style={{ color: INK }}>{seller.business}</span>
+                  <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full shrink-0" style={{ color: VIOLET, backgroundColor: VIOLET_TINT }}>Business</span>
+                </span>
+                <span className="block text-[13px] truncate mt-0.5" style={{ color: SUBTLE }}>{seller.type} · {[seller.area, seller.city].filter(Boolean).join(", ")}</span>
+                <span className="inline-flex items-center gap-1 text-[12.5px] font-bold mt-1 group-hover:underline" style={{ color: BRAND }}><Pencil className="w-3.5 h-3.5" /> Edit business profile</span>
+              </span>
+            </button>
+          ) : (
+            <div className="flex items-center gap-4 flex-1 min-w-0">
+              <span className="w-14 h-14 rounded-2xl shrink-0 flex items-center justify-center" style={{ backgroundColor: BRAND_50 }}>
+                <Tag className="w-6 h-6" style={{ color: BRAND }} />
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-[16px] font-extrabold" style={{ color: INK }}>Free plan · Personal seller</p>
+                  <p className="text-[13px] font-bold shrink-0" style={{ color: freeLeft ? GREEN : RED }}>{freeLeft} of {FREE_LISTINGS_PER_MONTH} free left</p>
+                </div>
+                <div className="flex gap-1.5 mt-2.5">
+                  {Array.from({ length: FREE_LISTINGS_PER_MONTH }).map((_, n) => (
+                    <span key={n} className="flex-1 h-2 rounded-full transition-colors" style={{ backgroundColor: n < usedThisMonth ? BRAND : "#E4E7EC" }} />
+                  ))}
+                </div>
+                <p className="text-[12.5px] mt-2 leading-snug" style={{ color: SUBTLE }}>
+                  List up to {FREE_LISTINGS_PER_MONTH} items a month, new or used. Selling regularly or offering services? Upgrade to a Business profile.
+                </p>
+              </div>
             </div>
-            <div className="flex gap-1.5 mt-2.5">
-              {Array.from({ length: FREE_LISTINGS_PER_MONTH }).map((_, n) => (
-                <span key={n} className="flex-1 h-2 rounded-full" style={{ backgroundColor: n < usedThisMonth ? BRAND : "#E4E7EC" }} />
-              ))}
-            </div>
-            <p className="text-[12.5px] mt-2.5 leading-snug" style={{ color: SUBTLE }}>
-              Anyone can list {FREE_LISTINGS_PER_MONTH} items a month, new or used. To list more, sell new stock regularly, or offer services, create a Business profile.
-            </p>
-            <button onClick={() => onNeedProfile(null, {})} className="mt-3 w-full h-11 rounded-xl text-[13.5px] font-bold flex items-center justify-center gap-1.5"
-              style={{ color: VIOLET, backgroundColor: VIOLET_TINT }}>
-              <Store className="w-4 h-4" /> Create a Business profile
+          )}
+          <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+            {!canSell && (
+              <button type="button" onClick={() => onNeedProfile(null, {})}
+                className="h-11 px-4 rounded-xl text-[13.5px] font-bold inline-flex items-center justify-center gap-2"
+                style={{ color: VIOLET, backgroundColor: VIOLET_TINT, border: "1px solid #DCD3FA" }}>
+                <Store className="w-4 h-4" /> Upgrade to Business
+              </button>
+            )}
+            <button type="button" onClick={addListing}
+              className="h-11 px-5 rounded-xl text-[14px] font-bold text-white inline-flex items-center justify-center gap-2 transition-all hover:brightness-110"
+              style={{ backgroundColor: BRAND, boxShadow: "0 8px 20px -10px rgba(11,87,183,0.6)" }}>
+              <Plus className="w-4 h-4" /> Add a listing
             </button>
           </div>
-        )}
+        </div>
 
-        {/* business card */}
-        {canSell && <button onClick={() => setView("profile")} className="w-full rounded-2xl bg-white p-3.5 flex items-center gap-3 mb-3 text-left active:scale-[0.99] transition-transform" style={{ border: `1px solid ${CARD_BORDER}` }}>
-          <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 flex items-center justify-center" style={{ backgroundColor: "#E6EAF3" }}>
-            {seller.logo ? <img src={seller.logo} alt="" className="w-full h-full object-cover" /> : <Store className="w-5 h-5" style={{ color: SUBTLE }} />}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[15px] font-semibold truncate" style={{ color: INK }}>{seller.business}</p>
-            <p className="text-[12.5px] truncate" style={{ color: SUBTLE }}>{seller.type} · {[seller.area, seller.city].filter(Boolean).join(", ")}</p>
-          </div>
-          <Pencil className="w-4 h-4 shrink-0" style={{ color: SUBTLE }} />
-        </button>}
-
-        {/* stats */}
-        <div className="grid grid-cols-3 gap-2 mb-3">
-          {[["Listings", listings.length], ["Enquiries", totals.enq], ["Comments", totals.com]].map(([k, v]) => (
-            <div key={k} className="rounded-xl bg-white p-3 text-center" style={{ border: `1px solid ${CARD_BORDER}` }}>
-              <p className="text-[19px] font-bold" style={{ color: NAVY }}>{v}</p>
-              <p className="text-[11px] mt-0.5" style={{ color: SUBTLE }}>{k}</p>
+        {/* KPIs */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            { label: "Live listings", value: statusCount("live"), sub: `${listings.length} total`, icon: Store, color: VIOLET, tint: VIOLET_TINT },
+            { label: "Views", value: totalViews, sub: "all listings", icon: Eye, color: BRAND, tint: BRAND_50 },
+            { label: "Enquiries", value: totals.enq, sub: "buyer messages", icon: MessageSquareText, color: TEAL, tint: TEAL_TINT },
+            { label: "Comments", value: totals.com, sub: "questions & reviews", icon: MessageCircle, color: AMBER, tint: AMBER_TINT },
+          ].map((k) => (
+            <div key={k.label} className="rounded-2xl bg-white p-4 flex items-center gap-3.5" style={{ border: `1px solid ${CARD_BORDER}` }}>
+              <span className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: k.tint }}>
+                <k.icon className="w-5 h-5" style={{ color: k.color }} />
+              </span>
+              <div className="min-w-0">
+                <p className="text-[22px] font-extrabold leading-none tabular-nums" style={{ color: INK }}>{k.value}</p>
+                <p className="text-[12.5px] font-semibold mt-1" style={{ color: INK_2 }}>{k.label}</p>
+                <p className="text-[11.5px]" style={{ color: FAINT }}>{k.sub}</p>
+              </div>
             </div>
           ))}
         </div>
 
-        <button
-          onClick={() => { setEditing({ ...EMPTY_LISTING }); setView("editor"); }}
-          className="w-full rounded-2xl p-4 flex items-center gap-3.5 mb-3 active:scale-[0.98] transition-transform"
-          style={{ backgroundColor: NAVY }}
-        >
-          <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "#FFFFFF22" }}>
-            <Upload className="w-5 h-5 text-white" />
+        {/* listings */}
+        <div className="rounded-2xl bg-white overflow-hidden" style={{ border: `1px solid ${CARD_BORDER}` }}>
+          <div className="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3" style={{ borderBottom: `1px solid ${CARD_BORDER}` }}>
+            <p className="text-[16px] font-extrabold flex-1" style={{ color: INK }}>Your listings</p>
+            <div className="flex gap-1.5 flex-wrap">
+              {[["all", "All", listings.length], ["live", "Live", statusCount("live")], ["hidden", "Hidden", statusCount("hidden")], ["sold", "Sold", statusCount("sold")]].map(([k, label, n]) => {
+                const on = listFilter === k;
+                return (
+                  <button key={k} type="button" onClick={() => setListFilter(k)} className="h-8 px-3 rounded-full text-[12.5px]"
+                    style={{ fontWeight: on ? 700 : 600, color: on ? "#fff" : INK_2, backgroundColor: on ? BRAND : "#fff", border: `1px solid ${on ? BRAND : CARD_BORDER}` }}>
+                    {label} · {n}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-          <div className="flex-1 text-left">
-            <p className="text-[15px] font-semibold text-white">Add a listing</p>
-            <p className="text-[12.5px] mt-0.5 text-white/70">Product, price, photos</p>
-          </div>
-          <ChevronRight className="w-4 h-4 shrink-0 text-white/60" />
-        </button>
 
-        <div className="flex items-center justify-between mt-4 mb-1.5">
-          <p className="text-[13px] font-semibold" style={{ color: INK_2 }}>Your listings</p>
-          <span className="text-[12px]" style={{ color: SUBTLE }}>{listings.filter((l) => l.status === "live").length} live</span>
+          {shownListings.length === 0 ? (
+            <div className="px-6 py-12 text-center">
+              <span className="w-14 h-14 rounded-2xl mx-auto flex items-center justify-center" style={{ backgroundColor: VIOLET_TINT }}><Store className="w-7 h-7" style={{ color: VIOLET }} /></span>
+              <p className="text-[15px] font-bold mt-3" style={{ color: INK }}>{listings.length ? "Nothing here" : "No listings yet"}</p>
+              <p className="text-[13px] mt-1" style={{ color: SUBTLE }}>{listings.length ? "Try another filter." : "Add your first product — it takes about a minute."}</p>
+              {!listings.length && (
+                <button type="button" onClick={addListing} className="mt-4 h-10 px-4 rounded-xl text-[13.5px] font-bold text-white inline-flex items-center gap-2" style={{ backgroundColor: BRAND }}>
+                  <Plus className="w-4 h-4" /> Add a listing
+                </button>
+              )}
+            </div>
+          ) : (
+            <ul>
+              {shownListings.map((l) => {
+                const st = LISTING_STATUS[l.status] || LISTING_STATUS.live;
+                const cover = l.photos && l.photos.length ? (l.photos[l.coverIndex] || l.photos[0]) : null;
+                const nComments = (l.comments || []).length;
+                const unanswered = (l.comments || []).filter((c) => !c.reply).length;
+                return (
+                  <li key={l.id} className="px-5 py-4 flex flex-col md:flex-row md:items-center gap-4" style={{ borderTop: `1px solid ${CARD_BORDER}`, opacity: l.status === "sold" ? 0.8 : 1 }}>
+                    <div className="flex gap-4 flex-1 min-w-0">
+                      <div className="w-20 h-20 rounded-xl overflow-hidden shrink-0 flex items-center justify-center" style={{ backgroundColor: VIOLET_TINT }}>
+                        {cover ? <img src={cover} alt="" className="w-full h-full object-cover" /> : <img src={marketCatOf(l.category).img} alt="" className="w-full h-full object-cover opacity-90" />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full" style={{ color: st.color, backgroundColor: st.tint }}>{st.label}</span>
+                          {l.stock && <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ color: INK_2, backgroundColor: "#F2F4F7" }}>{l.stock}</span>}
+                          {l.condition && <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ color: INK_2, backgroundColor: "#F2F4F7" }}>{l.condition}</span>}
+                        </div>
+                        <p className="text-[15px] font-bold leading-snug mt-1.5 truncate" style={{ color: INK }}>{l.name}</p>
+                        <p className="text-[12.5px] truncate" style={{ color: SUBTLE }}>{l.category}</p>
+                        <div className="flex items-center gap-4 mt-1.5 flex-wrap">
+                          <p className="text-[15px] font-extrabold" style={{ color: BRAND }}>PKR {l.price}{l.priceTo ? ` – ${l.priceTo}` : ""}</p>
+                          <span className="inline-flex items-center gap-3 text-[12px] font-semibold" style={{ color: SUBTLE }}>
+                            <span className="inline-flex items-center gap-1"><Eye className="w-3.5 h-3.5" /> {l.views || 0}</span>
+                            <span className="inline-flex items-center gap-1"><MessageSquareText className="w-3.5 h-3.5" /> {l.enquiries || 0}</span>
+                            <span className="inline-flex items-center gap-1"><MessageCircle className="w-3.5 h-3.5" /> {nComments}</span>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-1.5 md:justify-end md:max-w-[360px]">
+                      <ActionBtn icon={Pencil} label="Edit" tone={BRAND} onClick={() => { setEditing({ ...l }); setView("editor"); }} />
+                      <ActionBtn icon={MessageCircle} label={unanswered ? `Reply (${unanswered})` : `Comments${nComments ? ` (${nComments})` : ""}`}
+                        tone={unanswered ? "#fff" : INK_2} bg={unanswered ? AMBER : "#fff"} onClick={() => { setCommentsFor(l.id); setView("comments"); }} />
+                      {l.status !== "sold" && (
+                        <ActionBtn icon={l.status === "live" ? EyeOff : Eye} label={l.status === "live" ? "Hide" : "Show"} tone={l.status === "live" ? AMBER : GREEN}
+                          onClick={() => setStatus(l.id, l.status === "live" ? "hidden" : "live")} />
+                      )}
+                      {l.status === "sold"
+                        ? <ActionBtn icon={RotateCcw} label="Relist" tone={GREEN} onClick={() => setStatus(l.id, "live")} />
+                        : <ActionBtn icon={CheckCircle2} label="Mark sold" tone={INK_2} onClick={() => setStatus(l.id, "sold")} />}
+                      {confirmDel === l.id ? (
+                        <span className="inline-flex items-center gap-1">
+                          <button type="button" onClick={() => { setListings((prev) => prev.filter((x) => x.id !== l.id)); setConfirmDel(null); flash("Listing deleted."); }}
+                            className="h-9 px-3 rounded-lg text-[12.5px] font-bold text-white" style={{ backgroundColor: RED }}>Delete</button>
+                          <button type="button" onClick={() => setConfirmDel(null)} className="h-9 px-2.5 rounded-lg text-[12.5px] font-semibold" style={{ color: SUBTLE }}>Cancel</button>
+                        </span>
+                      ) : (
+                        <button type="button" onClick={() => setConfirmDel(l.id)} aria-label={`Delete ${l.name}`} title="Delete listing"
+                          className="h-9 w-9 rounded-lg inline-flex items-center justify-center hover:bg-[#FDECEC]" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                          <Trash2 className="w-4 h-4" style={{ color: RED }} />
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
 
-        {listings.length === 0 ? (
-          <div className="rounded-2xl bg-white p-6 text-center" style={{ border: `1px solid ${CARD_BORDER}` }}>
-            <Store className="w-8 h-8 mx-auto mb-2" style={{ color: SUBTLE }} />
-            <p className="text-[13.5px]" style={{ color: SUBTLE }}>No listings yet. Add your first product above.</p>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2.5">
-            {listings.map((l) => (
-              <div key={l.id} className="rounded-2xl bg-white p-3.5" style={{ border: `1px solid ${CARD_BORDER}` }}>
-                <div className="flex gap-3">
-                  {l.photos && l.photos.length > 0 ? (
-                    <img src={l.photos[l.coverIndex] || l.photos[0]} alt="" className="w-16 h-16 rounded-xl object-cover shrink-0" />
-                  ) : (
-                    <div className="w-16 h-16 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "#EFF2FA" }}>
-                      <Store className="w-6 h-6" style={{ color: SUBTLE }} />
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                        style={{ color: l.status === "live" ? GREEN : l.status === "sold" ? SUBTLE : "#B45309",
-                                 backgroundColor: l.status === "live" ? GREEN_TINT : l.status === "sold" ? "#EFF2FA" : "#FDF3E3" }}>
-                        {l.status === "live" ? "Live" : l.status === "sold" ? "Sold" : "Hidden"}
-                      </span>
-                      <span className="text-[10.5px]" style={{ color: SUBTLE }}>{l.stock}</span>
-                    </div>
-                    <p className="text-[14.5px] font-semibold leading-snug" style={{ color: INK }}>{l.name}</p>
-                    <p className="text-[12px] mt-0.5 truncate" style={{ color: SUBTLE }}>{l.category}</p>
-                    <p className="text-[14px] font-bold mt-1" style={{ color: NAVY }}>
-                      PKR {l.price}{l.priceTo ? ` – ${l.priceTo}` : ""}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1.5 mt-2.5 pt-2.5" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
-                  <button onClick={() => { setEditing({ ...l }); setView("editor"); }} className="flex-1 py-2 rounded-full text-[12.5px] font-semibold" style={{ backgroundColor: "#EFF2FA", color: INK }}>
-                    Edit
-                  </button>
-                  <button onClick={() => { setCommentsFor(l.id); setView("comments"); }} className="flex-1 py-2 rounded-full text-[12.5px] font-semibold" style={{ backgroundColor: "#EAF0F8", color: NAVY }}>
-                    Comments {(l.comments || []).length > 0 ? `(${l.comments.length})` : ""}
-                  </button>
-                  <button
-                    onClick={() => setListings((prev) => prev.map((x) => x.id === l.id
-                      ? { ...x, status: x.status === "live" ? "hidden" : "live" } : x))}
-                    className="px-3 py-2 rounded-full text-[12.5px] font-semibold"
-                    style={{ backgroundColor: "#EFF2FA", color: INK }}
-                  >
-                    {l.status === "live" ? "Hide" : "Show"}
-                  </button>
-                </div>
-
-                <div className="flex gap-1.5 mt-1.5">
-                  <button
-                    onClick={() => setListings((prev) => prev.map((x) => x.id === l.id ? { ...x, status: "sold" } : x))}
-                    className="flex-1 py-2 rounded-full text-[12px] font-semibold" style={{ backgroundColor: "#EFF2FA", color: SUBTLE }}
-                  >
-                    Mark sold
-                  </button>
-                  <button
-                    onClick={() => setListings((prev) => prev.filter((x) => x.id !== l.id))}
-                    className="flex-1 py-2 rounded-full text-[12px] font-semibold" style={{ backgroundColor: "#FBEBEC", color: RED }}
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <p className="text-[11.5px] mt-4 leading-snug px-1" style={{ color: SUBTLE }}>
-          You can only see view and enquiry counts — never who viewed your listing. Buyer contact
-          details appear only after they message you.
-        </p>
+        <div className="rounded-xl px-4 py-3 flex items-start gap-2.5" style={{ backgroundColor: "#fff", border: `1px solid ${CARD_BORDER}` }}>
+          <Shield className="w-4 h-4 mt-0.5 shrink-0" style={{ color: BRAND }} />
+          <p className="text-[12.5px] leading-snug" style={{ color: SUBTLE }}>
+            You only see view and enquiry counts — never who viewed your listing. Buyer contact details appear only after they message you.
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -3284,12 +3337,12 @@ function ScreenHeader({ title, subtitle, onBack, onMenu, right }) {
   const iconBtn = "w-10 h-10 rounded-xl flex items-center justify-center bg-white shrink-0 transition-colors hover:bg-[#F5F7FA]";
   return (
     <div className={`px-4 sm:px-6 pt-4 pb-3.5 items-center gap-2.5 shrink-0 bg-white ${inDash ? "hidden lg:flex" : "flex"}`} style={{ borderBottom: `1px solid ${CARD_BORDER}`, fontFamily: FONT }}>
-      {onBack && (
+      {onBack && !inDash && (
         <button onClick={onBack} className={iconBtn} style={{ border: `1px solid ${CARD_BORDER}` }} aria-label="Back">
           <ChevronLeft className="w-5 h-5" style={{ color: INK }} />
         </button>
       )}
-      {goHome && (
+      {goHome && !inDash && (
         <button onClick={goHome} className={iconBtn} style={{ border: `1px solid ${CARD_BORDER}` }} aria-label="Home">
           <Home className="w-[17px] h-[17px]" style={{ color: INK }} />
         </button>
@@ -3299,7 +3352,7 @@ function ScreenHeader({ title, subtitle, onBack, onMenu, right }) {
         {subtitle && <p className="text-[12.5px] sm:text-[13px] mt-0.5 truncate" style={{ color: SUBTLE }}>{subtitle}</p>}
       </div>
       {right}
-      {onMenu && (
+      {onMenu && !inDash && (
         <button onClick={onMenu} className={iconBtn} style={{ border: `1px solid ${CARD_BORDER}` }} aria-label="Open menu">
           <Menu className="w-5 h-5" style={{ color: INK }} />
         </button>
@@ -9313,110 +9366,159 @@ function ModerationScreen({ reports, setReports, onBack, onMenu }) {
   );
 }
 
-function MyJobsScreen({ onBack, onMenu, postedJobs, jobSocial, onOpenJob, onToggleFav, applicants }) {
+const APP_STEPS = ["Applied", "Viewed", "Shortlisted"];
+const appStatus = (s) =>
+  s === "shortlisted" ? { label: "Shortlisted", step: 2, color: GREEN, tint: GREEN_TINT, note: "The employer shortlisted you — expect a message soon." }
+  : s === "rejected" ? { label: "Not selected", step: -1, color: SUBTLE, tint: "#F2F4F7", note: "The employer moved forward with other candidates." }
+  : s === "viewed" ? { label: "Viewed", step: 1, color: BRAND, tint: BRAND_50, note: "The employer opened your CV." }
+  : { label: "Applied", step: 0, color: AMBER, tint: AMBER_TINT, note: "Waiting for the employer to review your application." };
+
+function MyJobsScreen({ onBack, onMenu, postedJobs, jobSocial, onOpenJob, onToggleFav, applicants, onFindJobs }) {
   const [shareJob, setShareJob] = useState(null);
-  const [tab, setTab] = useState("saved");
   const all = [...postedJobs.filter((j) => j.status === "posted"), ...SEED_JOBS];
   const favs = all.filter((j) => jobSocial[j.id] && jobSocial[j.id].favourite);
   const mineApps = (applicants || []).filter((a) => a.id.startsWith("me-"));
   const appliedJobs = mineApps.map((a) => ({ app: a, job: all.find((j) => j.id === a.jobId) })).filter((x) => x.job);
+  const [tab, setTab] = useState(appliedJobs.length || !favs.length ? "applied" : "saved");
+  const count = (s) => appliedJobs.filter(({ app }) => (app.status || "new") === s).length;
+
+  const kpis = [
+    { label: "Applications", value: appliedJobs.length, icon: FileText, color: BRAND, tint: BRAND_50 },
+    { label: "Viewed by employer", value: count("viewed") + count("shortlisted"), icon: Eye, color: TEAL, tint: TEAL_TINT },
+    { label: "Shortlisted", value: count("shortlisted"), icon: BadgeCheck, color: GREEN, tint: GREEN_TINT },
+    { label: "Saved jobs", value: favs.length, icon: Bookmark, color: VIOLET, tint: VIOLET_TINT },
+  ];
+
+  const Empty = ({ icon: I, title, sub }) => (
+    <div className="rounded-2xl bg-white px-6 py-14 text-center" style={{ border: `1px solid ${CARD_BORDER}` }}>
+      <span className="w-14 h-14 rounded-2xl mx-auto flex items-center justify-center" style={{ backgroundColor: BRAND_50 }}><I className="w-7 h-7" style={{ color: BRAND }} /></span>
+      <p className="text-[15.5px] font-bold mt-3" style={{ color: INK }}>{title}</p>
+      <p className="text-[13px] mt-1 max-w-sm mx-auto" style={{ color: SUBTLE }}>{sub}</p>
+      {onFindJobs && (
+        <button type="button" onClick={onFindJobs} className="mt-4 h-10 px-4 rounded-xl text-[13.5px] font-bold text-white inline-flex items-center gap-2" style={{ backgroundColor: BRAND }}>
+          <Search className="w-4 h-4" /> Browse jobs
+        </button>
+      )}
+    </div>
+  );
 
   return (
-    <div className="flex flex-col h-full min-h-0">
-      <ScreenHeader title="My Jobs" subtitle="Saved and applied" onBack={onBack} onMenu={onMenu} />
-
-      <div className="px-3 pb-2 shrink-0 flex gap-2">
-        {[["saved", `Saved (${favs.length})`], ["applied", `Applied (${appliedJobs.length})`]].map(([k, l]) => (
-          <button key={k} onClick={() => setTab(k)} className="px-3.5 py-2 rounded-full text-[12.5px] font-semibold transition-colors"
-            style={{ backgroundColor: tab === k ? NAVY : "white", color: tab === k ? "white" : INK, border: `1.5px solid ${tab === k ? NAVY : CARD_BORDER}` }}>
-            {l}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-4">
-        {tab === "applied" && (
-          appliedJobs.length === 0 ? (
-            <div className="rounded-2xl bg-white p-6 text-center mt-1" style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: SOFT_SHADOW }}>
-              <FileText className="w-9 h-9 mx-auto mb-2" style={{ color: SUBTLE }} />
-              <p className="text-[14px] font-semibold" style={{ color: INK }}>No applications yet</p>
-              <p className="text-[12.5px] mt-1" style={{ color: SUBTLE }}>Jobs you apply to will show here with their status.</p>
+    <div className="flex flex-col h-full min-h-0" style={{ fontFamily: FONT }}>
+      <ScreenHeader title="My jobs" subtitle="Track your applications and saved jobs" onBack={onBack} onMenu={onMenu} />
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-5 space-y-4" style={{ backgroundColor: CREAM }}>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {kpis.map((k) => (
+            <div key={k.label} className="rounded-2xl bg-white p-4 flex items-center gap-3.5" style={{ border: `1px solid ${CARD_BORDER}` }}>
+              <span className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: k.tint }}><k.icon className="w-5 h-5" style={{ color: k.color }} /></span>
+              <div className="min-w-0">
+                <p className="text-[22px] font-extrabold leading-none tabular-nums" style={{ color: INK }}>{k.value}</p>
+                <p className="text-[12.5px] font-semibold mt-1 truncate" style={{ color: SUBTLE }}>{k.label}</p>
+              </div>
             </div>
-          ) : (
-            <div className="flex flex-col gap-2.5">
-              {appliedJobs.map(({ app, job }) => {
-                const seekerStatus =
-                  app.status === "shortlisted" ? { label: "Shortlisted", color: GREEN, tint: GREEN_TINT, note: "The employer shortlisted you." }
-                  : app.status === "rejected" ? { label: "Not selected", color: SUBTLE, tint: "#EFF2FA", note: "The employer moved on with others." }
-                  : app.status === "viewed" ? { label: "Viewed", color: NAVY, tint: NAVY_TINT, note: "The employer opened your CV." }
-                  : { label: "Applied", color: AMBER, tint: AMBER_TINT, note: "Waiting for the employer to review." };
-                return (
-                  <button key={app.id} onClick={() => onOpenJob(job)} className="rounded-2xl bg-white p-3.5 text-left active:scale-[0.99] transition-transform" style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: SOFT_SHADOW }}>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: seekerStatus.color, backgroundColor: seekerStatus.tint }}>{seekerStatus.label}</span>
-                    <p className="text-[15.5px] font-bold mt-1.5" style={{ color: INK }}>{job.jobTitle}</p>
-                    <p className="text-[12.5px] mt-0.5" style={{ color: SUBTLE }}>{job.facilityName} · {job.city}</p>
-                    <p className="text-[14px] font-bold mt-1" style={{ color: NAVY }}>PKR {job.payAmount} <span className="text-[11px] font-medium" style={{ color: SUBTLE }}>{job.payUnitLabel}</span></p>
-                    <p className="text-[12px] mt-1.5" style={{ color: SUBTLE }}>{seekerStatus.note} · applied {app.at}</p>
-                  </button>
-                );
-              })}
-            </div>
-          )
-        )}
+          ))}
+        </div>
 
-        {tab === "saved" && (favs.length === 0 ? (
-          <div className="rounded-2xl bg-white p-6 text-center mt-1" style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: SOFT_SHADOW }}>
-            <Bookmark className="w-9 h-9 mx-auto mb-2" style={{ color: SUBTLE }} />
-            <p className="text-[14px] font-semibold" style={{ color: INK }}>No saved jobs yet</p>
-            <p className="text-[12.5px] mt-1" style={{ color: SUBTLE }}>Tap the bookmark on any job to keep it here.</p>
+        <div className="flex items-center gap-2">
+          <div className="inline-flex p-1 rounded-xl bg-white" style={{ border: `1px solid ${CARD_BORDER}` }}>
+            {[["applied", "Applications", appliedJobs.length], ["saved", "Saved", favs.length]].map(([k, label, n]) => (
+              <button key={k} type="button" onClick={() => setTab(k)} className="h-9 px-4 rounded-lg text-[13.5px] font-bold inline-flex items-center gap-2 transition-colors"
+                style={{ color: tab === k ? "#fff" : INK_2, backgroundColor: tab === k ? BRAND : "transparent" }}>
+                {label}
+                <span className="text-[11px] px-1.5 py-0.5 rounded-md" style={{ backgroundColor: tab === k ? "rgba(255,255,255,0.22)" : "#F2F4F7" }}>{n}</span>
+              </button>
+            ))}
           </div>
+          {onFindJobs && (
+            <button type="button" onClick={onFindJobs} className="ml-auto h-10 px-4 rounded-xl text-[13.5px] font-bold inline-flex items-center gap-2 bg-white" style={{ color: BRAND, border: `1px solid ${CARD_BORDER}` }}>
+              <Search className="w-4 h-4" /> <span className="hidden sm:inline">Find more jobs</span>
+            </button>
+          )}
+        </div>
+
+        {tab === "applied" && (appliedJobs.length === 0 ? (
+          <Empty icon={FileText} title="No applications yet" sub="Apply to a job with your CV and track every step here — viewed, shortlisted and replies." />
         ) : (
-          <>
-            <p className="text-[14px] font-bold mb-2" style={{ color: INK, letterSpacing: "-0.01em" }}>{favs.length} saved</p>
-            <div className="flex flex-col gap-2.5">
-              {favs.map((j) => (
-                <button key={j.id} onClick={() => onOpenJob(j)} className="rounded-2xl bg-white p-3 text-left active:scale-[0.99] transition-transform" style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: SOFT_SHADOW }}>
-                  <div className="flex gap-3">
-                    <div className="shrink-0 rounded-xl overflow-hidden relative" style={{ width: 72, height: 90, border: `1px solid ${CARD_BORDER}` }}>
-                      {j.photos && j.photos.length > 0 ? (
-                        <img src={j.photos[j.coverIndex] || j.photos[0]} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        <div style={{ transform: "scale(0.26)", transformOrigin: "top left", width: 277, position: "absolute", top: 0, left: 0, pointerEvents: "none" }}>
-                          <JobPostCard job={j} tpl={CARD_TEMPLATES.find((t) => t.id === j.templateId) || CARD_TEMPLATES[0]} scale={1} />
-                        </div>
-                      )}
-                    </div>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+            {appliedJobs.map(({ app, job }) => {
+              const st = appStatus(app.status);
+              const role = jobRoleVisual(job.jobTitle);
+              return (
+                <button key={app.id} type="button" onClick={() => onOpenJob(job)}
+                  className="rounded-2xl bg-white p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-lg" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                  <div className="flex items-start gap-3">
+                    <span className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: role.tint, color: role.color }}><role.Icon className="w-5 h-5" /></span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[15.5px] font-bold leading-snug" style={{ color: INK }}>{j.jobTitle}</p>
-                      <p className="text-[16px] font-bold mt-1" style={{ color: NAVY }}>
-                        PKR {j.payAmount}<span className="text-[11.5px] font-medium ml-1" style={{ color: SUBTLE }}>{j.payUnitLabel}</span>
-                      </p>
-                      <p className="text-[12px] mt-1 truncate" style={{ color: SUBTLE }}>{j.facilityName}</p>
-                      <p className="text-[11.5px] mt-0.5 truncate" style={{ color: SUBTLE }}><IconText icon={MapPin}>{[j.area, j.city].filter(Boolean).join(", ")}</IconText></p>
-                    </div>
-                    <div className="flex flex-col gap-1.5 shrink-0">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); onToggleFav(j.id); }}
-                        className="w-7 h-7 rounded-full flex items-center justify-center active:scale-90 transition-transform"
-                        style={{ backgroundColor: NAVY_TINT, border: `1px solid ${NAVY}55` }}
-                        aria-label="Remove from favourites"
-                      >
-                        <Bookmark className="w-3.5 h-3.5" strokeWidth={2.2} fill={NAVY} stroke={NAVY} />
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setShareJob(j); }}
-                        className="w-7 h-7 rounded-full flex items-center justify-center active:scale-90 transition-transform"
-                        style={{ backgroundColor: "#F1F3F9", border: `1px solid ${CARD_BORDER}` }}
-                        aria-label="Share job"
-                      >
-                        <Repeat2 className="w-3.5 h-3.5" strokeWidth={2.2} style={{ color: SUBTLE }} />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <p className="text-[15.5px] font-bold truncate flex-1" style={{ color: INK }}>{job.jobTitle}</p>
+                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full shrink-0" style={{ color: st.color, backgroundColor: st.tint }}>{st.label}</span>
+                      </div>
+                      <p className="text-[12.5px] truncate" style={{ color: SUBTLE }}>{job.facilityName} · {[job.area, job.city].filter(Boolean).join(", ")}</p>
+                      <p className="text-[14px] font-extrabold mt-1" style={{ color: GREEN }}>PKR {job.payAmount} <span className="text-[11.5px] font-semibold" style={{ color: FAINT }}>{job.payUnitLabel}</span></p>
                     </div>
                   </div>
+                  {/* progress */}
+                  <div className="mt-4">
+                    <div className="flex items-center">
+                      {APP_STEPS.map((s, i) => {
+                        const done = st.step >= i;
+                        return (
+                          <div key={s} className="flex items-center flex-1 last:flex-none">
+                            <span className="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
+                              style={{ backgroundColor: done ? st.color : "#fff", border: `2px solid ${done ? st.color : CARD_BORDER}` }}>
+                              {done && <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />}
+                            </span>
+                            {i < APP_STEPS.length - 1 && <span className="flex-1 h-[3px] mx-1.5 rounded-full" style={{ backgroundColor: st.step > i ? st.color : CARD_BORDER }} />}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="flex justify-between mt-1.5 text-[11px] font-semibold" style={{ color: SUBTLE }}>
+                      {APP_STEPS.map((s) => <span key={s}>{s}</span>)}
+                    </div>
+                  </div>
+                  <p className="text-[12.5px] mt-3 pt-3 flex items-center gap-1.5" style={{ color: INK_2, borderTop: `1px solid ${CARD_BORDER}` }}>
+                    <Clock className="w-3.5 h-3.5 shrink-0" style={{ color: FAINT }} /> {st.note} <span style={{ color: FAINT }}>· applied {app.at}</span>
+                  </p>
                 </button>
-              ))}
-            </div>
-          </>
+              );
+            })}
+          </div>
+        ))}
+
+        {tab === "saved" && (favs.length === 0 ? (
+          <Empty icon={Bookmark} title="No saved jobs yet" sub="Tap the bookmark on any job to keep it here and apply later." />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {favs.map((j) => {
+              const role = jobRoleVisual(j.jobTitle);
+              return (
+                <div key={j.id} className="rounded-2xl bg-white p-4 flex flex-col" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                  <div className="flex items-start gap-3">
+                    <span className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: role.tint, color: role.color }}><role.Icon className="w-5 h-5" /></span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[15px] font-bold truncate" style={{ color: INK }}>{j.jobTitle}</p>
+                      <p className="text-[12.5px] truncate" style={{ color: SUBTLE }}>{j.facilityName}</p>
+                    </div>
+                    <button type="button" onClick={() => onToggleFav(j.id)} aria-label="Remove from saved" title="Remove from saved"
+                      className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: BRAND_50 }}>
+                      <Bookmark className="w-4 h-4" fill={BRAND} stroke={BRAND} />
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 mt-3">
+                    <span className="text-[11.5px] font-semibold px-2 py-0.5 rounded-md" style={{ color: GREEN, backgroundColor: GREEN_TINT }}>PKR {j.payAmount} / {(j.payUnitLabel || "").replace(/^Per /i, "").toLowerCase()}</span>
+                    <span className="text-[11.5px] font-semibold px-2 py-0.5 rounded-md inline-flex items-center gap-1" style={{ color: INK_2, backgroundColor: CREAM }}><MapPin className="w-3 h-3" /> {j.city}</span>
+                    {(j.shifts || []).slice(0, 2).map((s) => <span key={s} className="text-[11.5px] font-semibold px-2 py-0.5 rounded-md" style={{ color: INK_2, backgroundColor: CREAM }}>{s}</span>)}
+                  </div>
+                  <div className="flex gap-2 mt-auto pt-4">
+                    <button type="button" onClick={() => onOpenJob(j)} className="flex-1 h-9 rounded-lg text-[13px] font-bold text-white" style={{ backgroundColor: BRAND }}>View & apply</button>
+                    <button type="button" onClick={() => setShareJob(j)} aria-label="Share job" className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                      <Repeat2 className="w-4 h-4" style={{ color: INK_2 }} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         ))}
       </div>
       {shareJob && <JobShareSheet job={shareJob} onClose={() => setShareJob(null)} />}
@@ -16708,7 +16810,7 @@ function UserDashboard({ tab, groups, user, onSelect, onExit, onSignOut, onBack,
             <ChevronLeft className="w-5 h-5" style={{ color: INK }} />
           </button>
         )}
-        <p className="flex-1 min-w-0 text-[15px] font-extrabold truncate" style={{ color: INK }}>{current ? current.label : "Dashboard"}</p>
+        <p className="flex-1 min-w-0 text-[15px] font-extrabold truncate" style={{ color: INK }}>{current ? current.label : tab === "seller" ? "Sell on PakMed" : "Dashboard"}</p>
         <button type="button" onClick={onExit} className="h-9 px-3 rounded-lg text-[12.5px] font-bold inline-flex items-center gap-1.5 shrink-0" style={{ color: INK_2, border: `1px solid ${CARD_BORDER}` }}>
           <Globe className="w-4 h-4" /> Website
         </button>
@@ -17422,6 +17524,17 @@ export default function PakMedApp() {
                   onToggleJob={toggleJobFav}
                   onToggleSave={toggleSave}
                   onSignOut={() => { setAuthed(false); authedRef.current = false; setHistory(["home"]); }}
+                  {...navProps}
+                />
+              )}
+              {tab === "myjobs" && (
+                <MyJobsScreen
+                  postedJobs={postedJobs}
+                  jobSocial={jobSocial}
+                  applicants={applicants}
+                  onOpenJob={(j) => setFavJob(j)}
+                  onToggleFav={toggleJobFav}
+                  onFindJobs={() => { setSectionQ(""); navigate("findjob"); }}
                   {...navProps}
                 />
               )}
