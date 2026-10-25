@@ -283,4 +283,5 @@ select { accent-color: #0B57B7; }
 /* hero: decorative photos drift gently */
 @keyframes hero-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
 .hero-float { animation: hero-float 6s ease-in-out infinite; }
-@media (prefers-reduced-motion: reduce) { .hero-float { animation: none !important; } }
+.hero-float-alt { animation: hero-float 7s ease-in-out 1.2s infinite; }
+@media (prefers-reduced-motion: reduce) { .hero-float, .hero-float-alt { animation: none !important; } }

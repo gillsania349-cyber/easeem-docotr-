@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, createContext, useContext } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, createContext, useContext } from "react";
 import { createPortal } from "react-dom";
 import {
   Bell, Home, Briefcase, Activity, Mail, User, Heart, MessageCircle, Repeat2, Bookmark, Send, X,
@@ -14,8 +14,9 @@ import {
   ScanLine, BedDouble, Sparkles, Package, Truck, Tag,
   Siren, TestTube, Navigation, LayoutGrid,
   Minus, Save, ClipboardList,
-  Ban, CircleAlert, LayoutDashboard, Megaphone, Headphones, Trash2, RotateCcw, Inbox, UserCheck, ImagePlus, CheckCheck, ShieldAlert,
+  Ban, CircleAlert, Reply, LayoutDashboard, Megaphone, Headphones, Trash2, RotateCcw, Inbox, UserCheck, ImagePlus, CheckCheck, ShieldAlert,
 } from "lucide-react";
+import PrescriptionPad, { readRxSaved, readRxPads, RxPreview, RX_TEMPLATES, rxCheck, rxFmtDateTime, rxAgeText, rxEnLine, rxUrLine, rxMedTitle } from "./rx/RxPad";
 
 // ---------------- Theme ----------------
 // Professional palette: one confident brand blue, neutral surfaces,
@@ -2763,35 +2764,34 @@ function MarketHubScreen({ initialQuery, onBack, onMenu, onOpenSeller, onSendMes
   return (
     <div className="w-full min-w-0" style={{ fontFamily: FONT }}>
       {/* hero */}
-      <section className="relative z-10" style={{ background: "linear-gradient(135deg, #2E2370 0%, #5B47C7 55%, #0B57B7 100%)" }}>
-        <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute -right-24 -top-24 w-80 h-80 rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.07)" }} />
-          <img src={`${MKT_IMG}/patient-monitor.jpg`} alt="" className="hidden lg:block absolute right-0 top-0 h-full w-[34%] object-cover opacity-25" style={{ maskImage: "linear-gradient(90deg, transparent, #000 60%)", WebkitMaskImage: "linear-gradient(90deg, transparent, #000 60%)" }} />
-        </div>
+      <section className="relative z-10 overflow-x-clip" style={{ background: "linear-gradient(180deg, #EAF2FC 0%, #F4F8FD 45%, #FFFFFF 100%)", borderBottom: `1px solid ${CARD_BORDER}` }}>
+        <div className="pointer-events-none absolute inset-0 opacity-60"
+          style={{ backgroundImage: "radial-gradient(rgba(11,87,183,0.10) 1px, transparent 1px)", backgroundSize: "22px 22px", maskImage: "linear-gradient(180deg, #000 0%, transparent 75%)", WebkitMaskImage: "linear-gradient(180deg, #000 0%, transparent 75%)" }} />
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-6 pb-8 sm:pt-8 sm:pb-10">
           <div className="flex items-center gap-2 mb-5">
             {onBack && (
-              <button type="button" onClick={onBack} aria-label="Back" className="w-9 h-9 rounded-xl flex items-center justify-center bg-white/15 hover:bg-white/25 transition-colors">
-                <ChevronLeft className="w-5 h-5 text-white" />
+              <button type="button" onClick={onBack} aria-label="Back" className="w-9 h-9 rounded-xl flex items-center justify-center bg-white transition-colors hover:bg-[#F5F7FA]" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                <ChevronLeft className="w-5 h-5" style={{ color: INK }} />
               </button>
             )}
-            <p className="text-[13px] font-semibold text-white/80">Home <span className="mx-1 text-white/50">/</span> <span className="text-white">Buy / Sell</span></p>
+            <p className="text-[13px] font-semibold" style={{ color: SUBTLE }}>Home <span className="mx-1" style={{ color: FAINT }}>/</span> <span style={{ color: INK }}>Buy / Sell</span></p>
           </div>
-          <h1 className="text-[28px] sm:text-[38px] font-extrabold tracking-[-0.03em] leading-tight text-white">Medical equipment marketplace</h1>
-          <p className="text-[14.5px] sm:text-[16px] mt-2 text-white/80">Buy, sell and service equipment from {new Set(SEED_MARKET_ITEMS.map((i) => i.seller)).size}+ trusted suppliers across Pakistan</p>
+          <div className="flex justify-center"><span className="inline-flex items-center gap-2 text-[12px] font-bold px-3.5 py-1.5 rounded-full bg-white" style={{ color: VIOLET, border: "1px solid #DCD5F7", boxShadow: "0 2px 6px rgba(16,24,40,0.06)" }}><Store className="w-3.5 h-3.5" /> Buy, sell & service medical equipment</span></div>
+          <h1 className="mt-4 text-center text-[30px] sm:text-[42px] lg:text-[48px] font-extrabold tracking-[-0.035em] leading-[1.08]" style={{ color: INK }}>Medical equipment <span style={{ color: VIOLET }}>marketplace</span></h1>
+          <p className="text-center text-[15px] sm:text-[16.5px] mt-3 max-w-[640px] mx-auto leading-relaxed" style={{ color: SUBTLE }}>Buy, sell and service equipment from {new Set(SEED_MARKET_ITEMS.map((i) => i.seller)).size}+ trusted suppliers across Pakistan</p>
 
-          <div className="inline-flex p-1 rounded-2xl mt-6 bg-white/12" style={{ backgroundColor: "rgba(255,255,255,0.12)" }} role="tablist">
+          <div className="flex w-fit mx-auto p-1 rounded-2xl mt-6 bg-white" style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: "0 2px 6px rgba(16,24,40,0.05)" }} role="tablist">
             {[["buy", "Buy", Store], ["sell", "Sell", Tag], ["services", "Services & repair", Wrench]].map(([k, label, Icon]) => (
               <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
                 className="h-10 px-3.5 sm:px-5 rounded-xl text-[14px] font-bold inline-flex items-center gap-2 transition-all"
-                style={{ backgroundColor: tab === k ? "#fff" : "transparent", color: tab === k ? VIOLET : "#fff" }}>
+                style={{ backgroundColor: tab === k ? VIOLET : "transparent", color: tab === k ? "#fff" : INK_2 }}>
                 <Icon className="w-4 h-4" /> {label}
               </button>
             ))}
           </div>
 
           {tab !== "sell" && (
-            <form onSubmit={runSearch} className="mt-4 bg-white rounded-2xl p-2 grid grid-cols-1 md:grid-cols-[1.3fr_1fr_auto] gap-2 relative z-20" style={{ boxShadow: "0 20px 40px -20px rgba(0,0,0,0.4)" }}>
+            <form onSubmit={runSearch} className="mt-5 max-w-[860px] mx-auto bg-white rounded-2xl p-2 grid grid-cols-1 md:grid-cols-[1.3fr_1fr_auto] gap-2 relative z-20" style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: "0 18px 40px -22px rgba(16,24,40,0.28)" }}>
               <SearchSuggestInput
                 icon={tab === "services" ? Wrench : Search}
                 value={qDraft}
@@ -5668,32 +5668,33 @@ function PostJobScreen({ onBack, onMenu, postedJobs, onPublish, canPost, onNeedP
     const applicantsTotal = postedJobs.reduce((n, j) => n + (j.applicants || 0), 0);
     return (
       <div className="w-full min-w-0" style={{ fontFamily: FONT }}>
-        <section className="relative overflow-hidden" style={{ background: "linear-gradient(135deg, #0B4D33 0%, #12805C 55%, #0B57B7 100%)" }}>
-          <div className="pointer-events-none absolute -right-24 -top-24 w-80 h-80 rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.07)" }} />
-          <img src="/images/landing/offer-job.jpg" alt="" className="hidden lg:block absolute right-0 top-0 h-full w-[36%] object-cover opacity-25" style={{ maskImage: "linear-gradient(90deg, transparent, #000 60%)", WebkitMaskImage: "linear-gradient(90deg, transparent, #000 60%)" }} />
+        <section className="relative overflow-hidden" style={{ background: "linear-gradient(180deg, #EAF2FC 0%, #F4F8FD 45%, #FFFFFF 100%)", borderBottom: `1px solid ${CARD_BORDER}` }}>
+          <div className="pointer-events-none absolute inset-0 opacity-60"
+          style={{ backgroundImage: "radial-gradient(rgba(11,87,183,0.10) 1px, transparent 1px)", backgroundSize: "22px 22px", maskImage: "linear-gradient(180deg, #000 0%, transparent 75%)", WebkitMaskImage: "linear-gradient(180deg, #000 0%, transparent 75%)" }} />
           <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-6 pb-8 sm:pt-8 sm:pb-10">
             <div className="flex items-center gap-2 mb-5">
               {onBack && (
-                <button type="button" onClick={onBack} aria-label="Back" className="w-9 h-9 rounded-xl flex items-center justify-center bg-white/15 hover:bg-white/25 transition-colors">
-                  <ChevronLeft className="w-5 h-5 text-white" />
+                <button type="button" onClick={onBack} aria-label="Back" className="w-9 h-9 rounded-xl flex items-center justify-center bg-white transition-colors hover:bg-[#F5F7FA]" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                  <ChevronLeft className="w-5 h-5" style={{ color: INK }} />
                 </button>
               )}
-              <p className="text-[13px] font-semibold text-white/80">Home <span className="mx-1 text-white/50">/</span> <span className="text-white">Offer a Job</span></p>
+              <p className="text-[13px] font-semibold" style={{ color: SUBTLE }}>Home <span className="mx-1" style={{ color: FAINT }}>/</span> <span style={{ color: INK }}>Offer a Job</span></p>
             </div>
-            <div className="flex flex-col lg:flex-row lg:items-end gap-6">
-              <div className="flex-1 min-w-0">
-                <h1 className="text-[28px] sm:text-[38px] font-extrabold tracking-[-0.03em] leading-tight text-white">Hire verified healthcare staff</h1>
-                <p className="text-[14.5px] sm:text-[16px] mt-2 text-white/85 max-w-xl">Post a job in about two minutes. Choose the documents applicants must upload, and review CVs from PMDC-registered professionals.</p>
-                <button type="button" onClick={startNew} className="mt-6 h-12 px-6 rounded-xl text-[15px] font-bold inline-flex items-center gap-2 bg-white transition-transform hover:-translate-y-0.5" style={{ color: GREEN }}>
+            <div className="flex flex-col items-center text-center gap-7">
+              <div className="min-w-0 max-w-[680px]">
+                <div className="flex justify-center"><span className="inline-flex items-center gap-2 text-[12px] font-bold px-3.5 py-1.5 rounded-full bg-white" style={{ color: GREEN, border: "1px solid #C7E8D9", boxShadow: "0 2px 6px rgba(16,24,40,0.06)" }}><Briefcase className="w-3.5 h-3.5" /> Hire verified healthcare staff</span></div>
+                <h1 className="mt-4 text-[30px] sm:text-[42px] lg:text-[48px] font-extrabold tracking-[-0.035em] leading-[1.08]" style={{ color: INK }}>Hire verified <span style={{ color: GREEN }}>healthcare staff</span></h1>
+                <p className="text-[15px] sm:text-[16.5px] mt-3 leading-relaxed mx-auto max-w-xl" style={{ color: SUBTLE }}>Post a job in about two minutes. Choose the documents applicants must upload, and review CVs from PMDC-registered professionals.</p>
+                <button type="button" onClick={startNew} className="mt-6 h-12 px-6 rounded-xl text-[15px] font-bold inline-flex items-center gap-2 text-white transition-transform hover:-translate-y-0.5" style={{ backgroundColor: GREEN, boxShadow: "0 10px 24px -12px rgba(18,128,92,0.6)" }}>
                   <Plus className="w-5 h-5" /> Post a new job
                 </button>
               </div>
-              <div className="grid grid-cols-3 gap-2.5 lg:w-[380px]">
+              <div className="grid grid-cols-3 gap-3 w-full max-w-[520px]">
                 {[["Live jobs", live.length, Briefcase], ["Drafts", drafts.length, Pencil], ["Applicants", applicantsTotal, Users]].map(([l, n, Icon]) => (
-                  <div key={l} className="rounded-2xl p-3.5" style={{ backgroundColor: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)" }}>
-                    <Icon className="w-5 h-5 text-white/80" />
-                    <p className="text-[26px] font-extrabold leading-none mt-2 text-white">{n}</p>
-                    <p className="text-[12.5px] font-semibold mt-1 text-white/75">{l}</p>
+                  <div key={l} className="rounded-2xl p-4 bg-white text-left" style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: "0 4px 16px -10px rgba(16,24,40,0.18)" }}>
+                    <Icon className="w-5 h-5" style={{ color: GREEN }} />
+                    <p className="text-[26px] font-extrabold leading-none mt-2" style={{ color: INK }}>{n}</p>
+                    <p className="text-[12.5px] font-semibold mt-1" style={{ color: SUBTLE }}>{l}</p>
                   </div>
                 ))}
               </div>
@@ -6907,23 +6908,23 @@ function FindJobScreen({ initialQuery, userCity, onBack, onMenu, postedJobs, onR
   return (
     <div className="w-full min-w-0" style={{ fontFamily: FONT }}>
       {/* search hero */}
-      <section className="relative z-10" style={{ background: `linear-gradient(135deg, ${BRAND_DK} 0%, ${BRAND} 70%, #2F7BDA 100%)` }}>
-        <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute -right-24 -top-24 w-80 h-80 rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.07)" }} />
-        </div>
+      <section className="relative z-10 overflow-x-clip" style={{ background: "linear-gradient(180deg, #EAF2FC 0%, #F4F8FD 45%, #FFFFFF 100%)", borderBottom: `1px solid ${CARD_BORDER}` }}>
+        <div className="pointer-events-none absolute inset-0 opacity-60"
+          style={{ backgroundImage: "radial-gradient(rgba(11,87,183,0.10) 1px, transparent 1px)", backgroundSize: "22px 22px", maskImage: "linear-gradient(180deg, #000 0%, transparent 75%)", WebkitMaskImage: "linear-gradient(180deg, #000 0%, transparent 75%)" }} />
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-6 pb-8 sm:pt-8 sm:pb-10">
           <div className="flex items-center gap-2 mb-5">
             {onBack && (
-              <button type="button" onClick={onBack} aria-label="Back" className="w-9 h-9 rounded-xl flex items-center justify-center bg-white/15 hover:bg-white/25 transition-colors">
-                <ChevronLeft className="w-5 h-5 text-white" />
+              <button type="button" onClick={onBack} aria-label="Back" className="w-9 h-9 rounded-xl flex items-center justify-center bg-white transition-colors hover:bg-[#F5F7FA]" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                <ChevronLeft className="w-5 h-5" style={{ color: INK }} />
               </button>
             )}
-            <p className="text-[13px] font-semibold text-white/80">Home <span className="mx-1 text-white/50">/</span> <span className="text-white">Find a Job</span></p>
+            <p className="text-[13px] font-semibold" style={{ color: SUBTLE }}>Home <span className="mx-1" style={{ color: FAINT }}>/</span> <span style={{ color: INK }}>Find a Job</span></p>
           </div>
-          <h1 className="text-[28px] sm:text-[38px] font-extrabold tracking-[-0.03em] leading-tight text-white">Find your next healthcare job</h1>
-          <p className="text-[14.5px] sm:text-[16px] mt-2 text-white/80">{all.length} openings across {Object.keys(cityCounts).length} cities in Pakistan</p>
+          <div className="flex justify-center"><span className="inline-flex items-center gap-2 text-[12px] font-bold px-3.5 py-1.5 rounded-full bg-white" style={{ color: BRAND, border: "1px solid #CFE0F5", boxShadow: "0 2px 6px rgba(16,24,40,0.06)" }}><Briefcase className="w-3.5 h-3.5" /> Verified healthcare jobs across Pakistan</span></div>
+          <h1 className="mt-4 text-center text-[30px] sm:text-[42px] lg:text-[48px] font-extrabold tracking-[-0.035em] leading-[1.08]" style={{ color: INK }}>Find your next <span style={{ color: BRAND }}>healthcare job</span></h1>
+          <p className="text-center text-[15px] sm:text-[16.5px] mt-3 max-w-[640px] mx-auto leading-relaxed" style={{ color: SUBTLE }}>{all.length} openings across {Object.keys(cityCounts).length} cities in Pakistan</p>
 
-          <form onSubmit={runSearch} className="mt-6 bg-white rounded-2xl p-2 grid grid-cols-1 md:grid-cols-[1.3fr_1fr_auto] gap-2 relative z-20" style={{ boxShadow: "0 20px 40px -20px rgba(0,0,0,0.4)" }}>
+          <form onSubmit={runSearch} className="mt-7 max-w-[860px] mx-auto bg-white rounded-2xl p-2 grid grid-cols-1 md:grid-cols-[1.3fr_1fr_auto] gap-2 relative z-20" style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: "0 18px 40px -22px rgba(16,24,40,0.28)" }}>
             <SearchSuggestInput
               icon={Briefcase}
               value={kwDraft}
@@ -8668,24 +8669,23 @@ function ConsultDoctorScreen({ initialQuery, userCity, onBack, onMenu, onReport,
   return (
     <div className="w-full min-w-0" style={{ fontFamily: FONT }}>
       {/* search hero */}
-      <section className="relative z-10" style={{ background: "linear-gradient(135deg, #0B3F86 0%, #0B57B7 55%, #0E7C86 100%)" }}>
-        <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute -right-24 -top-24 w-80 h-80 rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.07)" }} />
-          <img src="/images/landing/find-doctor.jpg" alt="" className="hidden lg:block absolute right-0 top-0 h-full w-[34%] object-cover opacity-25" style={{ maskImage: "linear-gradient(90deg, transparent, #000 60%)", WebkitMaskImage: "linear-gradient(90deg, transparent, #000 60%)" }} />
-        </div>
+      <section className="relative z-10 overflow-x-clip" style={{ background: "linear-gradient(180deg, #EAF2FC 0%, #F4F8FD 45%, #FFFFFF 100%)", borderBottom: `1px solid ${CARD_BORDER}` }}>
+        <div className="pointer-events-none absolute inset-0 opacity-60"
+          style={{ backgroundImage: "radial-gradient(rgba(11,87,183,0.10) 1px, transparent 1px)", backgroundSize: "22px 22px", maskImage: "linear-gradient(180deg, #000 0%, transparent 75%)", WebkitMaskImage: "linear-gradient(180deg, #000 0%, transparent 75%)" }} />
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-6 pb-8 sm:pt-8 sm:pb-10">
           <div className="flex items-center gap-2 mb-5">
             {onBack && (
-              <button type="button" onClick={onBack} aria-label="Back" className="w-9 h-9 rounded-xl flex items-center justify-center bg-white/15 hover:bg-white/25 transition-colors">
-                <ChevronLeft className="w-5 h-5 text-white" />
+              <button type="button" onClick={onBack} aria-label="Back" className="w-9 h-9 rounded-xl flex items-center justify-center bg-white transition-colors hover:bg-[#F5F7FA]" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                <ChevronLeft className="w-5 h-5" style={{ color: INK }} />
               </button>
             )}
-            <p className="text-[13px] font-semibold text-white/80">Home <span className="mx-1 text-white/50">/</span> <span className="text-white">Find a Doctor</span></p>
+            <p className="text-[13px] font-semibold" style={{ color: SUBTLE }}>Home <span className="mx-1" style={{ color: FAINT }}>/</span> <span style={{ color: INK }}>Find a Doctor</span></p>
           </div>
-          <h1 className="text-[28px] sm:text-[38px] font-extrabold tracking-[-0.03em] leading-tight text-white">Find and consult verified doctors</h1>
-          <p className="text-[14.5px] sm:text-[16px] mt-2 text-white/80">{DOCTORS.length} PMDC-registered doctors across {Object.keys(cityCounts).length} cities · in-clinic and online</p>
+          <div className="flex justify-center"><span className="inline-flex items-center gap-2 text-[12px] font-bold px-3.5 py-1.5 rounded-full bg-white" style={{ color: BRAND, border: "1px solid #CFE0F5", boxShadow: "0 2px 6px rgba(16,24,40,0.06)" }}><Stethoscope className="w-3.5 h-3.5" /> PMDC-registered doctors</span></div>
+          <h1 className="mt-4 text-center text-[30px] sm:text-[42px] lg:text-[48px] font-extrabold tracking-[-0.035em] leading-[1.08]" style={{ color: INK }}>Find and consult <span style={{ color: BRAND }}>verified doctors</span></h1>
+          <p className="text-center text-[15px] sm:text-[16.5px] mt-3 max-w-[640px] mx-auto leading-relaxed" style={{ color: SUBTLE }}>{DOCTORS.length} PMDC-registered doctors across {Object.keys(cityCounts).length} cities · in-clinic and online</p>
 
-          <form onSubmit={runSearch} className="mt-6 bg-white rounded-2xl p-2 grid grid-cols-1 md:grid-cols-[1.3fr_1fr_auto] gap-2 relative z-20" style={{ boxShadow: "0 20px 40px -20px rgba(0,0,0,0.4)" }}>
+          <form onSubmit={runSearch} className="mt-7 max-w-[860px] mx-auto bg-white rounded-2xl p-2 grid grid-cols-1 md:grid-cols-[1.3fr_1fr_auto] gap-2 relative z-20" style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: "0 18px 40px -22px rgba(16,24,40,0.28)" }}>
             <SearchSuggestInput
               icon={Stethoscope}
               value={qDraft}
@@ -8714,13 +8714,13 @@ function ConsultDoctorScreen({ initialQuery, userCity, onBack, onMenu, onReport,
             </button>
           </form>
 
-          <div className="flex gap-2 mt-4 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap" style={{ scrollbarWidth: "none" }}>
+          <div className="flex gap-2 mt-5 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap sm:justify-center max-w-[900px] sm:mx-auto" style={{ scrollbarWidth: "none" }}>
             {CITIES.filter((c) => cityCounts[c]).map((c) => {
               const on = location.toLowerCase() === c.toLowerCase();
               return (
                 <button key={c} type="button" onClick={() => pickCity(c)}
                   className="shrink-0 h-9 px-3.5 rounded-full text-[13px] font-semibold inline-flex items-center gap-1.5 transition-colors"
-                  style={{ backgroundColor: on ? "#fff" : "rgba(255,255,255,0.14)", color: on ? BRAND : "#fff", border: `1px solid ${on ? "#fff" : "rgba(255,255,255,0.25)"}` }}>
+                  style={{ backgroundColor: on ? BRAND : "#fff", color: on ? "#fff" : INK_2, border: `1px solid ${on ? BRAND : CARD_BORDER}` }}>
                   {c} <span className="text-[11.5px]" style={{ opacity: 0.7 }}>{cityCounts[c]}</span>
                 </button>
               );
@@ -9543,7 +9543,7 @@ const PRACTICE_TYPES = ["Clinic", "Hospital OPD", "Online only", "Home visit"];
 const WEEK = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 /* ---------- 01 PHYSICIAN PANEL ---------- */
-function PhysicianPanelScreen({ onBack, onMenu, profile, onChange, adminHidPhone = false }) {
+function PhysicianPanelScreen({ onBack, onMenu, profile, onChange, adminHidPhone = false, onOpenRx }) {
   const [view, setView] = useState("dash");
   const [editing, setEditing] = useState(null);
   const [idx, setIdx] = useState(-1);
@@ -9636,6 +9636,17 @@ function PhysicianPanelScreen({ onBack, onMenu, profile, onChange, adminHidPhone
             </button>
           </div>
         </div>
+
+        {onOpenRx && (
+          <button type="button" onClick={onOpenRx} className="w-full rounded-2xl p-4 mb-3 flex items-center gap-3.5 text-left transition-transform active:scale-[0.99]" style={{ backgroundColor: BRAND }}>
+            <span className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "rgba(255,255,255,0.16)" }}><FileText className="w-5 h-5 text-white" /></span>
+            <span className="flex-1 min-w-0">
+              <span className="block text-[15px] font-bold text-white">Prescriptions</span>
+              <span className="block text-[12.5px] text-white/75">Write & send e-prescriptions · pads & templates · patient history</span>
+            </span>
+            <ChevronRight className="w-5 h-5 text-white/70 shrink-0" />
+          </button>
+        )}
 
         {/* how you appear */}
         <p className="text-[14px] font-bold mb-2" style={{ color: INK, letterSpacing: "-0.01em" }}>How patients see you</p>
@@ -10944,24 +10955,23 @@ function FindHospitalScreen({ initialQuery, onBack, onMenu, userCity, employer, 
 
   return (
     <div className="w-full min-w-0" style={{ fontFamily: FONT }}>
-      <section className="relative z-10" style={{ background: "linear-gradient(135deg, #064E55 0%, #0E7C86 55%, #0B57B7 100%)" }}>
-        <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute -right-24 -top-24 w-80 h-80 rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.07)" }} />
-          <img src="/images/facility/hospital.jpg" alt="" className="hidden lg:block absolute right-0 top-0 h-full w-[38%] object-cover opacity-30" style={{ maskImage: "linear-gradient(90deg, transparent, #000 60%)", WebkitMaskImage: "linear-gradient(90deg, transparent, #000 60%)" }} />
-        </div>
+      <section className="relative z-10 overflow-x-clip" style={{ background: "linear-gradient(180deg, #EAF2FC 0%, #F4F8FD 45%, #FFFFFF 100%)", borderBottom: `1px solid ${CARD_BORDER}` }}>
+        <div className="pointer-events-none absolute inset-0 opacity-60"
+          style={{ backgroundImage: "radial-gradient(rgba(11,87,183,0.10) 1px, transparent 1px)", backgroundSize: "22px 22px", maskImage: "linear-gradient(180deg, #000 0%, transparent 75%)", WebkitMaskImage: "linear-gradient(180deg, #000 0%, transparent 75%)" }} />
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-6 pb-8 sm:pt-8 sm:pb-10">
           <div className="flex items-center gap-2 mb-5">
             {onBack && (
-              <button type="button" onClick={onBack} aria-label="Back" className="w-9 h-9 rounded-xl flex items-center justify-center bg-white/15 hover:bg-white/25 transition-colors">
-                <ChevronLeft className="w-5 h-5 text-white" />
+              <button type="button" onClick={onBack} aria-label="Back" className="w-9 h-9 rounded-xl flex items-center justify-center bg-white transition-colors hover:bg-[#F5F7FA]" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                <ChevronLeft className="w-5 h-5" style={{ color: INK }} />
               </button>
             )}
-            <p className="text-[13px] font-semibold text-white/80">Home <span className="mx-1 text-white/50">/</span> <span className="text-white">Find a Hospital</span></p>
+            <p className="text-[13px] font-semibold" style={{ color: SUBTLE }}>Home <span className="mx-1" style={{ color: FAINT }}>/</span> <span style={{ color: INK }}>Find a Hospital</span></p>
           </div>
-          <h1 className="text-[28px] sm:text-[38px] font-extrabold tracking-[-0.03em] leading-tight text-white">Find hospitals, clinics, labs & pharmacies</h1>
-          <p className="text-[14.5px] sm:text-[16px] mt-2 text-white/80">{all.length} healthcare facilities across {Object.keys(cityCounts).length} cities · opening hours, services and contact</p>
+          <div className="flex justify-center"><span className="inline-flex items-center gap-2 text-[12px] font-bold px-3.5 py-1.5 rounded-full bg-white" style={{ color: TEAL, border: "1px solid #BFE3E6", boxShadow: "0 2px 6px rgba(16,24,40,0.06)" }}><Building2 className="w-3.5 h-3.5" /> Hospitals, clinics, labs & pharmacies</span></div>
+          <h1 className="mt-4 text-center text-[30px] sm:text-[42px] lg:text-[48px] font-extrabold tracking-[-0.035em] leading-[1.08]" style={{ color: INK }}>Find hospitals, <span style={{ color: TEAL }}>clinics, labs & pharmacies</span></h1>
+          <p className="text-center text-[15px] sm:text-[16.5px] mt-3 max-w-[640px] mx-auto leading-relaxed" style={{ color: SUBTLE }}>{all.length} healthcare facilities across {Object.keys(cityCounts).length} cities · opening hours, services and contact</p>
 
-          <form onSubmit={runSearch} className="mt-6 bg-white rounded-2xl p-2 grid grid-cols-1 md:grid-cols-[1.3fr_1fr_auto] gap-2 relative z-20" style={{ boxShadow: "0 20px 40px -20px rgba(0,0,0,0.4)" }}>
+          <form onSubmit={runSearch} className="mt-7 max-w-[860px] mx-auto bg-white rounded-2xl p-2 grid grid-cols-1 md:grid-cols-[1.3fr_1fr_auto] gap-2 relative z-20" style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: "0 18px 40px -22px rgba(16,24,40,0.28)" }}>
             <SearchSuggestInput
               icon={Building2}
               value={qDraft}
@@ -10990,13 +11000,13 @@ function FindHospitalScreen({ initialQuery, onBack, onMenu, userCity, employer, 
             </button>
           </form>
 
-          <div className="flex gap-2 mt-4 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap" style={{ scrollbarWidth: "none" }}>
+          <div className="flex gap-2 mt-5 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap sm:justify-center max-w-[900px] sm:mx-auto" style={{ scrollbarWidth: "none" }}>
             {CITIES.filter((c) => cityCounts[c]).map((c) => {
               const on = location.toLowerCase() === c.toLowerCase();
               return (
                 <button key={c} type="button" onClick={() => pickCity(c)}
                   className="shrink-0 h-9 px-3.5 rounded-full text-[13px] font-semibold inline-flex items-center gap-1.5 transition-colors"
-                  style={{ backgroundColor: on ? "#fff" : "rgba(255,255,255,0.14)", color: on ? TEAL : "#fff", border: `1px solid ${on ? "#fff" : "rgba(255,255,255,0.25)"}` }}>
+                  style={{ backgroundColor: on ? TEAL : "#fff", color: on ? "#fff" : INK_2, border: `1px solid ${on ? TEAL : CARD_BORDER}` }}>
                   {c} <span className="text-[11.5px]" style={{ opacity: 0.7 }}>{cityCounts[c]}</span>
                 </button>
               );
@@ -11288,11 +11298,11 @@ function SavedScreen({ onBack, onMenu, savedJobs, savedItems, onToggleJob, onTog
   return (
     <div className="flex flex-col h-full min-h-0" style={{ fontFamily: FONT }}>
       <ScreenHeader title="Saved" subtitle={`${counts.all} saved`} onBack={onBack} onMenu={onMenu} />
-      <div className="px-4 pb-2 shrink-0">
-        <div className="flex gap-1.5 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+      <div className="px-4 sm:px-6 pt-4 pb-3 shrink-0">
+        <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
           {[["all", "All"], ["jobs", "Jobs"], ["doctors", "Doctors"], ["hospitals", "Find Hospital"], ["market", "Buy / Sell"]].map(([k, l]) => (
             <button key={k} onClick={() => setFilter(k)}
-              className="shrink-0 px-3 py-1.5 rounded-full text-[12.5px] font-semibold"
+              className="shrink-0 h-9 px-4 rounded-full text-[13px] font-semibold"
               style={{ backgroundColor: filter === k ? BRAND_50 : "#fff", color: filter === k ? BRAND : INK_2, border: `1px solid ${filter === k ? "#B9D3F2" : CARD_BORDER}` }}>
               {l}{counts[k] ? ` · ${counts[k]}` : ""}
             </button>
@@ -11356,7 +11366,7 @@ function SavedScreen({ onBack, onMenu, savedJobs, savedItems, onToggleJob, onTog
 function AccountScreen({
   onBack, onMenu, authed, onSignIn, username, general = {}, doctor = {}, pctGeneral = 0, pctDoctor = 0,
   cvReady, verifiedPhone, profilesLive = 0, savedJobs = [], savedItems = {}, applications = [], allJobs = [],
-  messagesCount = 0, adminMessages = [], suspended = false, cvDoc = null, onUploadCV, onNavigate, onOpenSaved, onToggleJob, onToggleSave, onSignOut,
+  messagesCount = 0, adminMessages = [], suspended = false, cvDoc = null, onUploadCV, isDoctor = false, onNavigate, onOpenSaved, onToggleJob, onToggleSave, onSignOut,
 }) {
   const [savedTab, setSavedTab] = useState("jobs");
 
@@ -11435,6 +11445,25 @@ function AccountScreen({
             <button type="button" onClick={() => onNavigate("help")} className="h-9 px-3 rounded-lg text-[13px] font-bold text-white shrink-0" style={{ backgroundColor: RED }}>Support</button>
           </div>
         )}
+
+        {isDoctor && (() => {
+          const rx = readRxSaved();
+          const today = new Date().toDateString();
+          return (
+            <Card className="overflow-hidden">
+              <div className="p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+                <span className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0" style={{ backgroundColor: BRAND_50 }}><FileText className="w-7 h-7" style={{ color: BRAND }} /></span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[16px] font-extrabold" style={{ color: INK }}>Prescriptions</p>
+                  <p className="text-[13px] mt-0.5" style={{ color: SUBTLE }}>{rx.length} saved · {rx.filter((r) => new Date(r.createdAt).toDateString() === today).length} today · pads, templates and patient history</p>
+                </div>
+                <button type="button" onClick={() => onNavigate("prescriptions")} className="h-10 px-4 rounded-xl text-[13.5px] font-bold text-white inline-flex items-center gap-2 shrink-0" style={{ backgroundColor: BRAND }}>
+                  <Plus className="w-4 h-4" /> Write prescription
+                </button>
+              </div>
+            </Card>
+          );
+        })()}
 
         {/* CV on the profile — used for every job application */}
         <Card className="overflow-hidden">
@@ -12068,7 +12097,7 @@ function SiteHeader({
           </nav>
 
           <div className="flex items-center gap-2 ml-auto shrink-0">
-            {search && (
+            {search && activeTab !== "home" && (
               <button type="button" onClick={() => setSearchOpen((v) => !v)}
                 aria-label={searchOpen ? "Close search" : "Open search"} aria-expanded={searchOpen} title={searchOpen ? "Close search" : "Search PakMed"}
                 className="w-10 h-10 rounded-xl flex items-center justify-center transition-colors hover:bg-[#EAF2FC]"
@@ -13200,6 +13229,18 @@ function searchSite(index, query, limit = 8) {
 }
 
 // home category cards — extra copy shown under each TABS entry
+
+// doctor photo: the doctor's own upload, else a stock portrait from the site's images (demo)
+const FEMALE_FIRST = /^(dr\.?\s+)?(sara|noor|ayesha|fatima|hina|sana|mehwish|rabia|sadia|zainab|nadia|amna|maryam|areeba|saima|uzma|asma|farah|iqra|kiran|nida|rubina|samina|shazia|sidra|sobia|tahira|zara|anum|bushra|hira|madiha|mahnoor|saba|aisha|amina|huma)\b/i;
+const DOC_PHOTOS = { female: ["post-sara", "post-noor", "hero-3", "hero-1"], male: ["post-hamza", "hero-4"] };
+function doctorPhoto(d) {
+  if (!d) return null;
+  if (d.photo) return d.photo;
+  const pool = FEMALE_FIRST.test(String(d.name || "").trim()) ? DOC_PHOTOS.female : DOC_PHOTOS.male;
+  const n = String(d.id || d.name || "").split("").reduce((a, c) => a + c.charCodeAt(0), 0);
+  return `${LANDING_IMG}/${pool[n % pool.length]}.jpg`;
+}
+
 // photo for each category card on the landing page
 const HOME_CAT_IMAGES = {
   find: `${LANDING_IMG}/find-job.jpg`,
@@ -13229,7 +13270,7 @@ const HERO_CATS = [
   { key: "feeds", label: "Our Feeds", short: "Feeds", icon: Newspaper, color: "#B54708", tint: "#FFF6E8", types: [], section: "updates", ph: "Search news and updates" },
 ];
 
-function SiteSearch({ city, onGo, onSearchAll, onCityChange }) {
+function SiteSearch({ city, onGo, onSearchAll, onCityChange, hero = false }) {
   const index = useRef(null);
   if (!index.current) index.current = buildSearchIndex();
   const [q, setQ] = useState("");
@@ -13358,7 +13399,10 @@ function SiteSearch({ city, onGo, onSearchAll, onCityChange }) {
 
   return (
     <div ref={rootRef} className="relative z-30 w-full text-left">
-      <form onSubmit={submit} className="flex items-center gap-1 p-1 rounded-xl transition-all" style={{ backgroundColor: open || locOpen || catOpen ? "#fff" : "#F2F5F9", border: `1px solid ${open || locOpen || catOpen ? BRAND : CARD_BORDER}`, boxShadow: open || locOpen || catOpen ? `0 0 0 3px ${BRAND}1F` : "none" }}>
+      <form onSubmit={submit} className={`flex items-center gap-1 transition-all ${hero ? "p-1.5 rounded-2xl" : "p-1 rounded-xl"}`}
+        style={hero
+          ? { backgroundColor: "#fff", border: `1px solid ${open || locOpen || catOpen ? BRAND : CARD_BORDER}`, boxShadow: open || locOpen || catOpen ? `0 0 0 4px ${BRAND}1A, 0 18px 40px -20px rgba(16,24,40,0.35)` : "0 18px 40px -20px rgba(16,24,40,0.30)" }
+          : { backgroundColor: open || locOpen || catOpen ? "#fff" : "#F2F5F9", border: `1px solid ${open || locOpen || catOpen ? BRAND : CARD_BORDER}`, boxShadow: open || locOpen || catOpen ? `0 0 0 3px ${BRAND}1F` : "none" }}>
         <div className="flex-1 min-w-0 flex items-center h-10 relative">
           <button
             type="button"
@@ -13366,7 +13410,7 @@ function SiteSearch({ city, onGo, onSearchAll, onCityChange }) {
             aria-label="Choose a category"
             aria-expanded={catOpen}
             className="flex items-center gap-1.5 h-10 pl-3 pr-2.5 rounded-lg text-[13.5px] font-semibold shrink-0 transition-colors hover:bg-[#EAF2FC]"
-            style={{ color: cat === "all" ? INK_2 : catDef.color, backgroundColor: cat === "all" ? "#fff" : catDef.tint, border: catOpen ? `1.5px solid ${BRAND}` : "1.5px solid transparent" }}
+            style={{ color: cat === "all" ? INK_2 : catDef.color, backgroundColor: cat === "all" ? (hero ? "#F2F5F9" : "#fff") : catDef.tint, border: catOpen ? `1.5px solid ${BRAND}` : "1.5px solid transparent" }}
           >
             <catDef.icon className="w-4 h-4 shrink-0" />
             <span className="whitespace-nowrap">{cat === "all" ? "All" : <><span className="sm:hidden">{catDef.short}</span><span className="hidden sm:inline">{catDef.label}</span></>}</span>
@@ -13422,7 +13466,7 @@ function SiteSearch({ city, onGo, onSearchAll, onCityChange }) {
             aria-label="Use or change location"
             aria-expanded={locOpen}
             className="flex items-center gap-1.5 h-10 px-2.5 sm:px-3 rounded-lg text-[13.5px] font-semibold max-w-[180px] transition-colors hover:bg-[#EAF2FC] disabled:opacity-70"
-            style={{ color: locStatus === "error" ? RED : INK_2, backgroundColor: "#fff", border: locOpen ? `1.5px solid ${BRAND}` : "1.5px solid transparent" }}
+            style={{ color: locStatus === "error" ? RED : INK_2, backgroundColor: hero ? "#F2F5F9" : "#fff", border: locOpen ? `1.5px solid ${BRAND}` : "1.5px solid transparent" }}
           >
             <MapPin className={`w-4 h-4 shrink-0 ${locStatus === "loading" ? "animate-pulse" : ""}`} style={{ color: BRAND }} />
             <span className="hidden sm:inline truncate">{locLabel}</span>
@@ -13599,61 +13643,82 @@ function HomeScreen({ onTabNav, onOpenCard, authed, city, counts = {}, nearJobs 
 
   return (
     <div ref={rootRef} className="w-full min-w-0" style={{ fontFamily: FONT }}>
-      {/* Hero — headline + the six categories as photo cards (search is in the navbar) */}
-      <section
-        className="relative z-20 overflow-x-clip"
-        style={{ background: `linear-gradient(180deg, ${BRAND_50} 0%, #F7FAFE 55%, #fff 100%)`, borderBottom: `1px solid ${CARD_BORDER}` }}
-      >
-        <div className="pointer-events-none absolute inset-0"
-          style={{ backgroundImage: `radial-gradient(circle at 8% 0%, ${BRAND}1F 0%, transparent 35%), radial-gradient(circle at 95% 10%, ${TEAL}17 0%, transparent 30%)` }} />
+      {/* Hero — headline, site search and the six categories (client design) */}
+      <section className="relative z-20 overflow-x-clip"
+        style={{ background: "linear-gradient(180deg, #EAF2FC 0%, #F4F8FD 45%, #FFFFFF 100%)", borderBottom: `1px solid ${CARD_BORDER}` }}>
+        <div className="pointer-events-none absolute inset-0 opacity-60"
+          style={{ backgroundImage: "radial-gradient(rgba(11,87,183,0.10) 1px, transparent 1px)", backgroundSize: "22px 22px", maskImage: "linear-gradient(180deg, #000 0%, transparent 75%)", WebkitMaskImage: "linear-gradient(180deg, #000 0%, transparent 75%)" }} />
 
-        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-9 sm:pt-12 pb-12 sm:pb-16">
-          <div className="text-center max-w-3xl mx-auto mb-8 sm:mb-10 hero-stagger">
-            <span className="inline-flex items-center gap-2 text-[12px] font-bold px-3 py-1.5 rounded-full mb-4 bg-white"
-              style={{ color: BRAND, border: "1px solid #B9D3F2" }}>
+        {/* floating doctor cards (large screens) */}
+        <div className="hidden xl:block pointer-events-none absolute left-[max(16px,calc(50%-780px))] top-14 hero-float" aria-hidden="true">
+          <div className="relative">
+            <div className="w-[128px] h-[150px] rounded-3xl overflow-hidden bg-white p-1.5" style={{ boxShadow: "0 18px 40px -18px rgba(16,24,40,0.35)" }}>
+              <img src={`${LANDING_IMG}/post-hamza.jpg`} alt="" className="w-full h-full object-cover rounded-[20px]" />
+            </div>
+            <div className="absolute -bottom-9 -left-6 flex items-center gap-2.5 bg-white rounded-2xl pl-2.5 pr-4 py-2.5" style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: "0 14px 30px -14px rgba(16,24,40,0.30)" }}>
+              <span className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ backgroundColor: GREEN_TINT }}><ShieldCheck className="w-4 h-4" style={{ color: GREEN }} /></span>
+              <span>
+                <span className="block text-[12.5px] font-extrabold whitespace-nowrap" style={{ color: INK }}>PMDC Verified</span>
+                <span className="block text-[11px] whitespace-nowrap" style={{ color: FAINT }}>Checked by our team</span>
+              </span>
+            </div>
+          </div>
+        </div>
+        <div className="hidden xl:block pointer-events-none absolute right-[max(16px,calc(50%-780px))] top-12 hero-float-alt" aria-hidden="true">
+          <div className="relative">
+            <div className="w-[128px] h-[150px] rounded-3xl overflow-hidden bg-white p-1.5" style={{ boxShadow: "0 18px 40px -18px rgba(16,24,40,0.35)" }}>
+              <img src={`${LANDING_IMG}/post-sara.jpg`} alt="" className="w-full h-full object-cover rounded-[20px]" />
+            </div>
+            <div className="absolute -bottom-7 -right-5 bg-white rounded-2xl px-3.5 py-2" style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: "0 14px 30px -14px rgba(16,24,40,0.30)" }}>
+              <span className="flex gap-0.5">{[0, 1, 2, 3, 4].map((i) => <Star key={i} className="w-3.5 h-3.5" style={{ color: "#F59E0B", fill: "#F59E0B" }} />)}</span>
+              <span className="block text-[11px] font-semibold mt-0.5 whitespace-nowrap" style={{ color: INK_2 }}>Trusted by facilities</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-10 sm:pt-16 pb-12 sm:pb-16">
+          <div className="text-center max-w-3xl mx-auto hero-stagger">
+            <span className="inline-flex items-center gap-2 text-[12px] font-bold px-3.5 py-1.5 rounded-full bg-white"
+              style={{ color: BRAND, border: "1px solid #CFE0F5", boxShadow: "0 2px 6px rgba(11,87,183,0.08)" }}>
               <ShieldCheck className="w-3.5 h-3.5" /> Pakistan's trusted healthcare network
             </span>
-            <h1 className="text-[30px] sm:text-[40px] lg:text-[48px] font-extrabold leading-[1.08] tracking-[-0.035em]" style={{ color: INK }}>
-              Healthcare careers & care, <span style={{ color: BRAND }}>connected.</span>
+            <h1 className="mt-5 text-[34px] sm:text-[46px] lg:text-[56px] font-extrabold leading-[1.05] tracking-[-0.04em]" style={{ color: INK }}>
+              Healthcare careers & care,<br className="hidden sm:block" /> <span style={{ color: BRAND }}>connected.</span>
             </h1>
-            <p className="text-[15px] sm:text-[16.5px] leading-relaxed mt-3 max-w-2xl mx-auto" style={{ color: SUBTLE }}>
-              Jobs, verified doctors, hospitals and medical equipment across Pakistan — pick where you want to start.
+            <p className="text-[15px] sm:text-[16.5px] leading-relaxed mt-4 max-w-[600px] mx-auto" style={{ color: SUBTLE }}>
+              Find jobs, verified doctors, hospitals and medical equipment across Pakistan. Browse freely — sign in only when you want to apply, message, save or post.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+          <div className="relative z-30 max-w-[660px] mx-auto mt-7 sm:mt-8">
+            <SiteSearch hero city={city} onGo={onGo} onSearchAll={onSearch} onCityChange={onCityChange} />
+          </div>
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
+            {["PMDC-verified doctors", "Free to browse", "Direct messaging"].map((t) => (
+              <span key={t} className="inline-flex items-center gap-1.5 text-[13px] font-semibold" style={{ color: INK_2 }}>
+                <CheckCircle2 className="w-4 h-4" style={{ color: GREEN }} /> {t}
+              </span>
+            ))}
+          </div>
+
+          <div className="mt-12 sm:mt-14 flex items-center gap-4 max-w-md mx-auto">
+            <span className="flex-1 h-px" style={{ background: `linear-gradient(90deg, transparent, ${CARD_BORDER})` }} />
+            <span className="text-[11.5px] font-bold uppercase tracking-[0.16em]" style={{ color: SUBTLE }}>Browse by category</span>
+            <span className="flex-1 h-px" style={{ background: `linear-gradient(90deg, ${CARD_BORDER}, transparent)` }} />
+          </div>
+          <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
             {Object.entries(TABS).map(([key, t], i) => {
               const Icon = t.icon;
               const n = countFor(key);
-              const copy = HOME_CAT_COPY[key] || {};
               return (
                 <button key={key} type="button" onClick={() => onTabNav(key)}
-                  className="group relative h-[230px] sm:h-[250px] rounded-3xl overflow-hidden text-left cat-pop focus-visible:outline-3 focus-visible:outline-offset-2"
-                  style={{ boxShadow: "0 18px 40px -24px rgba(16,24,40,0.55)", animationDelay: `${100 + i * 70}ms`, outlineColor: t.color }}>
-                  <img src={HOME_CAT_IMAGES[key]} alt="" loading={i < 3 ? "eager" : "lazy"} decoding="async"
-                    className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.07]" />
-                  <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(10,22,44,0.10) 0%, rgba(10,22,44,0.28) 40%, rgba(10,22,44,0.90) 100%)" }} />
-                  <div className="absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100" style={{ background: `linear-gradient(0deg, ${t.color}CC 0%, ${t.color}33 45%, transparent 75%)` }} />
-
-                  <div className="absolute inset-x-0 top-0 p-4 flex items-start justify-between">
-                    <span className="w-11 h-11 rounded-xl flex items-center justify-center bg-white/95" style={{ boxShadow: "0 6px 16px rgba(0,0,0,0.18)" }}>
-                      <Icon className="w-5 h-5" style={{ color: t.color }} strokeWidth={2.3} />
-                    </span>
-                    <span className="text-[12px] font-bold px-2.5 py-1 rounded-full bg-white/95" style={{ color: t.color }}>
-                      {n !== "" ? `${n} ${t.sub}` : t.sub}
-                    </span>
-                  </div>
-
-                  <div className="absolute inset-x-0 bottom-0 p-5">
-                    <p className="text-[21px] font-extrabold text-white tracking-[-0.02em] leading-tight">{t.label}</p>
-                    <p className="text-[13.5px] text-white/80 leading-snug mt-1 line-clamp-2">{copy.desc}</p>
-                    <span className="mt-3 inline-flex items-center gap-2 text-[13.5px] font-bold text-white">
-                      {copy.cta || "Explore"}
-                      <span className="w-7 h-7 rounded-full flex items-center justify-center bg-white/20 backdrop-blur-sm transition-all duration-300 group-hover:bg-white group-hover:translate-x-1">
-                        <ArrowRight className="w-4 h-4 text-white transition-colors group-hover:text-[#0B57B7]" />
-                      </span>
-                    </span>
-                  </div>
+                  className="group flex flex-col items-center text-center rounded-2xl bg-white px-3 pt-5 pb-4 cat-pop transition-all duration-300 hover:-translate-y-1 focus-visible:outline-2 focus-visible:outline-offset-2"
+                  style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: "0 1px 2px rgba(16,24,40,0.04)", animationDelay: `${100 + i * 60}ms`, outlineColor: t.color }}>
+                  <span className="w-11 h-11 rounded-xl flex items-center justify-center transition-transform duration-300 group-hover:scale-110" style={{ backgroundColor: t.tint }}>
+                    <Icon className="w-5 h-5" style={{ color: t.color }} strokeWidth={2.2} />
+                  </span>
+                  <span className="mt-3 text-[14.5px] font-extrabold" style={{ color: INK }}>{t.label}</span>
+                  <span className="mt-0.5 text-[12.5px]" style={{ color: SUBTLE }}>{n !== "" && key !== "post" ? `${n} ${t.sub}` : t.sub}</span>
                 </button>
               );
             })}
@@ -13826,9 +13891,9 @@ const initialDocs = [
 ];
 
 function StatusPill({ status }) {
-  if (status === "verified") return <span className="flex items-center gap-1 text-[11.5px] font-bold px-2.5 py-1 rounded-full" style={{ color: GREEN, backgroundColor: GREEN_TINT }}><CheckCircle2 className="w-3.5 h-3.5" /> Verified</span>;
-  if (status === "pending") return <span className="flex items-center gap-1 text-[11.5px] font-bold px-2.5 py-1 rounded-full" style={{ color: AMBER, backgroundColor: AMBER_TINT }}><Clock className="w-3.5 h-3.5" /> In review</span>;
-  return <span className="flex items-center gap-1 text-[11.5px] font-bold px-2.5 py-1 rounded-full" style={{ color: SUBTLE, backgroundColor: "#EFF2FA" }}><Upload className="w-3.5 h-3.5" /> Add</span>;
+  if (status === "verified") return <span className="inline-flex items-center gap-1 whitespace-nowrap text-[11.5px] font-bold px-2.5 py-1 rounded-full" style={{ color: GREEN, backgroundColor: GREEN_TINT }}><CheckCircle2 className="w-3.5 h-3.5" /> Verified</span>;
+  if (status === "pending") return <span className="inline-flex items-center gap-1 whitespace-nowrap text-[11.5px] font-bold px-2.5 py-1 rounded-full" style={{ color: AMBER, backgroundColor: AMBER_TINT }}><Clock className="w-3.5 h-3.5" /> In review</span>;
+  return <span className="inline-flex items-center gap-1 whitespace-nowrap text-[11.5px] font-bold px-2.5 py-1 rounded-full" style={{ color: SUBTLE, backgroundColor: "#EFF2FA" }}><Upload className="w-3.5 h-3.5" /> Add</span>;
 }
 
 function UsernameField({ initialUsername }) {
@@ -13851,7 +13916,7 @@ function UsernameField({ initialUsername }) {
   const canSave = value === saved || status === "available";
 
   return (
-    <div className="mt-3 rounded-2xl p-4 bg-white" style={{ border: `1px solid ${CARD_BORDER}` }}>
+    <div className="rounded-2xl p-5 bg-white" style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: "0 1px 2px rgba(16,24,40,0.04)" }}>
       <div className="flex items-center justify-between mb-1">
         <label className="text-[13px] font-semibold" style={{ color: INK_2 }}>Username</label>
         {!editing && <button onClick={() => setEditing(true)} className="flex items-center gap-1 text-[12px] font-semibold" style={{ color: GREEN }}><Pencil className="w-3.5 h-3.5" /> Change</button>}
@@ -13886,11 +13951,25 @@ function UsernameField({ initialUsername }) {
   );
 }
 
+const DOC_HINTS = {
+  pmdc: "Front page of your PMDC / PM&DC registration",
+  cnic: "Both sides, clearly readable",
+  degree: "MBBS, BDS or your highest medical degree",
+  reference1: "From a consultant or head of department",
+  reference2: "From a current or previous employer",
+};
+
 function ProfileScreen({ username, onBack }) {
   const [docs, setDocs] = useState(initialDocs);
   const [pmdcNumber, setPmdcNumber] = useState("PMC-45872-K");
   const [specialty, setSpecialty] = useState("Emergency Medicine");
   const [experience, setExperience] = useState("4");
+  const [savedAt, setSavedAt] = useState(0);
+  useEffect(() => {
+    if (!savedAt) return undefined;
+    const t = setTimeout(() => setSavedAt(0), 2200);
+    return () => clearTimeout(t);
+  }, [savedAt]);
 
   const requiredDocs = docs.filter((d) => d.required);
   const verifiedRequired = requiredDocs.filter((d) => d.status === "verified").length;
@@ -13900,85 +13979,163 @@ function ProfileScreen({ username, onBack }) {
   const overallStatus = verifiedRequired === requiredDocs.length ? "verified" : docs.some((d) => d.status === "pending") ? "pending" : "missing";
   const uploadDoc = (id) => setDocs((prev) => prev.map((d) => (d.id === id ? { ...d, status: d.status === "missing" ? "pending" : d.status } : d)));
 
+  const steps = [
+    { label: "Account created", done: true },
+    { label: "PMDC number added", done: !!pmdcNumber.trim() },
+    ...requiredDocs.map((d) => ({ label: d.label, done: d.status === "verified", pending: d.status === "pending" })),
+  ];
+  const stepsDone = steps.filter((x) => x.done).length;
+  const field = "w-full h-12 mt-1.5 px-3.5 rounded-xl text-[15px] bg-white outline-none transition-shadow focus:ring-2 focus:ring-[#0B57B7]/20";
+  const card = "rounded-2xl bg-white";
+  const cardStyle = { border: `1px solid ${CARD_BORDER}`, boxShadow: "0 1px 2px rgba(16,24,40,0.04)" };
+  const tone = (st) => (st === "verified" ? { bg: GREEN_TINT, fg: GREEN } : st === "pending" ? { bg: AMBER_TINT, fg: AMBER } : { bg: "#F2F4F7", fg: SUBTLE });
+  const saveBtn = (cls) => (
+    <button type="button" onClick={() => setSavedAt(Date.now())}
+      className={`${cls} h-11 px-5 rounded-xl font-bold text-[14.5px] text-white items-center justify-center gap-2 transition-all hover:brightness-110`}
+      style={{ backgroundColor: savedAt ? GREEN : BRAND }}>
+      {savedAt ? <><Check className="w-4 h-4" /> Saved</> : "Save changes"}
+    </button>
+  );
+
   return (
-    <div className="flex flex-col h-full min-h-0">
-      <div className="px-4 sm:px-8 pt-6 pb-4 flex items-center gap-3">
-        <button onClick={onBack} className="w-9 h-9 rounded-full flex items-center justify-center bg-white" style={{ border: `1px solid ${CARD_BORDER}` }}>
+    <div className="flex flex-col min-h-full" style={{ fontFamily: FONT, backgroundColor: "#F7F9FC" }}>
+      <div className="bg-white px-5 sm:px-8 py-5 flex items-center gap-3.5" style={{ borderBottom: `1px solid ${CARD_BORDER}` }}>
+        <button type="button" onClick={onBack} aria-label="Back" className="w-10 h-10 rounded-xl flex items-center justify-center bg-white shrink-0" style={{ border: `1px solid ${CARD_BORDER}` }}>
           <ChevronLeft className="w-5 h-5" style={{ color: INK }} />
         </button>
-        <p className="font-bold text-[17px]" style={{ color: INK }}>Profile & Verification</p>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-[20px] sm:text-[22px] font-extrabold leading-tight" style={{ color: INK }}>Profile & verification</h1>
+          <p className="text-[13.5px] mt-0.5 truncate" style={{ color: SUBTLE }}>Your registration details and documents, checked by PakMed.</p>
+        </div>
+        {saveBtn("hidden sm:inline-flex shrink-0")}
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-8 pt-2 pb-8">
-        <div className="lg:grid lg:grid-cols-2 lg:gap-6 items-start">
-        <div>
-        <div className="rounded-2xl p-4 bg-white flex items-center gap-3.5" style={{ border: `1px solid ${CARD_BORDER}` }}>
-          <div className="relative shrink-0">
-            <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-white text-xl font-bold" style={{ backgroundColor: INK }}>AK</div>
-            <button className="absolute -bottom-1.5 -right-1.5 w-6 h-6 rounded-full bg-white flex items-center justify-center" style={{ border: `1px solid ${CARD_BORDER}` }}><Camera className="w-3 h-3" style={{ color: INK }} /></button>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-bold text-[16px]" style={{ color: INK }}>Dr. Awais Khan</p>
-            <p className="text-[12.5px]" style={{ color: SUBTLE }}>{specialty} · {experience} yrs experience</p>
-            <div className="mt-1.5"><StatusPill status={overallStatus} /></div>
-          </div>
-        </div>
 
-        <UsernameField initialUsername={username} />
-
-        <div className="mt-3 rounded-2xl p-4 bg-white" style={{ border: `1px solid ${CARD_BORDER}` }}>
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-[13px] font-semibold" style={{ color: INK_2 }}>Profile completion</p>
-            <p className="text-[13px] font-bold" style={{ color: INK }}>{completion}%</p>
-          </div>
-          <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: "#EFF2FA" }}><div className="h-full rounded-full transition-all" style={{ width: `${completion}%`, backgroundColor: GREEN }} /></div>
-          <p className="text-[13px] mt-2 leading-snug" style={{ color: "#4B4A45" }}>{completion < 100 ? "Complete verification to appear higher in hospital search results." : "Your profile is fully verified and visible to all hospitals."}</p>
-        </div>
-
-        </div>
-        <div>
-        <p className="text-[14px] font-bold mt-4 lg:mt-0 mb-1.5" style={{ color: INK, letterSpacing: "-0.01em" }}>Registration details</p>
-        <div className="rounded-2xl bg-white overflow-hidden" style={{ border: `1px solid ${CARD_BORDER}` }}>
-          <div className="px-4 py-3">
-            <label className="text-[13px] font-semibold" style={{ color: INK_2 }}>PMDC Registration Number</label>
-            <input value={pmdcNumber} onChange={(e) => setPmdcNumber(e.target.value)} className="w-full mt-1 text-[15px] rounded-xl px-3.5 py-2.5 outline-none" style={{ backgroundColor: "#F4F6FC", color: INK, border: `1px solid ${CARD_BORDER}` }} />
-          </div>
-          <div className="h-px" style={{ backgroundColor: CARD_BORDER }} />
-          <div className="px-4 py-3">
-            <label className="text-[13px] font-semibold" style={{ color: INK_2 }}>Specialty</label>
-            <input value={specialty} onChange={(e) => setSpecialty(e.target.value)} className="w-full mt-1 text-[15px] rounded-xl px-3.5 py-2.5 outline-none" style={{ backgroundColor: "#F4F6FC", color: INK, border: `1px solid ${CARD_BORDER}` }} />
-          </div>
-          <div className="h-px" style={{ backgroundColor: CARD_BORDER }} />
-          <div className="px-4 py-3">
-            <label className="text-[13px] font-semibold" style={{ color: INK_2 }}>Years of experience</label>
-            <input value={experience} onChange={(e) => setExperience(e.target.value.replace(/[^0-9]/g, ""))} className="w-full mt-1 text-[15px] rounded-xl px-3.5 py-2.5 outline-none" style={{ backgroundColor: "#F4F6FC", color: INK, border: `1px solid ${CARD_BORDER}` }} />
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between mt-4 mb-1.5">
-          <p className="text-[13px] font-semibold" style={{ color: INK_2 }}>Verification documents</p>
-          <span className="text-[11px] font-medium" style={{ color: SUBTLE }}>{verifiedRequired}/{requiredDocs.length} required</span>
-        </div>
-        <div className="rounded-2xl bg-white overflow-hidden" style={{ border: `1px solid ${CARD_BORDER}` }}>
-          {docs.map((d, i) => (
-            <div key={d.id}>
-              <button onClick={() => uploadDoc(d.id)} className="w-full flex items-center gap-3 px-3.5 py-3 text-left">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "#F4F6FC" }}><FileText className="w-4 h-4" style={{ color: INK }} /></div>
-                <div className="flex-1 min-w-0"><p className="text-[14.5px] font-semibold" style={{ color: INK }}>{d.label} {!d.required && <span className="text-[11px] font-normal" style={{ color: SUBTLE }}>(optional)</span>}</p></div>
-                <StatusPill status={d.status} />
-              </button>
-              {i < docs.length - 1 && <div className="h-px ml-[64px]" style={{ backgroundColor: CARD_BORDER }} />}
+      <div className="w-full max-w-[1200px] px-4 sm:px-8 py-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px] items-start">
+        <div className="flex flex-col gap-5 min-w-0">
+          {/* identity */}
+          <section className={`${card} p-5 sm:p-6`} style={cardStyle}>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-5">
+              <div className="flex items-center gap-4 flex-1 min-w-0">
+                <div className="relative shrink-0">
+                  <div className="w-[72px] h-[72px] rounded-2xl flex items-center justify-center text-white text-[22px] font-extrabold" style={{ background: `linear-gradient(135deg, ${BRAND}, #2F7BD8)` }}>AK</div>
+                  <button type="button" aria-label="Change photo" className="absolute -bottom-1.5 -right-1.5 w-7 h-7 rounded-full bg-white flex items-center justify-center" style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: "0 2px 6px rgba(16,24,40,0.12)" }}>
+                    <Camera className="w-3.5 h-3.5" style={{ color: INK }} />
+                  </button>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[18px] font-extrabold truncate" style={{ color: INK }}>Dr. Awais Khan</p>
+                  <p className="text-[13.5px] truncate" style={{ color: SUBTLE }}>{specialty || "Specialty not set"} · {experience || 0} yrs experience</p>
+                  <div className="mt-2 flex"><StatusPill status={overallStatus} /></div>
+                </div>
+              </div>
+              <div className="sm:w-[240px] shrink-0 sm:pl-5 sm:border-l" style={{ borderColor: CARD_BORDER }}>
+                <div className="flex items-baseline justify-between">
+                  <p className="text-[13px] font-semibold" style={{ color: INK_2 }}>Profile completion</p>
+                  <p className="text-[20px] font-extrabold tabular-nums" style={{ color: INK }}>{completion}%</p>
+                </div>
+                <div className="h-2 mt-2 rounded-full overflow-hidden" style={{ backgroundColor: "#EAECF0" }}>
+                  <div className="h-full rounded-full transition-all" style={{ width: `${completion}%`, backgroundColor: completion === 100 ? GREEN : BRAND }} />
+                </div>
+                <p className="text-[12.5px] mt-2 leading-snug" style={{ color: SUBTLE }}>{completion < 100 ? "Complete verification to rank higher in hospital searches." : "Fully verified and visible to all hospitals."}</p>
+              </div>
             </div>
-          ))}
+          </section>
+
+          {/* registration */}
+          <section className={card} style={cardStyle}>
+            <div className="px-5 sm:px-6 py-4" style={{ borderBottom: `1px solid ${CARD_BORDER}` }}>
+              <h2 className="text-[16px] font-extrabold" style={{ color: INK }}>Registration details</h2>
+              <p className="text-[13px] mt-0.5" style={{ color: SUBTLE }}>Shown on your public profile and printed on your prescriptions.</p>
+            </div>
+            <div className="p-5 sm:p-6 grid gap-4 sm:grid-cols-2">
+              <label className="block sm:col-span-2">
+                <span className="text-[13px] font-semibold" style={{ color: INK_2 }}>PMDC registration number</span>
+                <input value={pmdcNumber} onChange={(e) => setPmdcNumber(e.target.value)} className={field} style={{ color: INK, border: `1px solid ${CARD_BORDER}` }} />
+              </label>
+              <label className="block">
+                <span className="text-[13px] font-semibold" style={{ color: INK_2 }}>Specialty</span>
+                <input value={specialty} onChange={(e) => setSpecialty(e.target.value)} className={field} style={{ color: INK, border: `1px solid ${CARD_BORDER}` }} />
+              </label>
+              <label className="block">
+                <span className="text-[13px] font-semibold" style={{ color: INK_2 }}>Years of experience</span>
+                <input value={experience} inputMode="numeric" onChange={(e) => setExperience(e.target.value.replace(/[^0-9]/g, ""))} className={field} style={{ color: INK, border: `1px solid ${CARD_BORDER}` }} />
+              </label>
+            </div>
+          </section>
+
+          {/* documents */}
+          <section className={card} style={cardStyle}>
+            <div className="px-5 sm:px-6 py-4 flex items-start justify-between gap-3" style={{ borderBottom: `1px solid ${CARD_BORDER}` }}>
+              <div className="min-w-0">
+                <h2 className="text-[16px] font-extrabold" style={{ color: INK }}>Verification documents</h2>
+                <p className="text-[13px] mt-0.5" style={{ color: SUBTLE }}>PDF, JPG or PNG · up to 5 MB each</p>
+              </div>
+              <span className="shrink-0 text-[12px] font-bold px-2.5 py-1 rounded-full" style={{ backgroundColor: BRAND_50, color: BRAND }}>{verifiedRequired}/{requiredDocs.length} required verified</span>
+            </div>
+            <ul>
+              {docs.map((d, i) => {
+                const c = tone(d.status);
+                return (
+                  <li key={d.id} className="px-5 sm:px-6 py-4 flex items-center gap-3.5" style={{ borderTop: i ? `1px solid ${CARD_BORDER}` : "none" }}>
+                    <span className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: c.bg }}>
+                      <FileText className="w-[18px] h-[18px]" style={{ color: c.fg }} />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[14.5px] font-bold leading-snug" style={{ color: INK }}>
+                        {d.label}
+                        <span className="ml-2 align-middle text-[10.5px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ color: d.required ? INK_2 : SUBTLE, backgroundColor: "#F2F4F7" }}>{d.required ? "Required" : "Optional"}</span>
+                      </p>
+                      <p className="text-[12.5px] mt-0.5 truncate" style={{ color: SUBTLE }}>{DOC_HINTS[d.id] || ""}</p>
+                    </div>
+                    <div className="hidden sm:flex"><StatusPill status={d.status} /></div>
+                    {d.status === "missing" ? (
+                      <button type="button" onClick={() => uploadDoc(d.id)} className="shrink-0 h-9 px-3.5 rounded-lg text-[13px] font-bold inline-flex items-center gap-1.5 text-white" style={{ backgroundColor: BRAND }}>
+                        <Upload className="w-4 h-4" /> Upload
+                      </button>
+                    ) : (
+                      <span className="sm:hidden"><StatusPill status={d.status} /></span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
         </div>
 
-        <div className="flex items-start gap-2.5 mt-4 px-1">
-          <ShieldCheck className="w-4 h-4 mt-0.5 shrink-0" style={{ color: SUBTLE }} />
-          <p className="text-[11.5px] leading-snug" style={{ color: SUBTLE }}>Documents are reviewed by PakMed's verification team within 48 hours and are never shared without your consent.</p>
-        </div>
+        <aside className="flex flex-col gap-5 min-w-0 lg:sticky lg:top-6">
+          <section className={`${card} p-5`} style={cardStyle}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-[15px] font-extrabold" style={{ color: INK }}>Verification steps</h2>
+              <span className="text-[12.5px] font-bold tabular-nums" style={{ color: SUBTLE }}>{stepsDone} of {steps.length}</span>
+            </div>
+            <ol className="mt-4 flex flex-col">
+              {steps.map((st, i) => (
+                <li key={st.label} className="flex gap-3">
+                  <div className="flex flex-col items-center">
+                    <span className="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
+                      style={st.done ? { backgroundColor: GREEN } : st.pending ? { backgroundColor: AMBER_TINT, border: `1.5px solid ${AMBER}` } : { backgroundColor: "#fff", border: `1.5px solid ${CARD_BORDER}` }}>
+                      {st.done ? <Check className="w-3.5 h-3.5 text-white" /> : st.pending ? <Clock className="w-3 h-3" style={{ color: AMBER }} /> : null}
+                    </span>
+                    {i < steps.length - 1 && <span className="w-px flex-1 min-h-[14px] my-1" style={{ backgroundColor: st.done ? GREEN : CARD_BORDER }} />}
+                  </div>
+                  <div className="pb-3 min-w-0">
+                    <p className="text-[13.5px] font-semibold leading-6" style={{ color: st.done ? INK : INK_2 }}>{st.label}</p>
+                    {st.pending && <p className="text-[12px] -mt-0.5" style={{ color: AMBER }}>In review · usually within 48 hours</p>}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </section>
 
-        <button className="w-full mt-5 h-12 rounded-xl font-bold text-[15px] text-white transition-all hover:brightness-110" style={{ backgroundColor: BRAND }}>Save Profile</button>
-        </div>
-        </div>
+          <UsernameField initialUsername={username} />
+
+          <div className="rounded-2xl p-4 flex items-start gap-3" style={{ backgroundColor: BRAND_50, border: "1px solid #CFE0F5" }}>
+            <ShieldCheck className="w-5 h-5 shrink-0 mt-0.5" style={{ color: BRAND }} />
+            <p className="text-[12.5px] leading-relaxed" style={{ color: INK_2 }}>Documents are reviewed by PakMed's verification team within 48 hours and are never shared without your consent.</p>
+          </div>
+
+          {saveBtn("flex sm:hidden w-full h-12")}
+        </aside>
       </div>
     </div>
   );
@@ -14062,7 +14219,7 @@ function DashSidebar({ tag, groups, active, onSelect, user, footer = [], collaps
         )}
       </div>
 
-      <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-3" aria-label={ariaLabel} style={{ scrollbarWidth: "thin" }}>
+      <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain py-3" aria-label={ariaLabel} style={{ scrollbarWidth: "thin" }}>
         {groups.map((g) => (
           <div key={g.label} className="mb-2">
             {collapsed
@@ -14122,11 +14279,19 @@ function DashSidebar({ tag, groups, active, onSelect, user, footer = [], collaps
 
 function DashLayout({ storageKey, sidebar, mobileOpen, setMobileOpen, children }) {
   const size = useSidebarSize(storageKey);
+  // mobile drawer open: freeze the page behind it
+  useEffect(() => {
+    if (!mobileOpen) return undefined;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [mobileOpen]);
   return (
     <div className="min-h-dvh flex w-full" style={{ fontFamily: FONT, backgroundColor: CREAM }}>
       {/* desktop: resizable / collapsible column */}
-      <aside className="hidden lg:block shrink-0 sticky top-0 h-dvh z-40"
-        style={{ width: size.width, backgroundColor: "#14161A", transition: size.resizing ? "none" : "width 220ms cubic-bezier(.2,.7,.2,1)" }}>
+      <div className="hidden lg:block shrink-0" style={{ width: size.width, transition: size.resizing ? "none" : "width 220ms cubic-bezier(.2,.7,.2,1)" }} aria-hidden="true" />
+      <aside className="hidden lg:block fixed top-0 left-0 h-screen z-40"
+        style={{ height: "100dvh", width: size.width, backgroundColor: "#14161A", transition: size.resizing ? "none" : "width 220ms cubic-bezier(.2,.7,.2,1)" }}>
         {sidebar({ collapsed: size.collapsed })}
         {/* collapse / expand handle on the sidebar edge */}
         <button type="button" onClick={() => size.setCollapsed((c) => !c)}
@@ -14147,8 +14312,8 @@ function DashLayout({ storageKey, sidebar, mobileOpen, setMobileOpen, children }
 
       {/* mobile: slide-in drawer */}
       <div className="lg:hidden fixed inset-0 z-50 transition-opacity duration-200" style={{ backgroundColor: "rgba(0,0,0,0.45)", opacity: mobileOpen ? 1 : 0, pointerEvents: mobileOpen ? "auto" : "none" }} onClick={() => setMobileOpen(false)} />
-      <aside className="lg:hidden fixed top-0 left-0 z-50 h-dvh w-[80%] max-w-[300px] transition-transform duration-200 ease-out"
-        style={{ backgroundColor: "#14161A", transform: mobileOpen ? "translateX(0)" : "translateX(-100%)" }}>
+      <aside className="lg:hidden fixed top-0 bottom-0 left-0 z-50 h-screen w-[80%] max-w-[300px] transition-transform duration-200 ease-out overscroll-contain"
+        style={{ height: "100dvh", backgroundColor: "#14161A", transform: mobileOpen ? "translateX(0)" : "translateX(-100%)" }}>
         {sidebar({ collapsed: false, onClose: () => setMobileOpen(false) })}
       </aside>
 
@@ -14695,10 +14860,10 @@ const uniqueSorted = (list) => [...new Set(list.filter(Boolean))].sort((a, b) =>
 function AdminSelect({ value, all, options, onChange, label }) {
   const on = !!value && all !== undefined;   // only real filters highlight; sort dropdowns stay neutral
   return (
-    <label className="relative inline-flex items-center h-9 rounded-lg shrink-0 max-w-[220px]"
+    <label className="relative flex sm:inline-flex items-center h-10 sm:h-9 rounded-lg w-full sm:w-auto sm:shrink-0 sm:max-w-[220px] min-w-0"
       style={{ border: `1px solid ${on ? "#B9D3F2" : CARD_BORDER}`, backgroundColor: on ? BRAND_50 : "#fff", color: on ? BRAND : INK_2 }}>
       <select value={value} onChange={(e) => onChange(e.target.value)} aria-label={label || all}
-        className="appearance-none bg-transparent outline-none h-full pl-3 pr-8 text-[12.5px] font-semibold cursor-pointer truncate max-w-full">
+        className="appearance-none bg-transparent outline-none h-full w-full pl-3 pr-8 text-[13px] sm:text-[12.5px] font-semibold cursor-pointer truncate">
         {all !== undefined && <option value="">{all}</option>}
         {options.map((o) => {
           const v = typeof o === "string" ? o : o.value;
@@ -14711,18 +14876,25 @@ function AdminSelect({ value, all, options, onChange, label }) {
 }
 
 function AdminFilterBar({ children, active, onClear, shown, total }) {
+  const clear = active > 0 && (
+    <button type="button" onClick={onClear} className="h-9 px-3 rounded-lg text-[12.5px] font-bold inline-flex items-center gap-1 shrink-0" style={{ color: RED }}>
+      <X className="w-3.5 h-3.5" /> Clear ({active})
+    </button>
+  );
   return (
-    <div className="flex items-center gap-2 flex-wrap mt-3">
-      <span className="inline-flex items-center gap-1.5 text-[12.5px] font-bold mr-1" style={{ color: SUBTLE }}>
-        <SlidersHorizontal className="w-4 h-4" /> Filters
-      </span>
-      {children}
-      {active > 0 && (
-        <button type="button" onClick={onClear} className="h-9 px-3 rounded-lg text-[12.5px] font-bold inline-flex items-center gap-1" style={{ color: RED }}>
-          <X className="w-3.5 h-3.5" /> Clear ({active})
-        </button>
-      )}
-      <span className="ml-auto text-[12.5px] font-semibold" style={{ color: SUBTLE }}>Showing {shown} of {total}</span>
+    <div className="mt-3">
+      {/* mobile: label + count on top, dropdowns in a neat 2-column grid */}
+      <div className="flex items-center gap-2 mb-2 sm:hidden">
+        <span className="inline-flex items-center gap-1.5 text-[12.5px] font-bold" style={{ color: SUBTLE }}><SlidersHorizontal className="w-4 h-4" /> Filters</span>
+        {clear}
+        <span className="ml-auto text-[12.5px] font-semibold" style={{ color: SUBTLE }}>{shown} of {total}</span>
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+        <span className="hidden sm:inline-flex items-center gap-1.5 text-[12.5px] font-bold mr-1" style={{ color: SUBTLE }}><SlidersHorizontal className="w-4 h-4" /> Filters</span>
+        {children}
+        <span className="hidden sm:inline-flex">{clear}</span>
+        <span className="hidden sm:inline ml-auto text-[12.5px] font-semibold" style={{ color: SUBTLE }}>Showing {shown} of {total}</span>
+      </div>
     </div>
   );
 }
@@ -14736,6 +14908,8 @@ function AdminCollection({ kind, rows, admin, onSave, onHide, onDelete, onFlag, 
   const [confirm, setConfirm] = useState(null);
   const [sel, setSel] = useState({});             // dropdown filter values by key
   const [sort, setSort] = useState("default");
+  const [viewingId, setViewingId] = useState(null);   // doctor details popup
+  const [openRow, setOpenRow] = useState(null);        // mobile: expanded job row
   const fx = ADMIN_FILTERS[kind];
   const activeFilters = Object.values(sel).filter(Boolean).length;
   const pick = (k, v) => { setSel((p) => ({ ...p, [k]: v })); setLimit(ADMIN_PAGE); };
@@ -14798,10 +14972,10 @@ function AdminCollection({ kind, rows, admin, onSave, onHide, onDelete, onFlag, 
   return (
     <div>
       <div className="flex flex-col sm:flex-row gap-2.5 sm:items-center">
-        <label className="flex items-center gap-2 h-11 px-3.5 rounded-xl flex-1 min-w-0" style={{ backgroundColor: "#fff", border: `1px solid ${CARD_BORDER}` }}>
-          <Search className="w-4 h-4 shrink-0" style={{ color: FAINT }} />
+        <label className="flex items-center gap-2.5 h-12 sm:h-[52px] px-4 rounded-2xl focus-within:ring-2 focus-within:ring-[#B9D3F2] w-full sm:flex-1 min-w-0 shrink-0" style={{ backgroundColor: "#fff", border: `1px solid ${CARD_BORDER}` }}>
+          <Search className="w-5 h-5 shrink-0" style={{ color: FAINT }} />
           <input value={q} onChange={(e) => { setQ(e.target.value); setLimit(ADMIN_PAGE); }} placeholder={`Search ${cfg.label.toLowerCase()}…`}
-            className="flex-1 min-w-0 bg-transparent outline-none text-[14px]" style={{ color: INK }} />
+            className="flex-1 min-w-0 bg-transparent outline-none text-[15px]" style={{ color: INK }} />
           {q && <button type="button" onClick={() => setQ("")} aria-label="Clear"><X className="w-4 h-4" style={{ color: SUBTLE }} /></button>}
         </label>
         <div className="flex gap-2 shrink-0">
@@ -14852,9 +15026,8 @@ function AdminCollection({ kind, rows, admin, onSave, onHide, onDelete, onFlag, 
                   <span className="absolute top-3 right-3"><AdminPill color={st.color} tint={st.tint}>{st.label}</AdminPill></span>
                 </div>
                 <div className="relative px-5 pb-5 -mt-9 flex flex-col items-center text-center flex-1">
-                  <span className="w-[72px] h-[72px] rounded-full flex items-center justify-center text-[22px] font-extrabold text-white" style={{ backgroundColor: RED, border: "4px solid #fff" }}>
-                    {initialsOf(x.name || "")}
-                  </span>
+                  <button type="button" onClick={() => setViewingId(x.id)} className="flex flex-col items-center w-full group" aria-label={`View ${x.name}'s profile`}>
+                  <img src={doctorPhoto(x)} alt="" loading="lazy" className="w-[76px] h-[76px] rounded-full object-cover object-top" style={{ border: "4px solid #fff", boxShadow: "0 4px 12px -4px rgba(16,24,40,0.25)" }} />
                   <p className="text-[15.5px] font-extrabold mt-2 flex items-center gap-1" style={{ color: INK }}>
                     {x.name}{x.verified && <BadgeCheck className="w-4 h-4" style={{ color: GREEN }} />}
                   </p>
@@ -14863,6 +15036,8 @@ function AdminCollection({ kind, rows, admin, onSave, onHide, onDelete, onFlag, 
                   <p className="text-[12.5px] mt-1.5 inline-flex items-center gap-1" style={{ color: INK_2 }}>
                     <MapPin className="w-3.5 h-3.5" /> {[x.area, x.city].filter(Boolean).join(", ")}
                   </p>
+                  <span className="mt-1.5 text-[12.5px] font-bold inline-flex items-center gap-1 group-hover:underline" style={{ color: BRAND }}>View profile <ChevronRight className="w-3.5 h-3.5" /></span>
+                  </button>
                   <div className="grid grid-cols-3 w-full mt-4 rounded-xl overflow-hidden" style={{ border: `1px solid ${CARD_BORDER}` }}>
                     {[["Fee", x.fee ? `${x.fee}` : "—"], ["Rating", x.rating ? `${x.rating}★` : "—"], ["Exp.", x.exp || "—"]].map(([k, v], i) => (
                       <div key={k} className="py-2" style={{ borderLeft: i ? `1px solid ${CARD_BORDER}` : "none" }}>
@@ -14886,7 +15061,57 @@ function AdminCollection({ kind, rows, admin, onSave, onHide, onDelete, onFlag, 
       )}
 
       {kind === "job" && page.length > 0 && (
-        <div className="mt-4 rounded-2xl bg-white overflow-hidden" style={{ border: `1px solid ${CARD_BORDER}` }}>
+        <div className="md:hidden mt-4 rounded-2xl bg-white overflow-hidden" style={{ border: `1px solid ${CARD_BORDER}` }}>
+          {page.map(({ x, status }, i) => {
+            const st = adminStatusStyle(status);
+            const open = openRow === x.id;
+            return (
+              <div key={x.id} style={{ borderTop: i ? `1px solid ${CARD_BORDER}` : "none", backgroundColor: open ? "#FAFBFC" : "#fff" }}>
+                <button type="button" onClick={() => setOpenRow(open ? null : x.id)} aria-expanded={open} className="w-full flex items-center gap-3 px-4 py-3 text-left">
+                  <span className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: BRAND_50 }}>
+                    <Briefcase className="w-[18px] h-[18px]" style={{ color: BRAND }} />
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <span className="flex items-center gap-1.5">
+                      <span className="text-[14px] font-bold truncate" style={{ color: INK }}>{x.jobTitle}</span>
+                      {x.urgent && <AdminPill color={RED} tint={RED_TINT}>Urgent</AdminPill>}
+                    </span>
+                    <span className="block text-[12px] truncate" style={{ color: SUBTLE }}>{x.facilityName} · {x.city}</span>
+                    <span className="block text-[12.5px] font-bold mt-0.5" style={{ color: GREEN }}>{x.payAmount ? `PKR ${x.payAmount}` : "—"} <span className="font-medium" style={{ color: FAINT }}>{x.payUnitLabel}</span></span>
+                  </span>
+                  <span className="flex flex-col items-end gap-1 shrink-0">
+                    <AdminPill color={st.color} tint={st.tint}>{st.label}</AdminPill>
+                    <ChevronDown className="w-4 h-4 transition-transform" style={{ color: SUBTLE, transform: open ? "rotate(180deg)" : "none" }} />
+                  </span>
+                </button>
+                {open && (
+                  <div className="px-4 pb-4 dropdown-pop">
+                    <dl className="grid grid-cols-2 gap-2">
+                      {[
+                        ["Facility", `${x.facilityName} · ${x.facilityTypeLabel || ""}`],
+                        ["Location", [x.area, x.city].filter(Boolean).join(", ")],
+                        ["Shift", (x.shifts || []).join(", ") || "—"],
+                        ["Starts", x.startDate || "—"],
+                        ["Applicants", x.applicants || 0],
+                        ["Source", adminSource(x)],
+                      ].map(([k, v]) => (
+                        <div key={k} className="rounded-xl px-3 py-2 bg-white min-w-0" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                          <dt className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: FAINT }}>{k}</dt>
+                          <dd className="text-[13px] font-semibold truncate" style={{ color: INK }}>{v}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                    <div className="flex flex-wrap gap-1.5 mt-3">{actionButtons(x)}</div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {kind === "job" && page.length > 0 && (
+        <div className="hidden md:block mt-4 rounded-2xl bg-white overflow-hidden" style={{ border: `1px solid ${CARD_BORDER}` }}>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1050px] text-left border-collapse">
               <thead>
@@ -14939,13 +15164,13 @@ function AdminCollection({ kind, rows, admin, onSave, onHide, onDelete, onFlag, 
       )}
 
       {kind === "market" && page.length > 0 && (
-        <div className="mt-4 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
           {page.map(({ x, status }) => {
             const st = adminStatusStyle(status);
             const img = (x.photos && x.photos.length && photoSrc(x.photos[x.coverIndex || 0])) || x.img;
             return (
               <div key={x.id} className="rounded-2xl bg-white overflow-hidden flex flex-col group" style={{ border: `1px solid ${CARD_BORDER}`, opacity: status === "live" ? 1 : 0.75 }}>
-                <div className="relative aspect-square overflow-hidden" style={{ backgroundColor: VIOLET_TINT }}>
+                <div className="relative aspect-[16/10] sm:aspect-square overflow-hidden" style={{ backgroundColor: VIOLET_TINT }}>
                   {img ? <img src={img} alt="" loading="lazy" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
                     : <div className="w-full h-full flex items-center justify-center"><Store className="w-10 h-10" style={{ color: VIOLET }} /></div>}
                   <span className="absolute top-2.5 left-2.5"><AdminPill color={st.color} tint={st.tint}>{st.label}</AdminPill></span>
@@ -14972,7 +15197,9 @@ function AdminCollection({ kind, rows, admin, onSave, onHide, onDelete, onFlag, 
             const st = adminStatusStyle(status);
             return (
               <div key={x.id} className="rounded-2xl bg-white overflow-hidden flex flex-col sm:flex-row" style={{ border: `1px solid ${CARD_BORDER}`, opacity: status === "live" ? 1 : 0.75 }}>
-                <div className="relative sm:w-56 h-40 sm:h-auto shrink-0" style={{ backgroundColor: TEAL_TINT }}>
+                <div className="relative sm:w-56 h-40 sm:h-auto shrink-0 cursor-pointer" style={{ backgroundColor: TEAL_TINT }}
+                  role="button" tabIndex={0} aria-label={`View ${x.name} details`}
+                  onClick={() => setViewingId(x.id)} onKeyDown={(e) => { if (e.key === "Enter") setViewingId(x.id); }}>
                   <img src={facImage(x)} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
                   <span className="absolute top-2.5 left-2.5"><AdminPill color={st.color} tint={st.tint}>{st.label}</AdminPill></span>
                   {x.hiring > 0 && <span className="absolute bottom-2.5 left-2.5 text-[10.5px] font-bold px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: GREEN }}>Hiring · {x.hiring}</span>}
@@ -14998,7 +15225,12 @@ function AdminCollection({ kind, rows, admin, onSave, onHide, onDelete, onFlag, 
                       {x.services.length > 4 && <span className="text-[11px] font-semibold px-1.5 py-0.5" style={{ color: FAINT }}>+{x.services.length - 4}</span>}
                     </div>
                   )}
-                  <div className="flex items-center gap-1.5 mt-auto pt-3 flex-wrap">{actionButtons(x)}</div>
+                  <div className="flex items-center gap-1.5 mt-auto pt-3 flex-wrap">
+                    <button type="button" onClick={() => setViewingId(x.id)} className={ADMIN_BTN} style={{ color: "#fff", backgroundColor: TEAL }}>
+                      <Eye className="w-3.5 h-3.5" /> View details
+                    </button>
+                    {actionButtons(x)}
+                  </div>
                 </div>
               </div>
             );
@@ -15007,13 +15239,15 @@ function AdminCollection({ kind, rows, admin, onSave, onHide, onDelete, onFlag, 
       )}
 
       {kind === "feed" && page.length > 0 && (
-        <div className="mt-4 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
           {page.map(({ x, status }) => {
             const st = adminStatusStyle(status);
             const m = x.media || {};
             return (
               <div key={x.id} className="rounded-2xl overflow-hidden bg-white flex flex-col" style={{ border: `1px solid ${CARD_BORDER}`, opacity: status === "live" ? 1 : 0.75 }}>
-                <div className="relative aspect-[4/5] overflow-hidden" style={{ background: m.kind === "gradient" ? m.g : "#111" }}>
+                <div className="relative aspect-[4/3] sm:aspect-[4/5] overflow-hidden cursor-pointer group" style={{ background: m.kind === "gradient" ? m.g : "#111" }}
+                  role="button" tabIndex={0} aria-label={`View post: ${x.title}`}
+                  onClick={() => setViewingId(x.id)} onKeyDown={(e) => { if (e.key === "Enter") setViewingId(x.id); }}>
                   {m.kind === "image" && <img src={m.src} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />}
                   <div className="absolute inset-0" style={{ background: "linear-gradient(180deg,rgba(0,0,0,.35) 0%,rgba(0,0,0,0) 30%,rgba(0,0,0,0) 45%,rgba(0,0,0,.82) 100%)" }} />
                   <span className="absolute top-2.5 left-2.5"><AdminPill color={st.color} tint={st.tint}>{st.label}</AdminPill></span>
@@ -15027,7 +15261,9 @@ function AdminCollection({ kind, rows, admin, onSave, onHide, onDelete, onFlag, 
                 <div className="px-3 py-2.5 flex items-center gap-3 text-[12.5px] font-semibold" style={{ color: SUBTLE, borderBottom: `1px solid ${CARD_BORDER}` }}>
                   <span className="inline-flex items-center gap-1"><Heart className="w-3.5 h-3.5" /> {x.likes || 0}</span>
                   <span className="inline-flex items-center gap-1"><MessageCircle className="w-3.5 h-3.5" /> {(x.comments || []).length}</span>
-                  {x._src === "admin" && <span className="ml-auto text-[11px] font-bold" style={{ color: BRAND }}>By admin</span>}
+                  <button type="button" onClick={() => setViewingId(x.id)} className="ml-auto text-[12px] font-bold inline-flex items-center gap-1" style={{ color: BRAND }}>
+                    View post <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
                 </div>
                 <div className="px-3 py-2.5 flex items-center gap-1.5 flex-wrap">{actionButtons(x, { icons: true })}</div>
               </div>
@@ -15042,6 +15278,155 @@ function AdminCollection({ kind, rows, admin, onSave, onHide, onDelete, onFlag, 
         </button>
       )}
 
+
+      {kind === "feed" && viewingId && (() => {
+        const c = rows.find((r) => r.id === viewingId);
+        if (!c) return null;
+        const st = adminStatusStyle(statusOf(c));
+        const m = c.media || {};
+        const comments = c.comments || [];
+        const replies = comments.reduce((n, cm) => n + (cm.replies || []).length, 0);
+        const posted = c.createdAt
+          ? new Date(c.createdAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })
+          : `${c.time} ago`;
+        return (
+          <AdminModal wide title={c.title} sub={`${c.category} · posted by ${c.author}`} onClose={() => setViewingId(null)}
+            footer={<div className="flex flex-wrap gap-1.5 w-full justify-end">{actionButtons(c)}</div>}>
+            <div className="relative h-52 sm:h-64 rounded-2xl overflow-hidden" style={{ background: m.kind === "gradient" ? m.g : "#111" }}>
+              {m.kind === "image" && <img src={m.src} alt="" className="absolute inset-0 w-full h-full object-cover" />}
+              <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
+                <AdminPill color={st.color} tint={st.tint}>{st.label}</AdminPill>
+                {c.eyebrow && <span className="text-[10.5px] font-bold uppercase px-2 py-0.5 rounded-full bg-white/90" style={{ color: AMBER }}>{c.eyebrow}</span>}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 mt-4">
+              <span className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0" style={{ backgroundColor: BRAND }}>{initialsOf(c.author || "P")}</span>
+              <div className="min-w-0">
+                <p className="text-[14px] font-bold" style={{ color: INK }}>{c.author}</p>
+                <p className="text-[12.5px]" style={{ color: SUBTLE }}>{posted} · {c.category}{c._src === "admin" ? " · added by admin" : ""}</p>
+              </div>
+            </div>
+            <p className="text-[14.5px] leading-relaxed mt-3 whitespace-pre-wrap" style={{ color: INK_2 }}>{c.body}</p>
+
+            <div className="grid grid-cols-3 gap-2 mt-4">
+              {[["Likes", c.likes || 0, Heart], ["Comments", comments.length, MessageCircle], ["Replies", replies, Reply]].map(([k, v, I]) => (
+                <div key={k} className="rounded-xl px-3 py-2.5 text-center" style={{ backgroundColor: "#FAFBFC", border: `1px solid ${CARD_BORDER}` }}>
+                  <I className="w-4 h-4 mx-auto" style={{ color: SUBTLE }} />
+                  <p className="text-[17px] font-extrabold mt-1 tabular-nums" style={{ color: INK }}>{v}</p>
+                  <p className="text-[11.5px] font-semibold" style={{ color: FAINT }}>{k}</p>
+                </div>
+              ))}
+            </div>
+            {(c.likes || 0) > 0 && <div className="mt-3"><LikedBy card={c} /></div>}
+
+            <p className="text-[11px] font-semibold uppercase tracking-wide mt-5 mb-2" style={{ color: FAINT }}>Comments</p>
+            {comments.length === 0 ? (
+              <p className="text-[13px]" style={{ color: SUBTLE }}>No comments yet.</p>
+            ) : (
+              <ul className="space-y-3">
+                {comments.map((cm) => (
+                  <li key={cm.id}>
+                    <div className="flex gap-2.5">
+                      <span className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[11px] font-bold shrink-0" style={{ backgroundColor: LIKER_COLORS[(cm.name || "").length % LIKER_COLORS.length] }}>{(cm.name || "?").replace(/^Dr\.?\s*/i, "")[0]}</span>
+                      <div className="flex-1 min-w-0 rounded-xl px-3 py-2" style={{ backgroundColor: "#F5F7FA" }}>
+                        <p className="text-[12.5px] font-bold" style={{ color: INK }}>{cm.name} <span className="font-medium" style={{ color: FAINT }}>· {cm.likes || 0} likes</span></p>
+                        <p className="text-[13px] mt-0.5" style={{ color: INK_2 }}>{cm.text}</p>
+                      </div>
+                    </div>
+                    {(cm.replies || []).length > 0 && (
+                      <ul className="mt-2 ml-10 space-y-2">
+                        {cm.replies.map((r) => (
+                          <li key={r.id} className="rounded-xl px-3 py-2" style={{ backgroundColor: "#FAFBFC", border: `1px solid ${CARD_BORDER}` }}>
+                            <p className="text-[12px] font-bold" style={{ color: INK }}>{r.name}</p>
+                            <p className="text-[12.5px] mt-0.5" style={{ color: INK_2 }}>{r.text}</p>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </AdminModal>
+        );
+      })()}
+      {kind === "hospital" && viewingId && (() => {
+        const h = rows.find((r) => r.id === viewingId);
+        if (!h) return null;
+        const st = adminStatusStyle(statusOf(h));
+        const facts = [
+          ["Type", h.type], ["Address", [h.address || h.area, h.city].filter(Boolean).join(", ")],
+          ["Phone", h.phone || "Not added"], ["Opening hours", h.hours || "—"],
+          ["Rating", h.rating ? `${h.rating}★ · ${h.reviews || 0} reviews` : "—"],
+          ["Open positions", h.hiring > 0 ? `Hiring · ${h.hiring}` : "Not hiring"],
+          ["Source", adminSource(h)], ["Status", st.label],
+        ];
+        return (
+          <AdminModal wide title={h.name} sub={`${h.type || "Facility"} · ${h.city || ""}`} onClose={() => setViewingId(null)}
+            footer={<div className="flex flex-wrap gap-1.5 w-full justify-end">{actionButtons(h)}</div>}>
+            <div className="relative h-44 sm:h-52 rounded-2xl overflow-hidden" style={{ backgroundColor: TEAL_TINT }}>
+              <img src={facImage(h)} alt="" className="absolute inset-0 w-full h-full object-cover" />
+              <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, transparent 45%, rgba(10,22,44,0.7))" }} />
+              <div className="absolute left-3 bottom-3 flex flex-wrap gap-1.5">
+                <AdminPill color={st.color} tint={st.tint}>{st.label}</AdminPill>
+                <AdminPill color={h.verified ? GREEN : SUBTLE} tint={h.verified ? GREEN_TINT : "#F2F4F7"}>{h.verified ? "Verified" : "Not verified"}</AdminPill>
+                {h.hiring > 0 && <AdminPill color="#fff" tint={GREEN}>Hiring · {h.hiring}</AdminPill>}
+              </div>
+            </div>
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4">
+              {facts.map(([k, v]) => (
+                <div key={k} className="rounded-xl px-3.5 py-2.5" style={{ backgroundColor: "#FAFBFC", border: `1px solid ${CARD_BORDER}` }}>
+                  <dt className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: FAINT }}>{k}</dt>
+                  <dd className="text-[13.5px] font-semibold mt-0.5" style={{ color: INK }}>{v || "—"}</dd>
+                </div>
+              ))}
+            </dl>
+            {(h.services || []).length > 0 && (
+              <div className="mt-4">
+                <p className="text-[11px] font-semibold uppercase tracking-wide mb-2" style={{ color: FAINT }}>Services</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {h.services.map((sv) => <span key={sv} className="text-[12.5px] font-semibold px-2.5 py-1 rounded-lg" style={{ color: TEAL, backgroundColor: TEAL_TINT }}>{sv}</span>)}
+                </div>
+              </div>
+            )}
+          </AdminModal>
+        );
+      })()}
+      {kind === "doctor" && viewingId && (() => {
+        const d = rows.find((r) => r.id === viewingId);
+        if (!d) return null;
+        const st = adminStatusStyle(statusOf(d));
+        const facts = [
+          ["Specialty", d.specialty], ["Qualifications", d.qual], ["Clinic / hospital", d.clinic],
+          ["Location", [d.area, d.city].filter(Boolean).join(", ")], ["Consultation fee", d.fee ? `PKR ${d.fee}` : "—"],
+          ["Experience", d.exp || "—"], ["Rating", d.rating ? `${d.rating}★ · ${d.reviews || 0} reviews` : "—"],
+          ["Next slot", d.slots || "—"], ["Phone", d.phone ? `${d.phone} · ${d.showPhone ? "visible" : "hidden"}` : "Not added"],
+          ["Consult type", d.online ? "In-clinic & online" : "In-clinic only"],
+        ];
+        return (
+          <AdminModal wide title={d.name} sub={`${d.specialty || "Doctor"} · ${d.city || ""}`} onClose={() => setViewingId(null)}
+            footer={<div className="flex flex-wrap gap-1.5 w-full justify-end">{actionButtons(d)}</div>}>
+            <div className="flex items-center gap-4">
+              <img src={doctorPhoto(d)} alt={d.name} className="w-20 h-20 rounded-2xl object-cover object-top shrink-0" style={{ border: `1px solid ${CARD_BORDER}` }} />
+              <div className="flex flex-wrap gap-1.5">
+                <AdminPill color={st.color} tint={st.tint}>{st.label}</AdminPill>
+                <AdminPill color={d.verified ? GREEN : SUBTLE} tint={d.verified ? GREEN_TINT : "#F2F4F7"}>{d.verified ? "PMDC verified" : "Not verified"}</AdminPill>
+                <AdminPill color={d.showPhone ? GREEN : SUBTLE} tint={d.showPhone ? GREEN_TINT : "#F2F4F7"}>{d.showPhone ? "Phone visible" : "Phone hidden"}</AdminPill>
+                {d._src === "user" && <AdminPill color={VIOLET} tint={VIOLET_TINT}>Website user</AdminPill>}
+              </div>
+            </div>
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4">
+              {facts.map(([k, v]) => (
+                <div key={k} className="rounded-xl px-3.5 py-2.5" style={{ backgroundColor: "#FAFBFC", border: `1px solid ${CARD_BORDER}` }}>
+                  <dt className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: FAINT }}>{k}</dt>
+                  <dd className="text-[13.5px] font-semibold mt-0.5" style={{ color: INK }}>{v || "—"}</dd>
+                </div>
+              ))}
+            </dl>
+          </AdminModal>
+        );
+      })()}
       {editing && <AdminEditor kind={kind} item={editing.item} isNew={editing.isNew} onSave={(d) => onSave(d, editing.isNew)} onClose={() => setEditing(null)} />}
       {confirm && (
         <AdminConfirm
@@ -15074,6 +15459,7 @@ function AdminUsers({ users, admin, onBlock, onUnblock, onMessage, onSetRole, on
   const [role, setRole] = useState("All");
   const [limit, setLimit] = useState(ADMIN_PAGE);
   const [confirm, setConfirm] = useState(null);   // { type: "block" | "delete" | "admin" | "staff", user }
+  const [openUser, setOpenUser] = useState(null);  // mobile: expanded row
   const needle = q.trim().toLowerCase();
   const roles = ["All", "Admins", "Staff", "Doctor", "Employer", "Seller", "Job seeker", "Blocked"];
   const matchRole = (u, r) => {
@@ -15132,10 +15518,10 @@ function AdminUsers({ users, admin, onBlock, onUnblock, onMessage, onSetRole, on
 
   return (
     <div>
-      <label className="flex items-center gap-2 h-11 px-3.5 rounded-xl" style={{ backgroundColor: "#fff", border: `1px solid ${CARD_BORDER}` }}>
-        <Search className="w-4 h-4 shrink-0" style={{ color: FAINT }} />
+      <label className="flex items-center gap-2.5 h-12 sm:h-[52px] px-4 rounded-2xl focus-within:ring-2 focus-within:ring-[#B9D3F2]" style={{ backgroundColor: "#fff", border: `1px solid ${CARD_BORDER}` }}>
+        <Search className="w-5 h-5 shrink-0" style={{ color: FAINT }} />
         <input value={q} onChange={(e) => { setQ(e.target.value); setLimit(ADMIN_PAGE); }} placeholder="Search users by name, city or contact…"
-          className="flex-1 min-w-0 bg-transparent outline-none text-[14px]" style={{ color: INK }} />
+          className="flex-1 min-w-0 bg-transparent outline-none text-[15px]" style={{ color: INK }} />
         {q && <button type="button" onClick={() => setQ("")} aria-label="Clear"><X className="w-4 h-4" style={{ color: SUBTLE }} /></button>}
       </label>
       <div className="flex gap-1.5 overflow-x-auto mt-3 pb-1" style={{ scrollbarWidth: "none" }}>
@@ -15164,7 +15550,87 @@ function AdminUsers({ users, admin, onBlock, onUnblock, onMessage, onSetRole, on
       </AdminFilterBar>
       <p className="text-[12px] mt-2" style={{ color: SUBTLE }}>Blocking hides a user's posts until you unblock them. Deleting removes the account and everything they posted.</p>
 
-      <div className="mt-4 rounded-2xl bg-white overflow-hidden" style={{ border: `1px solid ${CARD_BORDER}` }}>
+      {/* mobile: compact rows, tap to see details */}
+      <div className="md:hidden mt-4 rounded-2xl bg-white overflow-hidden" style={{ border: `1px solid ${CARD_BORDER}` }}>
+        {shown.length === 0 && <div className="p-4"><AdminEmpty icon={Users} title="No users found" sub="Try a different search or clear the filters." /></div>}
+        {shown.slice(0, limit).map((u, i) => {
+          const blocked = admin.blocked[u.id];
+          const access = admin.roles[u.id];
+          const isMe = u.id === "me";
+          const rs = USER_ROLE_STYLE[u.role] || USER_ROLE_STYLE.You;
+          const ac = access ? ACCESS_STYLE[access] : null;
+          const open = openUser === u.id;
+          return (
+            <div key={u.id} style={{ borderTop: i ? `1px solid ${CARD_BORDER}` : "none", backgroundColor: open ? "#FAFBFC" : "#fff", boxShadow: ac ? `inset 3px 0 0 ${ac.tint}` : blocked ? `inset 3px 0 0 ${RED}` : "none" }}>
+              <button type="button" onClick={() => setOpenUser(open ? null : u.id)} aria-expanded={open}
+                className="w-full flex items-center gap-3 px-4 py-3 text-left">
+                <span className="w-10 h-10 rounded-full flex items-center justify-center text-[12.5px] font-bold shrink-0" style={{ backgroundColor: ac ? ac.tint : rs.tint, color: ac ? "#fff" : rs.color }}>
+                  {u.name.replace(/^@|^Dr\.?\s*/gi, "").split(/[\s_]+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase()}
+                </span>
+                <span className="flex-1 min-w-0">
+                  <span className="block text-[14px] font-bold truncate" style={{ color: INK }}>{u.name}{isMe ? " (you)" : ""}</span>
+                  <span className="flex items-center gap-1.5 mt-0.5">
+                    <AdminPill color={rs.color} tint={rs.tint}>{u.role}</AdminPill>
+                    {(ac || isMe) && <AdminPill color="#fff" tint={isMe ? BRAND : ac.tint}>{isMe ? "Admin" : ac.label}</AdminPill>}
+                  </span>
+                </span>
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: blocked ? RED : GREEN }} title={blocked ? "Blocked" : "Active"} />
+                <ChevronDown className="w-4 h-4 shrink-0 transition-transform" style={{ color: SUBTLE, transform: open ? "rotate(180deg)" : "none" }} />
+              </button>
+              {open && (
+                <div className="px-4 pb-4 dropdown-pop">
+                  <dl className="grid grid-cols-2 gap-2">
+                    {[["Contact", u.contact || "—"], ["City", u.city || "—"], ["Posts on site", u.items], ["Status", blocked ? "Blocked" : "Active"]].map(([k, v]) => (
+                      <div key={k} className="rounded-xl px-3 py-2 bg-white" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                        <dt className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: FAINT }}>{k}</dt>
+                        <dd className="text-[13px] font-semibold truncate" style={{ color: k === "Status" ? (blocked ? RED : GREEN) : INK }}>{v}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  {blocked && blocked.reason && <p className="text-[12px] mt-2" style={{ color: RED }}>Reason: {blocked.reason}</p>}
+                  {!isMe && (
+                    <label className="mt-3 flex items-center justify-between gap-3 rounded-xl px-3 py-2 bg-white" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                      <span className="text-[13px] font-semibold" style={{ color: INK_2 }}>Access</span>
+                      <select value={access || "user"} aria-label={`Access for ${u.name}`}
+                        onChange={(e) => { const next = e.target.value; if (next !== (access || "user")) setConfirm({ type: next === "user" ? access : next, user: u }); }}
+                        className="h-8 px-2 rounded-lg text-[13px] font-bold outline-none" style={{ color: ac ? ac.tint : INK, border: `1px solid ${CARD_BORDER}` }}>
+                        <option value="user">User</option>
+                        <option value="staff">Staff</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    </label>
+                  )}
+                  <div className="grid grid-cols-3 gap-2 mt-3">
+                    <button type="button" onClick={() => onMessage(u)} className="h-10 rounded-xl text-[13px] font-bold inline-flex items-center justify-center gap-1.5 bg-white" style={{ color: BRAND, border: `1px solid ${CARD_BORDER}` }}>
+                      <Send className="w-4 h-4" /> Message
+                    </button>
+                    {blocked ? (
+                      <button type="button" onClick={() => onUnblock(u)} className="h-10 rounded-xl text-[13px] font-bold inline-flex items-center justify-center gap-1.5 bg-white" style={{ color: GREEN, border: `1px solid ${CARD_BORDER}` }}>
+                        <UserCheck className="w-4 h-4" /> Unblock
+                      </button>
+                    ) : (
+                      <button type="button" onClick={() => setConfirm({ type: "block", user: u })} className="h-10 rounded-xl text-[13px] font-bold inline-flex items-center justify-center gap-1.5 bg-white" style={{ color: RED, border: `1px solid ${CARD_BORDER}` }}>
+                        <Ban className="w-4 h-4" /> Block
+                      </button>
+                    )}
+                    <button type="button" disabled={isMe} onClick={() => setConfirm({ type: "delete", user: u })}
+                      className="h-10 rounded-xl text-[13px] font-bold inline-flex items-center justify-center gap-1.5 disabled:opacity-35" style={{ color: "#fff", backgroundColor: RED }}>
+                      <Trash2 className="w-4 h-4" /> Delete
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {shown.length > limit && (
+          <button type="button" onClick={() => setLimit((n) => n + ADMIN_PAGE)} className="w-full h-12 text-[13.5px] font-bold" style={{ color: BRAND, borderTop: `1px solid ${CARD_BORDER}` }}>
+            Show more ({shown.length - limit} left)
+          </button>
+        )}
+      </div>
+
+      <div className="hidden md:block mt-4 rounded-2xl bg-white overflow-hidden" style={{ border: `1px solid ${CARD_BORDER}` }}>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1000px] text-left border-collapse">
             <thead>
@@ -15321,10 +15787,10 @@ function AdminSupport({ tickets, admin, onReply, onStatus, onBlock }) {
   return (
     <div>
     <div className={open ? "hidden lg:block mb-3" : "mb-3"}>
-      <label className="flex items-center gap-2 h-11 px-3.5 rounded-xl" style={{ backgroundColor: "#fff", border: `1px solid ${CARD_BORDER}` }}>
-        <Search className="w-4 h-4 shrink-0" style={{ color: FAINT }} />
+      <label className="flex items-center gap-2.5 h-12 sm:h-[52px] px-4 rounded-2xl focus-within:ring-2 focus-within:ring-[#B9D3F2]" style={{ backgroundColor: "#fff", border: `1px solid ${CARD_BORDER}` }}>
+        <Search className="w-5 h-5 shrink-0" style={{ color: FAINT }} />
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search tickets by subject, name or message…"
-          className="flex-1 min-w-0 bg-transparent outline-none text-[14px]" style={{ color: INK }} />
+          className="flex-1 min-w-0 bg-transparent outline-none text-[15px]" style={{ color: INK }} />
         {q && <button type="button" onClick={() => setQ("")} aria-label="Clear"><X className="w-4 h-4" style={{ color: SUBTLE }} /></button>}
       </label>
       <AdminFilterBar active={activeFilters} onClear={() => { setTopic(""); setWho(""); }} shown={shown.length} total={tickets.length}>
@@ -15486,11 +15952,6 @@ function AdminMessages({ users, admin, messages, preset, onSend }) {
   const needle = q.trim().toLowerCase();
   const history = messages.filter((m) => (tab === "all" || kindOf(m) === tab) && (!needle || `${m.subject} ${m.text} ${m.toName}`.toLowerCase().includes(needle)));
   const counts = messages.reduce((acc, m) => ({ ...acc, [kindOf(m)]: (acc[kindOf(m)] || 0) + 1 }), {});
-  const seenRate = (() => {
-    const mine = messages.filter(messageReachesMe);
-    return mine.length ? Math.round((mine.filter((m) => m.read).length / mine.length) * 100) : null;
-  })();
-  const totalReach = messages.reduce((n, m) => n + (m.reach || 1), 0);
 
   const field = { border: `1px solid ${CARD_BORDER}`, color: INK };
   const segBtn = (key, label, Icon) => {
@@ -15506,44 +15967,18 @@ function AdminMessages({ users, admin, messages, preset, onSend }) {
 
   return (
     <div className="space-y-4">
-      {/* KPI strip */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {[
-          { label: "Messages sent", value: messages.length, icon: Send, color: BRAND, tint: BRAND_50 },
-          { label: "Announcements", value: counts.announcement || 0, icon: Megaphone, color: AMBER, tint: AMBER_TINT },
-          { label: "People reached", value: totalReach, icon: Users, color: TEAL, tint: TEAL_TINT },
-          { label: "Seen rate", value: seenRate === null ? "—" : `${seenRate}%`, icon: CheckCheck, color: GREEN, tint: GREEN_TINT },
-        ].map((s) => (
-          <div key={s.label} className="rounded-2xl bg-white p-4 flex items-center gap-3.5" style={{ border: `1px solid ${CARD_BORDER}` }}>
-            <span className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: s.tint }}>
-              <s.icon className="w-5 h-5" style={{ color: s.color }} />
-            </span>
-            <div className="min-w-0">
-              <p className="text-[22px] font-extrabold leading-none" style={{ color: INK }}>{s.value}</p>
-              <p className="text-[12.5px] font-semibold mt-1" style={{ color: SUBTLE }}>{s.label}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] gap-4 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
         {/* ---------------- composer ---------------- */}
         <div className="rounded-2xl bg-white overflow-hidden" style={{ border: `1px solid ${CARD_BORDER}` }}>
-          <div className="px-5 py-4 flex items-center gap-3" style={{ borderBottom: `1px solid ${CARD_BORDER}` }}>
-            <span className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: BRAND }}>
-              <Pencil className="w-[18px] h-[18px] text-white" />
-            </span>
-            <div className="flex-1 min-w-0">
-              <p className="text-[16px] font-extrabold" style={{ color: INK }}>Compose message</p>
-              <p className="text-[12.5px]" style={{ color: SUBTLE }}>Delivered to the user's inbox and shown as a notice when they sign in</p>
-            </div>
+          <div className="px-5 py-4" style={{ borderBottom: `1px solid ${CARD_BORDER}` }}>
+            <p className="text-[16px] font-extrabold" style={{ color: INK }}>New message</p>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px]">
-            <div className="p-5 space-y-5 min-w-0">
+          <div>
+            <div className="p-4 sm:p-5 space-y-4 min-w-0">
               {/* audience */}
               <section>
-                <p className="text-[12px] font-bold uppercase tracking-wider mb-2" style={{ color: SUBTLE }}>1 · Audience</p>
+                <p className="text-[13px] font-bold mb-2" style={{ color: INK_2 }}>To</p>
                 <div className="flex gap-1 p-1 rounded-xl" style={{ backgroundColor: "#F2F4F7" }}>
                   {segBtn("all", "Everyone", Globe)}
                   {segBtn("group", "User group", Users)}
@@ -15551,32 +15986,14 @@ function AdminMessages({ users, admin, messages, preset, onSend }) {
                 </div>
 
                 {mode === "all" && (
-                  <div className="mt-3 rounded-xl p-3.5 flex items-center gap-3" style={{ backgroundColor: AMBER_TINT }}>
-                    <Megaphone className="w-5 h-5 shrink-0" style={{ color: AMBER }} />
-                    <p className="text-[13px]" style={{ color: INK_2 }}>Announcement to <b>all {users.length} users</b> on PakMed.</p>
-                  </div>
+                  <p className="text-[12.5px] mt-2" style={{ color: SUBTLE }}>Goes to all {users.length} users as an announcement.</p>
                 )}
 
                 {mode === "group" && (
-                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
-                    {MESSAGE_GROUPS.map((g) => {
-                      const on = g.key === group;
-                      return (
-                        <button key={g.key} type="button" onClick={() => setGroup(g.key)}
-                          className="rounded-xl p-3 flex items-center gap-2.5 text-left transition-colors"
-                          style={{ border: `1.5px solid ${on ? BRAND : CARD_BORDER}`, backgroundColor: on ? BRAND_50 : "#fff" }}>
-                          <span className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: g.tint }}>
-                            <g.icon className="w-4 h-4" style={{ color: g.color }} />
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block text-[13.5px] font-bold truncate" style={{ color: INK }}>{g.label}</span>
-                            <span className="block text-[12px]" style={{ color: SUBTLE }}>{groupCount(g)} people</span>
-                          </span>
-                          {on && <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: BRAND }} />}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <select value={group} onChange={(e) => setGroup(e.target.value)} aria-label="User group"
+                    className={`${ADMIN_INPUT} h-11 mt-2.5 font-semibold`} style={field}>
+                    {MESSAGE_GROUPS.map((g) => <option key={g.key} value={g.key}>{g.label} ({groupCount(g)} people)</option>)}
+                  </select>
                 )}
 
                 {mode === "one" && (
@@ -15633,102 +16050,56 @@ function AdminMessages({ users, admin, messages, preset, onSend }) {
                 )}
               </section>
 
-              {/* templates */}
-              <section>
-                <p className="text-[12px] font-bold uppercase tracking-wider mb-2" style={{ color: SUBTLE }}>2 · Start from a template <span className="normal-case font-semibold tracking-normal" style={{ color: FAINT }}>(optional)</span></p>
-                <div className="grid grid-cols-2 xl:grid-cols-4 gap-2">
-                  {ADMIN_TEMPLATES.map((t) => {
-                    const on = subject === t.subject;
-                    return (
-                      <button key={t.label} type="button" onClick={() => { setSubject(t.subject); setText(t.text); }}
-                        className="rounded-xl p-3 text-left transition-colors hover:bg-[#FAFBFC]"
-                        style={{ border: `1.5px solid ${on ? t.color : CARD_BORDER}`, backgroundColor: on ? t.tint : "#fff" }}>
-                        <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: t.tint }}>
-                          <t.icon className="w-4 h-4" style={{ color: t.color }} />
-                        </span>
-                        <span className="block text-[13px] font-bold mt-2" style={{ color: INK }}>{t.label}</span>
-                        <span className="block text-[11.5px] mt-0.5 line-clamp-1" style={{ color: SUBTLE }}>{t.subject}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
+              {/* quick templates */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[12.5px] font-semibold mr-1" style={{ color: SUBTLE }}>Templates:</span>
+                {ADMIN_TEMPLATES.map((t) => (
+                  <button key={t.label} type="button" onClick={() => { setSubject(t.subject); setText(t.text); }}
+                    className="h-8 px-3 rounded-full text-[12.5px] font-semibold"
+                    style={{ color: subject === t.subject ? "#fff" : INK_2, backgroundColor: subject === t.subject ? BRAND : "#F2F4F7" }}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
 
               {/* content */}
               <section>
-                <p className="text-[12px] font-bold uppercase tracking-wider mb-2" style={{ color: SUBTLE }}>3 · Message</p>
+                <p className="text-[13px] font-bold mb-2" style={{ color: INK_2 }}>Message</p>
                 <input value={subject} onChange={(e) => setSubject(e.target.value.slice(0, 90))} placeholder="Subject"
                   className={`${ADMIN_INPUT} h-12 text-[15px] font-semibold`} style={field} />
                 <div className="relative mt-2">
-                  <textarea value={text} onChange={(e) => setText(e.target.value.slice(0, 1000))} rows={7} placeholder="Write your message…"
+                  <textarea value={text} onChange={(e) => setText(e.target.value.slice(0, 1000))} rows={5} placeholder="Write your message…"
                     className={`${ADMIN_INPUT} py-3 resize-y leading-relaxed`} style={field} />
                   <span className="absolute right-3 bottom-2.5 text-[11.5px] font-semibold" style={{ color: FAINT }}>{text.length}/1000</span>
                 </div>
-                <div className="flex items-center gap-2 mt-3 flex-wrap">
-                  <span className="text-[12.5px] font-bold" style={{ color: INK_2 }}>Priority</span>
-                  {[["normal", "Normal", BRAND, BRAND_50], ["important", "Important", RED, RED_TINT]].map(([k, label, c, t]) => {
-                    const on = priority === k;
-                    return (
-                      <button key={k} type="button" onClick={() => setPriority(k)} className="h-8 px-3 rounded-full text-[12.5px] font-bold inline-flex items-center gap-1.5"
-                        style={{ color: on ? c : SUBTLE, backgroundColor: on ? t : "#fff", border: `1px solid ${on ? c : CARD_BORDER}` }}>
-                        {k === "important" ? <CircleAlert className="w-3.5 h-3.5" /> : <Info className="w-3.5 h-3.5" />} {label}
-                      </button>
-                    );
-                  })}
-                  <span className="w-px h-5 mx-1" style={{ backgroundColor: CARD_BORDER }} />
-                  <button type="button" onClick={() => setAlsoEmail((v) => !v)} aria-pressed={alsoEmail}
-                    className="h-8 px-3 rounded-full text-[12.5px] font-bold inline-flex items-center gap-1.5"
-                    style={{ color: alsoEmail ? TEAL : SUBTLE, backgroundColor: alsoEmail ? TEAL_TINT : "#fff", border: `1px solid ${alsoEmail ? TEAL : CARD_BORDER}` }}>
-                    <Mail className="w-3.5 h-3.5" /> Also send by email {alsoEmail && <Check className="w-3.5 h-3.5" />}
-                  </button>
+                <div className="flex items-center gap-x-5 gap-y-2 mt-3 flex-wrap">
+                  <label className="inline-flex items-center gap-2 text-[13px] font-semibold cursor-pointer" style={{ color: INK_2 }}>
+                    <input type="checkbox" checked={priority === "important"} onChange={(e) => setPriority(e.target.checked ? "important" : "normal")} className="w-4 h-4 accent-[#C0362C]" />
+                    Mark as important
+                  </label>
+                  <label className="inline-flex items-center gap-2 text-[13px] font-semibold cursor-pointer" style={{ color: INK_2 }}>
+                    <input type="checkbox" checked={alsoEmail} onChange={(e) => setAlsoEmail(e.target.checked)} className="w-4 h-4 accent-[#0B57B7]" />
+                    Also send by email
+                  </label>
                 </div>
               </section>
             </div>
 
-            {/* live preview */}
-            <aside className="p-5 lg:border-l" style={{ borderColor: CARD_BORDER, backgroundColor: "#FAFBFC" }}>
-              <p className="text-[12px] font-bold uppercase tracking-wider mb-3 flex items-center gap-1.5" style={{ color: SUBTLE }}><Eye className="w-3.5 h-3.5" /> Preview</p>
-              <p className="text-[11.5px] font-semibold mb-1.5" style={{ color: FAINT }}>Notice bar on the website</p>
-              <div className="rounded-xl px-3 py-2.5 flex items-center gap-2" style={{ backgroundColor: priority === "important" ? RED_TINT : BRAND_50, border: `1px solid ${priority === "important" ? "#F5C2BE" : "#B9D3F2"}` }}>
-                <Megaphone className="w-4 h-4 shrink-0" style={{ color: priority === "important" ? RED : BRAND }} />
-                <p className="text-[12px] truncate flex-1" style={{ color: INK }}><b>PakMed Admin: {subject || "Subject"}</b></p>
-                <span className="text-[10.5px] font-bold px-2 py-1 rounded-md text-white shrink-0" style={{ backgroundColor: priority === "important" ? RED : BRAND }}>View</span>
-              </div>
-              <p className="text-[11.5px] font-semibold mt-4 mb-1.5" style={{ color: FAINT }}>In the user's Messages</p>
-              <div className="rounded-xl p-3.5 bg-white" style={{ border: `1px solid ${CARD_BORDER}` }}>
-                <div className="flex items-center gap-2">
-                  <span className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: BRAND }}><Megaphone className="w-4 h-4 text-white" /></span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[12.5px] font-bold flex items-center gap-1" style={{ color: INK }}>PakMed Admin <CheckCircle2 className="w-3 h-3" style={{ color: BRAND }} /></p>
-                    <p className="text-[11px]" style={{ color: FAINT }}>just now</p>
-                  </div>
-                  {priority === "important" && <AdminPill color={RED} tint={RED_TINT}>Important</AdminPill>}
-                </div>
-                <p className="text-[13px] font-bold mt-2.5" style={{ color: subject ? INK : FAINT }}>{subject || "Your subject appears here"}</p>
-                <p className="text-[12.5px] mt-1 whitespace-pre-wrap leading-relaxed line-clamp-[8]" style={{ color: text ? INK_2 : FAINT }}>{text || "Your message appears here as you type."}</p>
-              </div>
-              <div className="mt-4 rounded-xl p-3 flex items-center gap-2.5" style={{ backgroundColor: "#fff", border: `1px solid ${CARD_BORDER}` }}>
-                <Users className="w-4 h-4 shrink-0" style={{ color: BRAND }} />
-                <p className="text-[12.5px]" style={{ color: INK_2 }}>
-                  {reach ? <>Will reach <b>{reach}</b> {reach === 1 ? "person" : "people"}{toName ? <> · {toName}</> : null}</> : "Choose who should receive this"}
-                </p>
-              </div>
-            </aside>
           </div>
 
-          <div className="px-5 py-3.5 flex items-center gap-2 flex-wrap" style={{ borderTop: `1px solid ${CARD_BORDER}`, backgroundColor: "#FCFCFD" }}>
+          <div className="px-4 sm:px-5 py-3.5 flex flex-col-reverse sm:flex-row sm:items-center gap-2" style={{ borderTop: `1px solid ${CARD_BORDER}`, backgroundColor: "#FCFCFD" }}>
             {flash ? (
               <p className="text-[13px] font-bold inline-flex items-center gap-1.5" style={{ color: GREEN }}><CheckCircle2 className="w-4 h-4" /> {flash}</p>
             ) : (
               <p className="text-[12.5px]" style={{ color: SUBTLE }}>{ready ? "Ready to send." : "Pick an audience, then add a subject and message."}</p>
             )}
-            <div className="ml-auto flex gap-2">
+            <div className="sm:ml-auto flex gap-2">
               <button type="button" onClick={() => { setSubject(""); setText(""); setPriority("normal"); }} disabled={!subject && !text}
                 className="h-10 px-4 rounded-xl text-[13.5px] font-bold disabled:opacity-40" style={{ color: INK_2, border: `1px solid ${CARD_BORDER}`, backgroundColor: "#fff" }}>
                 Clear
               </button>
               <button type="button" onClick={send} disabled={!ready}
-                className="h-10 px-5 rounded-xl text-[13.5px] font-bold text-white inline-flex items-center gap-2 transition-opacity disabled:opacity-45"
+                className="flex-1 sm:flex-none h-11 sm:h-10 px-5 rounded-xl text-[14px] font-bold text-white inline-flex items-center justify-center gap-2 transition-opacity disabled:opacity-45"
                 style={{ backgroundColor: priority === "important" ? RED : BRAND }}>
                 <Send className="w-4 h-4" /> Send{reach > 1 ? ` to ${reach}` : ""}
               </button>
@@ -15744,9 +16115,9 @@ function AdminMessages({ users, admin, messages, preset, onSend }) {
               <p className="text-[16px] font-extrabold flex-1" style={{ color: INK }}>Sent messages</p>
               <span className="text-[12.5px] font-semibold" style={{ color: SUBTLE }}>{messages.length} total</span>
             </div>
-            <label className="mt-3 flex items-center gap-2 h-10 px-3 rounded-xl" style={{ backgroundColor: CREAM, border: `1px solid ${CARD_BORDER}` }}>
-              <Search className="w-4 h-4 shrink-0" style={{ color: FAINT }} />
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search sent messages…" className="flex-1 min-w-0 bg-transparent outline-none text-[13.5px]" style={{ color: INK }} />
+            <label className="mt-3 flex items-center gap-2.5 h-12 px-4 rounded-2xl focus-within:ring-2 focus-within:ring-[#B9D3F2]" style={{ backgroundColor: CREAM, border: `1px solid ${CARD_BORDER}` }}>
+              <Search className="w-5 h-5 shrink-0" style={{ color: FAINT }} />
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search sent messages…" className="flex-1 min-w-0 bg-transparent outline-none text-[15px]" style={{ color: INK }} />
             </label>
             <div className="flex gap-1.5 mt-3 flex-wrap">
               {[["all", "All", messages.length], ["announcement", "Announcements", counts.announcement || 0], ["group", "Groups", counts.group || 0], ["direct", "Direct", counts.direct || 0]].map(([k, label, n]) => {
@@ -15824,6 +16195,7 @@ function AdminReports({ reports, admin, ownerOf, onSetStatus, onSuspend, onUnsus
   const [q, setQ] = useState("");
   const [type, setType] = useState("");
   const [suspendFor, setSuspendFor] = useState(null);   // { owner, g }
+  const [openRep, setOpenRep] = useState(null);         // mobile: expanded report
   const grouped = Object.values(
     reports.reduce((acc, r) => {
       const k = r.targetId;
@@ -15845,10 +16217,10 @@ function AdminReports({ reports, admin, ownerOf, onSetStatus, onSuspend, onUnsus
 
   return (
     <div>
-      <label className="flex items-center gap-2 h-11 px-3.5 rounded-xl" style={{ backgroundColor: "#fff", border: `1px solid ${CARD_BORDER}` }}>
-        <Search className="w-4 h-4 shrink-0" style={{ color: FAINT }} />
+      <label className="flex items-center gap-2.5 h-12 sm:h-[52px] px-4 rounded-2xl focus-within:ring-2 focus-within:ring-[#B9D3F2]" style={{ backgroundColor: "#fff", border: `1px solid ${CARD_BORDER}` }}>
+        <Search className="w-5 h-5 shrink-0" style={{ color: FAINT }} />
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search reports by title, reason or details…"
-          className="flex-1 min-w-0 bg-transparent outline-none text-[14px]" style={{ color: INK }} />
+          className="flex-1 min-w-0 bg-transparent outline-none text-[15px]" style={{ color: INK }} />
       </label>
       <div className="flex gap-1.5 overflow-x-auto pt-3 pb-1" style={{ scrollbarWidth: "none" }}>
         {[["pending", "Pending"], ["reviewing", "Reviewing"], ["removed", "Removed"], ["dismissed", "Dismissed"], ["all", "All"]].map(([k, label]) => {
@@ -15873,16 +16245,28 @@ function AdminReports({ reports, admin, ownerOf, onSetStatus, onSuspend, onUnsus
           const st = REPORT_STATUS[g.status] || REPORT_STATUS.pending;
           const owner = ownerOf(g);
           const suspended = owner && admin.blocked[owner.id];
+          const open = openRep === g.targetId;
           return (
             <div key={g.targetId} className="rounded-2xl bg-white p-4 flex flex-col" style={{ border: `1px solid ${g.count >= 3 ? RED + "55" : CARD_BORDER}` }}>
+              <button type="button" onClick={() => setOpenRep(open ? null : g.targetId)} aria-expanded={open}
+                className="text-left md:cursor-default md:pointer-events-none">
               <div className="flex items-center gap-1.5 flex-wrap">
                 <AdminPill color={st.color} tint={st.tint}>{st.label}</AdminPill>
                 <AdminPill color={SUBTLE} tint="#F2F4F7">{REPORT_TYPE_LABEL[g.type] || g.type}</AdminPill>
                 {g.count > 1 && <AdminPill color={RED} tint={RED_TINT}>{g.count} reports</AdminPill>}
                 {g.lastAt > 0 && <span className="ml-auto text-[11.5px]" style={{ color: FAINT }}>{adminAgo(g.lastAt)}</span>}
               </div>
-              <p className="text-[15px] font-extrabold mt-2" style={{ color: INK }}>{g.title}</p>
-              {g.subtitle && <p className="text-[12.5px]" style={{ color: SUBTLE }}>{g.subtitle}</p>}
+              <div className="flex items-start gap-2 mt-2">
+                <div className="flex-1 min-w-0">
+                  <p className="text-[15px] font-extrabold" style={{ color: INK }}>{g.title}</p>
+                  {g.subtitle && <p className="text-[12.5px] truncate" style={{ color: SUBTLE }}>{g.subtitle}</p>}
+                  {!open && <p className="md:hidden text-[12.5px] mt-1 truncate inline-flex items-center gap-1.5 max-w-full" style={{ color: RED }}><Flag className="w-3.5 h-3.5 shrink-0" /> {g.entries[0].reason}</p>}
+                </div>
+                <ChevronDown className="md:hidden w-5 h-5 shrink-0 mt-0.5 transition-transform" style={{ color: SUBTLE, transform: open ? "rotate(180deg)" : "none" }} />
+              </div>
+              </button>
+
+              <div className={`${open ? "flex" : "hidden"} md:flex flex-col flex-1`}>
 
               <div className="mt-3 rounded-xl p-3 space-y-2.5" style={{ backgroundColor: "#FAFBFC", border: `1px solid ${CARD_BORDER}` }}>
                 <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: SUBTLE }}>Why it was flagged</p>
@@ -15931,6 +16315,7 @@ function AdminReports({ reports, admin, ownerOf, onSetStatus, onSuspend, onUnsus
                     )}
                   </>
                 )}
+              </div>
               </div>
             </div>
           );
@@ -16287,6 +16672,218 @@ function AdminCharts({ chart, onGo }) {
   );
 }
 
+
+const RX_STATUS = {
+  sent: { label: "Sent", color: GREEN, tint: GREEN_TINT },
+  edited: { label: "Edited*", color: RED, tint: RED_TINT },
+  saved: { label: "Saved", color: BRAND, tint: BRAND_50 },
+};
+const rxStatusOf = (r) => (r.editedAt ? "edited" : r.sentAt ? "sent" : "saved");
+
+function AdminPrescriptions() {
+  const [list] = useState(() => readRxSaved());
+  const [pads] = useState(() => readRxPads());
+  const [q, setQ] = useState("");
+  const [status, setStatus] = useState("all");
+  const [tpl, setTpl] = useState("");
+  const [doc, setDoc] = useState("");
+  const [viewId, setViewId] = useState(null);
+  const [openRow, setOpenRow] = useState(null);
+  const padFor = (r) => r.padSnapshot || pads.find((p) => p.id === r.padId) || pads[0];
+  const docName = (r) => { const p = padFor(r); return (p && p.doctor && p.doctor.name) || "Doctor"; };
+  const needle = q.trim().toLowerCase();
+  const rows = [...list].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).filter((r) =>
+    (status === "all" || rxStatusOf(r) === status) &&
+    (!tpl || (padFor(r) || {}).template === tpl) &&
+    (!doc || docName(r) === doc) &&
+    (!needle || `${r.id} ${r.patient.name} ${r.diagnosis} ${docName(r)}`.toLowerCase().includes(needle))
+  );
+  const today = new Date().toDateString();
+  const kpis = [
+    { label: "Prescriptions", value: list.length, icon: FileText, color: BRAND, tint: BRAND_50 },
+    { label: "Issued today", value: list.filter((r) => new Date(r.createdAt).toDateString() === today).length, icon: CalendarDays, color: TEAL, tint: TEAL_TINT },
+    { label: "Edited after sending", value: list.filter((r) => r.editedAt).length, icon: Pencil, color: RED, tint: RED_TINT },
+    { label: "Pads / letterheads", value: pads.length, icon: ClipboardList, color: VIOLET, tint: VIOLET_TINT },
+  ];
+  const tplUse = Object.entries(pads.reduce((acc, p) => ({ ...acc, [p.template]: (acc[p.template] || 0) + 1 }), {}));
+  const view = viewId && list.find((r) => r.id === viewId);
+  const patientLine = (r) => [r.patient.name, rxAgeText(r.patient), r.patient.sex].filter(Boolean).join(" · ");
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {kpis.map((k) => (
+          <div key={k.label} className="rounded-2xl bg-white p-4 flex items-center gap-3.5" style={{ border: `1px solid ${CARD_BORDER}` }}>
+            <span className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: k.tint }}><k.icon className="w-5 h-5" style={{ color: k.color }} /></span>
+            <div className="min-w-0">
+              <p className="text-[22px] font-extrabold leading-none tabular-nums" style={{ color: INK }}><CountUp value={k.value} /></p>
+              <p className="text-[12.5px] font-semibold mt-1 truncate" style={{ color: SUBTLE }}>{k.label}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {tplUse.length > 0 && (
+        <div className="rounded-2xl bg-white p-4" style={{ border: `1px solid ${CARD_BORDER}` }}>
+          <p className="text-[13px] font-bold mb-2.5" style={{ color: INK_2 }}>Templates doctors use</p>
+          <div className="flex flex-wrap gap-2">
+            {tplUse.map(([k, n]) => (
+              <button key={k} type="button" onClick={() => setTpl(tpl === k ? "" : k)} className="h-9 px-3 rounded-xl text-[13px] font-semibold inline-flex items-center gap-2"
+                style={{ color: tpl === k ? "#fff" : INK_2, backgroundColor: tpl === k ? BRAND : "#F5F7FA", border: `1px solid ${tpl === k ? BRAND : CARD_BORDER}` }}>
+                {(RX_TEMPLATES[k] || {}).name || k}
+                <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-md" style={{ backgroundColor: tpl === k ? "rgba(255,255,255,0.22)" : "#fff" }}>{n} pad{n === 1 ? "" : "s"}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <label className="flex items-center gap-2.5 h-12 sm:h-[52px] px-4 rounded-2xl bg-white focus-within:ring-2 focus-within:ring-[#B9D3F2]" style={{ border: `1px solid ${CARD_BORDER}` }}>
+        <Search className="w-5 h-5 shrink-0" style={{ color: FAINT }} />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by patient, diagnosis, doctor or Rx ID…" className="flex-1 min-w-0 bg-transparent outline-none text-[15px]" style={{ color: INK }} />
+        {q && <button type="button" onClick={() => setQ("")} aria-label="Clear"><X className="w-4 h-4" style={{ color: SUBTLE }} /></button>}
+      </label>
+      <div className="flex gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+        {[["all", "All"], ["sent", "Sent"], ["edited", "Edited*"], ["saved", "Saved only"]].map(([k, label]) => {
+          const on = status === k;
+          const n = k === "all" ? list.length : list.filter((r) => rxStatusOf(r) === k).length;
+          return (
+            <button key={k} type="button" onClick={() => setStatus(k)} className="h-8 px-3 rounded-full text-[12.5px] whitespace-nowrap shrink-0"
+              style={{ fontWeight: on ? 700 : 600, color: on ? "#fff" : INK_2, backgroundColor: on ? BRAND : "#fff", border: `1px solid ${on ? BRAND : CARD_BORDER}` }}>
+              {label} · {n}
+            </button>
+          );
+        })}
+      </div>
+      <AdminFilterBar active={[tpl, doc].filter(Boolean).length} onClear={() => { setTpl(""); setDoc(""); }} shown={rows.length} total={list.length}>
+        <AdminSelect value={doc} all="All doctors" options={uniqueSorted(list.map(docName))} onChange={setDoc} />
+        <AdminSelect value={tpl} all="All templates" options={Object.keys(RX_TEMPLATES).map((k) => ({ value: k, label: RX_TEMPLATES[k].name }))} onChange={setTpl} />
+      </AdminFilterBar>
+
+      {rows.length === 0 ? (
+        <AdminEmpty icon={FileText} title={list.length ? "No prescriptions match" : "No prescriptions yet"} sub={list.length ? "Try another search or filter." : "Prescriptions doctors write and send from their dashboard appear here."} />
+      ) : (
+        <div className="rounded-2xl bg-white overflow-hidden" style={{ border: `1px solid ${CARD_BORDER}` }}>
+          {/* desktop table */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full min-w-[900px] text-left border-collapse">
+              <thead>
+                <tr style={{ backgroundColor: CREAM }}>
+                  {["Patient", "Diagnosis", "Doctor & pad", "Medicines", "Issued", "Status", ""].map((h, i) => (
+                    <th key={i} className="px-5 py-3.5 text-[11.5px] font-bold uppercase tracking-wider whitespace-nowrap" style={{ color: SUBTLE, borderBottom: `1px solid ${CARD_BORDER}` }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => {
+                  const st = RX_STATUS[rxStatusOf(r)];
+                  const p = padFor(r) || {};
+                  return (
+                    <tr key={r.id} onClick={() => setViewId(r.id)} className="cursor-pointer hover:bg-[#FAFBFC]" style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+                      <td className="px-5 py-3.5">
+                        <p className="text-[14px] font-bold" style={{ color: INK }}>{r.patient.name || "—"}</p>
+                        <p className="text-[12px]" style={{ color: SUBTLE }}>{[rxAgeText(r.patient), r.patient.sex].filter(Boolean).join(" · ")} · {r.id}</p>
+                      </td>
+                      <td className="px-5 py-3.5 text-[13px] max-w-[220px] truncate" style={{ color: INK_2 }}>{r.diagnosis || "—"}</td>
+                      <td className="px-5 py-3.5">
+                        <p className="text-[13px] font-semibold" style={{ color: INK }}>{docName(r)}</p>
+                        <p className="text-[12px] inline-flex items-center gap-1.5" style={{ color: SUBTLE }}><span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.accent }} /> {p.label} · {(RX_TEMPLATES[p.template] || {}).name}</p>
+                      </td>
+                      <td className="px-5 py-3.5 text-[13px] font-semibold" style={{ color: INK_2 }}>{r.meds.length}</td>
+                      <td className="px-5 py-3.5 text-[12.5px] whitespace-nowrap" style={{ color: INK_2 }}>{rxFmtDateTime(new Date(r.createdAt))}</td>
+                      <td className="px-5 py-3.5"><AdminPill color={st.color} tint={st.tint}>{st.label}</AdminPill></td>
+                      <td className="px-5 py-3.5 text-right"><span className="text-[12.5px] font-bold inline-flex items-center gap-1" style={{ color: BRAND }}>View <ChevronRight className="w-3.5 h-3.5" /></span></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {/* mobile rows */}
+          <div className="md:hidden">
+            {rows.map((r, i) => {
+              const st = RX_STATUS[rxStatusOf(r)];
+              const open = openRow === r.id;
+              const p = padFor(r) || {};
+              return (
+                <div key={r.id} style={{ borderTop: i ? `1px solid ${CARD_BORDER}` : "none", backgroundColor: open ? "#FAFBFC" : "#fff" }}>
+                  <button type="button" onClick={() => setOpenRow(open ? null : r.id)} aria-expanded={open} className="w-full flex items-center gap-3 px-4 py-3 text-left">
+                    <span className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: BRAND_50 }}><FileText className="w-[18px] h-[18px]" style={{ color: BRAND }} /></span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-[14px] font-bold truncate" style={{ color: INK }}>{r.patient.name}</span>
+                      <span className="block text-[12px] truncate" style={{ color: SUBTLE }}>{r.diagnosis}</span>
+                    </span>
+                    <span className="flex flex-col items-end gap-1 shrink-0">
+                      <AdminPill color={st.color} tint={st.tint}>{st.label}</AdminPill>
+                      <ChevronDown className="w-4 h-4 transition-transform" style={{ color: SUBTLE, transform: open ? "rotate(180deg)" : "none" }} />
+                    </span>
+                  </button>
+                  {open && (
+                    <div className="px-4 pb-4 dropdown-pop">
+                      <dl className="grid grid-cols-2 gap-2">
+                        {[["Patient", patientLine(r)], ["Doctor", docName(r)], ["Pad", `${p.label} · ${(RX_TEMPLATES[p.template] || {}).name || ""}`], ["Medicines", r.meds.length], ["Issued", rxFmtDateTime(new Date(r.createdAt))], ["Rx ID", r.id]].map(([k, v]) => (
+                          <div key={k} className="rounded-xl px-3 py-2 bg-white min-w-0" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                            <dt className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: FAINT }}>{k}</dt>
+                            <dd className="text-[13px] font-semibold truncate" style={{ color: INK }}>{v}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                      <button type="button" onClick={() => setViewId(r.id)} className="mt-3 w-full h-10 rounded-xl text-[13.5px] font-bold text-white inline-flex items-center justify-center gap-2" style={{ backgroundColor: BRAND }}>
+                        <Eye className="w-4 h-4" /> View prescription
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {view && (() => {
+        const alerts = rxCheck(view);
+        const p = padFor(view);
+        return (
+          <AdminModal wide title={`${view.patient.name} · ${view.id}`} sub={`${docName(view)} · ${rxFmtDateTime(new Date(view.createdAt))}${view.editedAt ? ` · Edited* ${rxFmtDateTime(new Date(view.editedAt))}` : ""}`} onClose={() => setViewId(null)}>
+            <dl className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {[["Patient", patientLine(view)], ["Phone", view.patient.phone || "—"], ["Allergies", view.patient.allergies || "—"], ["Diagnosis", view.diagnosis || "—"], ["Visit", view.patient.visit || "—"], ["Template", `${(RX_TEMPLATES[p.template] || {}).name || ""} · ${p.label}`]].map(([k, v]) => (
+                <div key={k} className="rounded-xl px-3 py-2 min-w-0" style={{ backgroundColor: "#FAFBFC", border: `1px solid ${CARD_BORDER}` }}>
+                  <dt className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: FAINT }}>{k}</dt>
+                  <dd className="text-[13px] font-semibold" style={{ color: INK }}>{v}</dd>
+                </div>
+              ))}
+            </dl>
+            {view.meds.length > 0 && (
+              <div className="mt-4">
+                <p className="text-[11px] font-semibold uppercase tracking-wide mb-2" style={{ color: FAINT }}>Medicines</p>
+                <ul className="space-y-2">
+                  {view.meds.map((m, i) => (
+                    <li key={i} className="rounded-xl px-3.5 py-2.5" style={{ border: `1px solid ${CARD_BORDER}` }}>
+                      <p className="text-[13.5px] font-bold" style={{ color: INK }}>{rxMedTitle(m)}</p>
+                      <p className="text-[12.5px]" style={{ color: INK_2 }}>{rxEnLine(m)}</p>
+                      <p className="text-[13px] mt-0.5 text-right" dir="rtl" style={{ color: INK_2, fontFamily: "'Noto Nastaliq Urdu', serif" }}>{rxUrLine(m)}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {alerts.length > 0 && (
+              <div className="mt-4 rounded-xl p-3" style={{ backgroundColor: AMBER_TINT, border: "1px solid #F3D9A8" }}>
+                <p className="text-[12.5px] font-bold mb-1" style={{ color: AMBER }}>Safety alerts ({alerts.length})</p>
+                {alerts.map((a, i) => <p key={i} className="text-[12.5px]" style={{ color: INK_2 }}>• {a.text || a.msg || a.title || String(a.type || "")}</p>)}
+              </div>
+            )}
+            <p className="text-[11px] font-semibold uppercase tracking-wide mt-5 mb-2" style={{ color: FAINT }}>Printed prescription (A4)</p>
+            <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${CARD_BORDER}`, backgroundColor: "#F2F4F7" }}>
+              <RxPreview pad={p} rx={view} />
+            </div>
+          </AdminModal>
+        );
+      })()}
+    </div>
+  );
+}
+
 function AdminOverview({ stats, log, tickets, onGo, onNewPost, chart }) {
   const open = tickets.filter((t) => t.status === "open").sort((a, b) => lastAt(b) - lastAt(a)).slice(0, 4);
   return (
@@ -16358,7 +16955,13 @@ function AdminPanelScreen({
   admin, setAdmin, postedJobs, listings, seller, reports, setReports,
   me, selfDoctor, onViewSite, onExit, onSignOut,
 }) {
-  const [section, setSection] = useState("overview");
+  // the open section survives a refresh (this screen only renders client-side, after sign-in)
+  const [section, setSection] = useState(() => {
+    try { return sessionStorage.getItem("pakmed-admin-section") || "overview"; } catch (_) { return "overview"; }
+  });
+  useEffect(() => {
+    try { sessionStorage.setItem("pakmed-admin-section", section); } catch (_) { /* storage unavailable */ }
+  }, [section]);
   const [preset, setPreset] = useState(null);       // prefilled compose for Messages
   const [newPostOpen, setNewPostOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);    // mobile sidebar
@@ -16530,6 +17133,7 @@ Please review it and update or remove it within 48 hours. Repeated reports can l
     { key: "support", label: "Support", icon: Headphones, alert: openTickets },
     { key: "messages", label: "Messages", icon: Send },
     { key: "reports", label: "Reports", icon: Flag, alert: pendingReports },
+    { key: "prescriptions", label: "Prescriptions", icon: FileText },
   ];
   const current = nav.find((n) => n.key === section) || nav[0];
 
@@ -16550,6 +17154,7 @@ Please review it and update or remove it within 48 hours. Repeated reports can l
     { label: "Hospitals live", value: liveCount("hospital"), icon: Building2, color: TEAL, tint: TEAL_TINT, go: "hospital", note: `${rows.hospital.length} total` },
     { label: "Feed posts", value: liveCount("feed"), icon: Newspaper, color: AMBER, tint: AMBER_TINT, go: "feed" },
     { label: "Open tickets", value: openTickets, icon: Headphones, color: openTickets ? AMBER : GREEN, tint: openTickets ? AMBER_TINT : GREEN_TINT, go: "support" },
+    { label: "Prescriptions", value: readRxSaved().length, icon: FileText, color: BRAND, tint: BRAND_50, go: "prescriptions" },
     { label: "Pending reports", value: pendingReports, icon: Flag, color: pendingReports ? RED : GREEN, tint: pendingReports ? RED_TINT : GREEN_TINT, go: "reports" },
   ];
 
@@ -16564,6 +17169,7 @@ Please review it and update or remove it within 48 hours. Repeated reports can l
     support: "Requests sent from Help & Support",
     messages: "Send updates to one user or everyone",
     reports: "Content flagged by users",
+    prescriptions: "E-prescriptions doctors issue on PakMed",
   };
 
   const accessLabel = admin.roles.me === "staff" ? "Staff" : "Admin";
@@ -16626,6 +17232,7 @@ Please review it and update or remove it within 48 hours. Repeated reports can l
           {section === "messages" && (
             <AdminMessages key={preset ? preset.key : "compose"} users={users} admin={admin} messages={admin.messages} preset={preset} onSend={sendMessage} />
           )}
+          {section === "prescriptions" && <AdminPrescriptions />}
           {section === "reports" && (
             <AdminReports reports={reports} admin={admin} ownerOf={ownerOfReport} onSetStatus={setReportStatus}
               onSuspend={(o, reason) => blockUser(o, reason)} onUnsuspend={unblockUser} onEmail={emailReportOwner} />
@@ -16776,8 +17383,37 @@ function AdminNoticeBar({ tone = "info", icon: Icon = Megaphone, title, text, ac
 }
 
 
+function RxGate({ initialName = "", initialPmdc = "", onSubmit }) {
+  const [name, setName] = useState(initialName);
+  const [pmdc, setPmdc] = useState(initialPmdc);
+  const ok = name.trim().length > 2 && /^[A-Za-z]{0,4}-?\d{3,6}-?[A-Za-z]?$/.test(pmdc.trim().replace(/\s/g, ""));
+  const field = { border: `1px solid ${CARD_BORDER}`, color: INK };
+  return (
+    <div className="flex-1 flex items-center justify-center px-5 py-12" style={{ fontFamily: FONT, backgroundColor: CREAM }}>
+      <form className="w-full max-w-md rounded-3xl bg-white p-6 sm:p-8" style={{ border: `1px solid ${CARD_BORDER}`, boxShadow: "0 18px 40px -24px rgba(16,24,40,0.35)" }}
+        onSubmit={(e) => { e.preventDefault(); if (ok) onSubmit({ fullName: name.trim(), pmdc: pmdc.trim().toUpperCase() }); }}>
+        <span className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ backgroundColor: BRAND_50 }}><FileText className="w-7 h-7" style={{ color: BRAND }} /></span>
+        <p className="text-[20px] font-extrabold mt-4" style={{ color: INK }}>Set up e-prescriptions</p>
+        <p className="text-[13.5px] mt-1 leading-relaxed" style={{ color: SUBTLE }}>Your name and PMDC number are printed on every pad and can't be changed on a pad — they come from your Doctor profile.</p>
+        <label className="block mt-5">
+          <span className="text-[13px] font-bold" style={{ color: INK_2 }}>Full name</span>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Dr. Full Name" className={`${ADMIN_INPUT} h-12 mt-1.5`} style={field} />
+        </label>
+        <label className="block mt-3">
+          <span className="text-[13px] font-bold" style={{ color: INK_2 }}>PMDC registration number</span>
+          <input value={pmdc} onChange={(e) => setPmdc(e.target.value)} placeholder="e.g. 12345-P or PMC-45872-K" className={`${ADMIN_INPUT} h-12 mt-1.5`} style={field} />
+        </label>
+        <button type="submit" disabled={!ok} className="mt-5 w-full h-12 rounded-xl text-[15px] font-bold text-white disabled:opacity-45" style={{ backgroundColor: BRAND }}>
+          Open prescriptions
+        </button>
+        <p className="text-[12px] mt-3 text-center" style={{ color: FAINT }}>In the live app, prescriptions unlock after PakMed verifies your PMDC number.</p>
+      </form>
+    </div>
+  );
+}
+
 // account pages that open inside the signed-in user's dashboard
-const USER_DASH_TABS = ["profile", "profiles", "profileEdit", "profileDetail", "cv", "myjobs", "saved", "messages", "physicianPanel", "employerPanel", "seller", "applicants", "settings", "help", "moderation"];
+const USER_DASH_TABS = ["prescriptions", "profile", "profiles", "profileEdit", "profileDetail", "cv", "myjobs", "saved", "messages", "physicianPanel", "employerPanel", "seller", "applicants", "settings", "help", "moderation"];
 const USER_DASH_ACTIVE = { profileEdit: "profiles", applicants: "employerPanel", moderation: "profile" };
 
 function UserDashboard({ tab, groups, user, onSelect, onExit, onSignOut, onBack, mobileOpen, setMobileOpen, children }) {
@@ -16816,7 +17452,7 @@ function UserDashboard({ tab, groups, user, onSelect, onExit, onSignOut, onBack,
         </button>
       </div>
       <InDashboard.Provider value={true}>
-        <div className="flex-1 flex flex-col min-w-0 sm:px-2">{children}</div>
+        <div className="flex-1 flex flex-col min-w-0">{children}</div>
       </InDashboard.Provider>
     </DashLayout>
   );
@@ -17060,6 +17696,37 @@ export default function PakMedApp() {
     tickets: a.tickets.map((x) => (x.id === t.id ? { ...x, status: "open", unreadAdmin: true, messages: [...x.messages, { from: "user", text, at: Date.now() }] } : x)),
   }));
 
+  // a refresh keeps the user signed in and on the same page
+  const [restored, setRestored] = useState(false);
+  useLayoutEffect(() => {
+    try {
+      const s = JSON.parse(localStorage.getItem("pakmed-session-v1") || "null");
+      if (s) {
+        if (s.authed) setAuthed(true);
+        if (s.username) setUsername(s.username);
+        if (s.verifiedPhone) setVerifiedPhone(s.verifiedPhone);
+        if (s.introSeen) setIntroSeen(true);
+        if (s.profiles) setProfiles({ ...JSON.parse(JSON.stringify(EMPTY_PROFILES)), ...s.profiles });
+        if (s.savedProfiles) setSavedProfiles((p) => ({ ...p, ...s.savedProfiles }));
+      }
+      const h = JSON.parse(sessionStorage.getItem("pakmed-history-v1") || "null");
+      // pages that need in-memory context (e.g. a job's applicants) fall back to the page before them
+      const keep = Array.isArray(h) ? h.filter((k) => typeof k === "string" && k !== "applicants").slice(-30) : [];
+      if (keep.length) setHistory(keep);
+    } catch (_) { /* storage unavailable */ }
+    setRestored(true);
+  }, []);
+  useEffect(() => {
+    if (!restored) return;
+    try { sessionStorage.setItem("pakmed-history-v1", JSON.stringify(history)); } catch (_) { /* storage unavailable */ }
+  }, [restored, history]);
+  useEffect(() => {
+    if (!restored) return;
+    try {
+      localStorage.setItem("pakmed-session-v1", JSON.stringify({ authed, username, verifiedPhone, introSeen, profiles, savedProfiles }));
+    } catch (_) { /* storage unavailable */ }
+  }, [restored, authed, username, verifiedPhone, introSeen, profiles, savedProfiles]);
+
   const tab = history[history.length - 1];
   // opening Messages / Help marks the admin's messages and replies as seen
   useEffect(() => {
@@ -17122,6 +17789,7 @@ export default function PakMedApp() {
     navigate(key);
   };
   const showChrome = !signInFor && !showIntent;
+  const canPrescribe = !!(savedProfiles.doctor && (savedProfiles.doctor.fullName || "").trim() && (savedProfiles.doctor.pmdc || "").trim());
   const hasCvDoc = !!(cvDoc.uploaded || cvDoc.savedInApp);
   const dashGroups = [
     { label: "Overview", items: [{ key: "profile", label: "My dashboard", icon: LayoutDashboard }] },
@@ -17140,6 +17808,9 @@ export default function PakMedApp() {
       ...(canPostJob ? [{ key: "employerPanel", label: "Employer panel", icon: Building2 }] : []),
       ...(canSell ? [{ key: "seller", label: "Business panel", icon: Store }] : []),
     ] }] : []),
+    { label: "Doctor tools", items: [
+      { key: "prescriptions", label: "Prescriptions", icon: FileText, tag: canPrescribe ? undefined : "Set up", tagOk: false },
+    ] },
     { label: "Help", items: [
       { key: "help", label: "Help & support", icon: HelpCircle, alert: supportUnread.length },
       { key: "settings", label: "Settings", icon: Settings },
@@ -17283,13 +17954,15 @@ export default function PakMedApp() {
             {(() => { const page = (
             <div
               className={`flex-1 flex flex-col w-full min-w-0 ${
-                tab === "home" || tab === "findjob" || tab === "consult" || tab === "market" || tab === "hospital" || tab === "postjob"
+                dashMode
+                  ? (tab === "prescriptions" ? "min-h-[100dvh]" : "min-h-[100dvh] page-enter bg-white")
+                  : tab === "home" || tab === "findjob" || tab === "consult" || tab === "market" || tab === "hospital" || tab === "postjob"
                   ? ""
                   : tab === "feed"
                     ? "min-h-[calc(100dvh-64px)]"
                     : "max-w-6xl mx-auto w-full sm:w-[calc(100%-48px)] min-h-[calc(100dvh-68px)] bg-white sm:rounded-3xl sm:my-6 overflow-hidden page-enter"
               }`}
-              style={!["home", "feed", "findjob", "consult", "market", "hospital", "postjob"].includes(tab) ? { border: `1px solid ${CARD_BORDER}`, boxShadow: "0 12px 40px -18px rgba(16,24,40,0.18)" } : undefined}
+              style={!dashMode && !["home", "feed", "findjob", "consult", "market", "hospital", "postjob"].includes(tab) ? { border: `1px solid ${CARD_BORDER}`, boxShadow: "0 12px 40px -18px rgba(16,24,40,0.18)" } : undefined}
             >
               {tab === "home" && (
                 <HomeScreen
@@ -17381,6 +18054,7 @@ export default function PakMedApp() {
               )}
               {tab === "physicianPanel" && (
                 <PhysicianPanelScreen
+                  onOpenRx={() => navigate("prescriptions")}
                   adminHidPhone={adminHidMyPhone}
                   profile={profiles.doctor}
                   onChange={(u) => updateLive("doctor", u)}
@@ -17510,6 +18184,7 @@ export default function PakMedApp() {
                   cvReady={cvDoc.uploaded || cvDoc.savedInApp}
                   cvDoc={cvDoc}
                   onUploadCV={uploadCV}
+                  isDoctor={canPrescribe}
                   verifiedPhone={verifiedPhone}
                   profilesLive={["general", "doctor", "employer", "seller"].filter((k) => savedProfiles[k] && profileCompletion(k, savedProfiles[k]) >= GATE_THRESHOLD).length}
                   savedJobs={[...postedJobs, ...SEED_JOBS].filter((j) => jobSocial[j.id] && jobSocial[j.id].favourite)}
@@ -17527,6 +18202,19 @@ export default function PakMedApp() {
                   {...navProps}
                 />
               )}
+              {tab === "prescriptions" && (canPrescribe ? (
+                <PrescriptionPad
+                  doctor={{
+                    name: (savedProfiles.doctor && savedProfiles.doctor.fullName) || profiles.doctor.fullName || profiles.general.fullName || "Doctor",
+                    pmdc: (savedProfiles.doctor && savedProfiles.doctor.pmdc) || profiles.doctor.pmdc || "",
+                    degrees: (profiles.doctor.education || []).map((e) => e.degree).filter(Boolean),
+                  }}
+                  onExit={() => (canGoBack ? goBack() : navigate("physicianPanel"))}
+                />
+              ) : (
+                <RxGate initialName={profiles.doctor.fullName || profiles.general.fullName || ""} initialPmdc={profiles.doctor.pmdc || ""}
+                  onSubmit={(v) => { const next = { ...profiles.doctor, ...v }; updateProfile("doctor", next); saveProfile("doctor", next); }} />
+              ))}
               {tab === "myjobs" && (
                 <MyJobsScreen
                   postedJobs={postedJobs}
